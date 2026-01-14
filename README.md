@@ -1,1 +1,2 @@
-# pizero_generator_control
+PiZero Generator Control
+Richard J. Sears
