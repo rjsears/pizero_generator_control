@@ -530,25 +530,22 @@ prepare_system() {
         if echo "$pi_model" | grep -q "Raspberry Pi 5"; then
             print_step "8" "Installing Raspberry Pi 5 GPIO software..."
 
-            # Pi 5 uses libgpiod instead of RPi.GPIO
+            # Pi 5 uses gpiozero with lgpio backend (not RPi.GPIO)
             apt-get install -y -qq \
-                python3-libgpiod \
-                libgpiod2 \
-                libgpiod-dev \
-                gpiod \
+                python3-gpiozero \
                 python3-lgpio \
                 > /dev/null 2>&1
 
-            # Enable GPIO access for Docker containers
-            if ! grep -q "^dtoverlay=gpio-shutdown" /boot/firmware/config.txt 2>/dev/null; then
-                print_info "Configuring GPIO device tree overlays..."
-            fi
-
-            # Ensure /dev/gpiochip devices are accessible
+            # Ensure /dev/gpiochip devices are accessible for Docker
             if [ ! -e /dev/gpiochip0 ]; then
                 print_warning "GPIO chip device not found - may require reboot"
             else
-                print_success "GPIO chip device available"
+                print_success "GPIO chip device available (/dev/gpiochip0)"
+            fi
+
+            # Check for gpiochip4 (legacy GPIO interface on Pi 5)
+            if [ -e /dev/gpiochip4 ]; then
+                print_success "Legacy GPIO interface available (/dev/gpiochip4)"
             fi
 
             # Add user to gpio group if needed
@@ -556,18 +553,18 @@ prepare_system() {
                 usermod -aG gpio root 2>/dev/null || true
             fi
 
-            print_success "Raspberry Pi 5 GPIO software installed"
+            print_success "Raspberry Pi 5 GPIO software installed (gpiozero + lgpio)"
 
         elif echo "$pi_model" | grep -q "Raspberry Pi"; then
             print_step "8" "Installing standard Raspberry Pi GPIO software..."
 
-            # Older Pi models use RPi.GPIO
+            # Older Pi models use gpiozero with RPi.GPIO backend
             apt-get install -y -qq \
-                python3-rpi.gpio \
                 python3-gpiozero \
+                python3-rpi.gpio \
                 > /dev/null 2>&1
 
-            print_success "Raspberry Pi GPIO software installed"
+            print_success "Raspberry Pi GPIO software installed (gpiozero + RPi.GPIO)"
         fi
     else
         print_info "Not running on Raspberry Pi hardware"

@@ -42,14 +42,13 @@ services:
     volumes:
       - genmaster_logs:/app/logs
       - genmaster_data:/app/data
-      # GPIO access for Pi 5 (uses /dev/gpiochip* instead of /dev/gpiomem)
-      - /dev/gpiomem:/dev/gpiomem:ro
     devices:
-      # GPIO device access for Raspberry Pi 5
-      # Pi 5 uses gpiochip0 for RP1 GPIO controller (pins 0-27)
-      # gpiochip4 is for the legacy GPIO interface
+      # GPIO device access for Raspberry Pi 5 (gpiozero uses lgpio backend)
+      # Pi 5 uses gpiochip0 for RP1 GPIO controller (GPIO17 for Victron signal)
+      # gpiochip4 provides legacy GPIO numbering compatibility
       - /dev/gpiochip0:/dev/gpiochip0
       - /dev/gpiochip4:/dev/gpiochip4
+      - /dev/gpiomem:/dev/gpiomem
     group_add:
       - gpio
       - dialout

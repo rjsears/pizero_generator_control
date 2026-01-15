@@ -67,10 +67,9 @@ RUN groupadd --gid 1000 genmaster \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # PostgreSQL client for healthchecks
     postgresql-client \
-    # For GPIO access (Raspberry Pi 5 uses libgpiod)
-    libgpiod2 \
-    libgpiod-dev \
-    gpiod \
+    # For GPIO access via gpiozero (uses lgpio backend on Pi 5)
+    python3-gpiozero \
+    python3-lgpio \
     # Networking tools
     curl \
     iputils-ping \
