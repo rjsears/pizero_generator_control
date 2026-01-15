@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:shop.pimoroni.com)",
+      "WebFetch(domain:learn.pimoroni.com)",
+      "WebFetch(domain:pinout.xyz)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd comprehensive project outline document\n\nThis document covers the complete system architecture, hardware requirements,\nsoftware stack, API design, database schema, web interface mockups,\ncommunication protocol, and implementation roadmap for the PiZero Generator\nControl project.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ]
+  }
+}

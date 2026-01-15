@@ -756,19 +756,307 @@ RuntimeMaxUse=50M" | sudo tee /etc/systemd/journald.conf.d/reduce-writes.conf
 
 ---
 
-## 14. Security Considerations
+## 14. Remote Access & Networking
+
+### 14.1 Overview
+
+Remote access is essential for managing the generator control system when away from the local network. We use a layered approach:
+
+| Layer | Technology | Status | Purpose |
+|-------|------------|--------|---------|
+| Primary | **Tailscale** | Required | Secure mesh VPN for all device communication |
+| Secondary | **Cloudflare Tunnel** | Optional | Public web access without exposing ports |
+
+### 14.2 Tailscale (Required)
+
+**Why Tailscale is Required:**
+- Creates secure mesh network between GenMaster, GenSlave, and your devices
+- Both Pi Zeros get stable IPs (100.x.x.x) accessible from anywhere
+- Direct communication between n8n_management and generator devices
+- WireGuard-based encryption with minimal overhead
+- MagicDNS provides hostname resolution (genmaster, genslave)
+
+**Resource Usage on Pi Zero 2W:**
+| Metric | Value | Impact |
+|--------|-------|--------|
+| RAM | ~20-30MB | Acceptable (4-6% of 512MB) |
+| CPU (idle) | <1% | Negligible |
+| CPU (active) | 2-5% | Minimal during transfers |
+| Network | WireGuard kernel module | Very efficient |
+
+**Network Architecture with Tailscale:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           YOUR DEVICES                                      │
+│              (Phone, Laptop, Desktop - all on Tailscale)                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                          Tailscale Mesh Network
+                            (Encrypted WireGuard)
+                                      │
+        ┌─────────────────────────────┼─────────────────────────────┐
+        │                             │                             │
+        ▼                             ▼                             ▼
+┌───────────────┐           ┌───────────────┐           ┌───────────────┐
+│  GenMaster    │◄─────────►│   GenSlave    │           │ n8n_management│
+│ 100.x.x.101   │  Heartbeat│ 100.x.x.102   │           │  100.x.x.50   │
+│               │  Commands │               │           │               │
+│ - Web UI      │           │ - Relay API   │◄─────────►│ - Webhooks    │
+│ - Master API  │           │ - LCD Display │  Notifs   │ - Automation  │
+└───────────────┘           └───────────────┘           └───────────────┘
+```
+
+**Tailscale Configuration:**
+
+```bash
+# Tailscale auth key types:
+# - Reusable: For multiple devices (recommended for initial setup)
+# - Single-use: More secure, one device per key
+# - Pre-approved: Skip admin approval step
+
+# Setup command (run by setup.sh)
+tailscale up --authkey=tskey-auth-xxxxx --hostname=genmaster
+```
+
+**Docker Integration:**
+
+```yaml
+# Tailscale as sidecar container
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: genmaster  # or genslave
+    environment:
+      - TS_AUTHKEY=${TAILSCALE_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+    volumes:
+      - tailscale_state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
+    network_mode: host  # Required for proper networking
+
+volumes:
+  tailscale_state:
+```
+
+**ACL Configuration (Tailscale Admin Console):**
+
+```json
+{
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["tag:admin"],
+      "dst": ["tag:generator:*"]
+    },
+    {
+      "action": "accept",
+      "src": ["tag:generator"],
+      "dst": ["tag:generator:*", "tag:n8n:*"]
+    }
+  ],
+  "tagOwners": {
+    "tag:generator": ["autogroup:admin"],
+    "tag:n8n": ["autogroup:admin"],
+    "tag:admin": ["autogroup:admin"]
+  }
+}
+```
+
+### 14.3 Cloudflare Tunnel (Optional)
+
+**When to Use Cloudflare Tunnel:**
+- Access web UI from devices NOT on Tailscale (guest access)
+- Public webhook endpoint for external services
+- Redundant access path if Tailscale has issues
+
+**When NOT to Use:**
+- All your devices are on Tailscale (most common case)
+- Concerned about resource usage on Pi Zero
+- Want to minimize complexity
+
+**Resource Usage on Pi Zero 2W:**
+| Metric | Value | Impact |
+|--------|-------|--------|
+| RAM | ~50-100MB | Significant (10-20% of 512MB) |
+| CPU (idle) | 2-3% | Noticeable |
+| CPU (active) | 5-15% | Higher during traffic |
+| Combined w/Tailscale | ~80-130MB RAM | May cause memory pressure |
+
+**Architecture with Cloudflare Tunnel:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              INTERNET                                       │
+│                   (Any device, anywhere, no VPN needed)                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                   HTTPS
+                        genmaster.yourdomain.com
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         CLOUDFLARE EDGE                                     │
+│                    (DDoS protection, SSL termination)                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                          Cloudflare Tunnel
+                         (Outbound connection)
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            GenMaster                                        │
+│                         (cloudflared daemon)                                │
+│                                                                             │
+│   Internet Traffic ──► cloudflared ──► nginx ──► FastAPI                    │
+│                                                                             │
+│   Tailscale Traffic ──────────────────► nginx ──► FastAPI                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Cloudflare Tunnel Docker Configuration:**
+
+```yaml
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: unless-stopped
+    network_mode: host
+    profiles:
+      - cloudflare  # Only starts if profile is specified
+```
+
+**Nginx Configuration for Dual Access:**
+
+```nginx
+# /etc/nginx/conf.d/genmaster.conf
+
+# Geo-based access classification
+geo $access_level {
+    default          "external";
+    127.0.0.1/32     "internal";
+    100.64.0.0/10    "internal";    # Tailscale CGNAT range
+    172.16.0.0/12    "internal";    # Docker networks
+    10.0.0.0/8       "internal";    # Private networks
+    192.168.0.0/16   "internal";    # Private networks
+}
+
+server {
+    listen 80;
+    server_name _;
+
+    # Full access for Tailscale/internal
+    location / {
+        if ($access_level = "internal") {
+            proxy_pass http://127.0.0.1:8000;
+            break;
+        }
+        # External access - require Cloudflare Access auth or limit endpoints
+        return 403;
+    }
+
+    # API endpoints - always available (protected by API secret)
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Access-Level $access_level;
+    }
+}
+```
+
+### 14.4 Setup Script Integration
+
+The setup.sh script will handle network configuration with interactive prompts:
+
+```bash
+# Network setup flow in setup.sh
+
+configure_networking() {
+    print_section "Network Configuration"
+
+    # Tailscale (Required)
+    print_subsection "Tailscale Setup (Required)"
+    print_info "Tailscale provides secure remote access to your devices"
+
+    if ! command -v tailscale &> /dev/null; then
+        print_info "Installing Tailscale..."
+        curl -fsSL https://tailscale.com/install.sh | sh
+    fi
+
+    read_masked_token "Enter Tailscale Auth Key" TAILSCALE_AUTHKEY
+
+    # Cloudflare Tunnel (Optional)
+    print_subsection "Cloudflare Tunnel (Optional)"
+    print_info "Cloudflare Tunnel allows public web access without exposing ports"
+    print_warning "Adds ~50-100MB RAM usage"
+
+    if confirm_prompt "Enable Cloudflare Tunnel?" "n"; then
+        CLOUDFLARE_ENABLED=true
+        read_masked_token "Enter Cloudflare Tunnel Token" CLOUDFLARE_TUNNEL_TOKEN
+        prompt_with_default "Public hostname" "genmaster.example.com" CLOUDFLARE_HOSTNAME
+    else
+        CLOUDFLARE_ENABLED=false
+    fi
+
+    save_state
+}
+```
+
+### 14.5 Memory Budget Analysis
+
+**Pi Zero 2W Total RAM: 512MB**
+
+| Component | RAM Usage | With CF Tunnel |
+|-----------|-----------|----------------|
+| Linux OS | ~50MB | ~50MB |
+| Docker Engine | ~50MB | ~50MB |
+| MariaDB | ~80MB | ~80MB |
+| FastAPI + Uvicorn | ~40MB | ~40MB |
+| Nginx | ~10MB | ~10MB |
+| Tailscale | ~25MB | ~25MB |
+| Cloudflare Tunnel | - | ~75MB |
+| Vue.js (browser) | ~30MB | ~30MB |
+| **Total** | **~285MB** | **~360MB** |
+| **Available** | **~227MB** | **~152MB** |
+
+**Recommendation:** Cloudflare Tunnel is viable but reduces available memory significantly. Only enable if you have a specific need for public access.
+
+### 14.6 Database Schema Updates for Networking
+
+```sql
+-- Add to config table
+ALTER TABLE config ADD COLUMN tailscale_hostname VARCHAR(50);
+ALTER TABLE config ADD COLUMN tailscale_ip VARCHAR(45);
+ALTER TABLE config ADD COLUMN cloudflare_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE config ADD COLUMN cloudflare_hostname VARCHAR(255);
+```
+
+---
+
+## 15. Security Considerations
 
 | Concern | Mitigation |
 |---------|------------|
 | API Authentication | Shared secret in headers + HTTPS via Tailscale |
 | Database Access | Local socket only, strong passwords |
 | GPIO Access | Container isolation, minimal privileges |
-| Web Interface | No public exposure, Tailscale only |
+| Web Interface | Tailscale-only by default, Cloudflare Access if public |
 | Webhook Security | Signed payloads with timestamp |
+| Network Isolation | Tailscale ACLs limit device communication |
+| Public Access | Cloudflare Access authentication (if tunnel enabled) |
 
 ---
 
-## 15. Questions and Clarifications Needed
+## 16. Questions and Clarifications Needed
 
 ### Hardware Questions
 
@@ -811,7 +1099,7 @@ RuntimeMaxUse=50M" | sudo tee /etc/systemd/journald.conf.d/reduce-writes.conf
 
 ---
 
-## 16. Implementation Roadmap
+## 17. Implementation Roadmap
 
 ### Phase 1: Foundation
 - [ ] Set up development environment
@@ -862,7 +1150,15 @@ RuntimeMaxUse=50M" | sudo tee /etc/systemd/journald.conf.d/reduce-writes.conf
 - [ ] Test GPIO access in containers
 - [ ] Create setup.sh scripts
 
-### Phase 8: Polish & Testing
+### Phase 8: Remote Access & Networking
+- [ ] Integrate Tailscale into Docker Compose
+- [ ] Configure Tailscale auth key handling in setup.sh
+- [ ] Implement optional Cloudflare Tunnel support
+- [ ] Configure nginx for dual access (Tailscale + Cloudflare)
+- [ ] Test remote connectivity and failover
+- [ ] Document Tailscale ACL configuration
+
+### Phase 9: Polish & Testing
 - [ ] Implement database backup/restore
 - [ ] Add system health monitoring
 - [ ] Comprehensive testing
@@ -871,7 +1167,7 @@ RuntimeMaxUse=50M" | sudo tee /etc/systemd/journald.conf.d/reduce-writes.conf
 
 ---
 
-## 17. File Structure (Proposed)
+## 18. File Structure (Proposed)
 
 ```
 pizero_generator_control/
@@ -944,7 +1240,15 @@ pizero_generator_control/
 │   ├── Dockerfile
 │   ├── docker-compose.yml
 │   └── requirements.txt
-├── setup.sh                     # Main setup script
+├── setup.sh                     # Main setup script (--GenMaster or --GenSlave)
+├── config/
+│   ├── tailscale/
+│   │   └── .gitkeep             # Tailscale state stored here
+│   └── cloudflare/
+│       └── .gitkeep             # Cloudflare config (if enabled)
+├── scripts/
+│   ├── backup.sh                # Database backup script
+│   └── health-check.sh          # System health monitoring
 ├── instructions.md
 ├── generator_project_outline.md # This document
 └── README.md
@@ -952,7 +1256,7 @@ pizero_generator_control/
 
 ---
 
-## 18. Next Steps
+## 19. Next Steps
 
 Once you've reviewed this outline and answered the questions above, we can:
 
