@@ -1,0 +1,4 @@
+.claude
+.env
+.mcp.json
+*.credentials

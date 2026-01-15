@@ -7,7 +7,9 @@
       "WebFetch(domain:pinout.xyz)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd comprehensive project outline document\n\nThis document covers the complete system architecture, hardware requirements,\nsoftware stack, API design, database schema, web interface mockups,\ncommunication protocol, and implementation roadmap for the PiZero Generator\nControl project.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd Tailscale and Cloudflare Tunnel networking sections\n\nAdds comprehensive Section 14 covering remote access architecture:\n- Tailscale as required mesh VPN with Docker integration\n- Optional Cloudflare Tunnel for public access\n- Memory budget analysis, nginx config, and setup script integration\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)"
     ]
   }
 }
