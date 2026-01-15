@@ -1,18 +1,26 @@
 # Agent Handoff: Docker Infrastructure
 
 ## Purpose
-This document provides complete specifications for containerizing GenMaster and GenSlave, including Dockerfiles, docker-compose configurations, nginx setup, and container orchestration.
+This document provides complete specifications for containerizing **GenMaster only**, including Dockerfile, docker-compose configuration, nginx setup, and container orchestration.
+
+**Note**: GenSlave runs as a native Python application (not Docker) to conserve RAM on the Pi Zero 2W. See `05-genslave-backend.md` for GenSlave deployment details.
 
 ---
 
 ## Overview
 
-Both GenMaster and GenSlave run as containerized applications with:
+**GenMaster** (Raspberry Pi 5 8GB + NVMe) runs as a containerized application with:
 - FastAPI application container
-- MariaDB database container
-- Nginx reverse proxy (GenMaster only)
-- Tailscale sidecar container
-- Optional Cloudflare Tunnel (GenMaster only)
+- PostgreSQL 16 database container
+- Nginx reverse proxy
+- Optional Tailscale container (--profile tailscale)
+- Optional Cloudflare Tunnel (--profile cloudflare)
+
+**GenSlave** (Raspberry Pi Zero 2W) runs natively without Docker:
+- Native Python with virtualenv
+- SQLite database (file-based)
+- systemd service management
+- Native Tailscale installation
 
 ---
 
@@ -78,72 +86,85 @@ version: '3.8'
 services:
   # FastAPI Application
   genmaster:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: genmaster-app
+    image: rjsears/genmaster:${GENMASTER_VERSION:-latest}
+    container_name: genmaster
     restart: unless-stopped
-    privileged: true  # Required for GPIO access
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       - APP_ENV=${APP_ENV:-production}
       - APP_DEBUG=${APP_DEBUG:-false}
       - APP_SECRET_KEY=${APP_SECRET_KEY}
-      - DATABASE_URL=mysql+pymysql://genmaster:${DB_PASSWORD}@db:3306/genmaster
-      - SLAVE_API_URL=${SLAVE_API_URL}
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_USER=${DATABASE_USER:-genmaster}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - DATABASE_NAME=${DATABASE_NAME:-genmaster}
+      - SLAVE_API_URL=${SLAVE_API_URL:-http://genslave:8000}
       - SLAVE_API_SECRET=${SLAVE_API_SECRET}
-      - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL:-}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+      - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - HEARTBEAT_INTERVAL_SECONDS=${HEARTBEAT_INTERVAL_SECONDS:-60}
+      - HEARTBEAT_FAILURE_THRESHOLD=${HEARTBEAT_FAILURE_THRESHOLD:-3}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ./data:/app/data  # For backups
-      - /sys:/sys:ro      # For temperature readings
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - genmaster-net
+      - genmaster_logs:/app/logs
+      - genmaster_data:/app/data
     devices:
-      - /dev/gpiomem:/dev/gpiomem  # GPIO access
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      # GPIO device access for Raspberry Pi 5 (gpiozero uses lgpio backend)
+      - /dev/gpiochip0:/dev/gpiochip0
+      - /dev/gpiochip4:/dev/gpiochip4
+      - /dev/gpiomem:/dev/gpiomem
+    group_add:
+      - gpio
+      - dialout
+    networks:
+      - genmaster-internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
-  # MariaDB Database
+  # PostgreSQL Database
   db:
-    image: mariadb:10.11
+    image: postgres:16-alpine
     container_name: genmaster-db
     restart: unless-stopped
     environment:
-      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
-      - MYSQL_DATABASE=genmaster
-      - MYSQL_USER=genmaster
-      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_USER=${DATABASE_USER:-genmaster}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=${DATABASE_NAME:-genmaster}
+      - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
-      - db_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    networks:
-      - genmaster-net
+      - postgres_data:/var/lib/postgresql/data
+    # PostgreSQL performance tuning for Pi 5 with 8GB RAM
     command: >
-      --innodb_flush_log_at_trx_commit=2
-      --sync_binlog=0
-      --innodb_flush_method=O_DIRECT
-      --skip-log-bin
-      --general_log=0
-      --slow_query_log=0
-      --innodb_buffer_pool_size=64M
-      --max_connections=20
+      postgres
+      -c shared_buffers=512MB
+      -c effective_cache_size=2GB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=10MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_worker_processes=4
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+      -c max_parallel_maintenance_workers=2
+    networks:
+      - genmaster-internal
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-genmaster} -d ${DATABASE_NAME:-genmaster}"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "2"
 
   # Nginx Reverse Proxy
   nginx:
@@ -258,167 +279,27 @@ services:
 
 ---
 
-## GenSlave Docker Configuration
+## GenSlave Deployment (Native - No Docker)
 
-### Dockerfile
+GenSlave runs as a **native Python application** on Raspberry Pi Zero 2W to conserve the limited 512MB RAM.
 
-```dockerfile
-# genslave/Dockerfile
-FROM python:3.11-slim-bookworm
+**Why Native instead of Docker?**
+- Docker daemon overhead: ~50-100MB RAM
+- Container images: additional storage requirements
+- Limited benefit on single-application device
+- Native systemd provides reliable service management
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+For complete GenSlave deployment instructions, see:
+- `05-genslave-backend.md` - Application implementation
+- `08-setup-scripts.md` - Installation script (genslave/setup.sh)
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libmariadb-dev \
-    curl \
-    python3-dev \
-    libjpeg-dev \
-    zlib1g-dev \
-    libfreetype6-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set work directory
-WORKDIR /app
-
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application code
-COPY app/ ./app/
-COPY alembic/ ./alembic/
-COPY alembic.ini .
-
-# Expose port
-EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/api/health || exit 1
-
-# Run application (must run as root for GPIO/SPI/I2C access)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### Docker Compose
-
-```yaml
-# genslave/docker-compose.yml
-version: '3.8'
-
-services:
-  # FastAPI Application
-  genslave:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: genslave-app
-    restart: unless-stopped
-    privileged: true  # Required for GPIO, SPI, I2C
-    environment:
-      - APP_ENV=${APP_ENV:-production}
-      - APP_DEBUG=${APP_DEBUG:-false}
-      - APP_SECRET_KEY=${APP_SECRET_KEY}
-      - API_SECRET=${API_SECRET}
-      - DATABASE_URL=mysql+pymysql://genslave:${DB_PASSWORD}@db:3306/genslave
-      - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL:-}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
-      - LCD_ENABLED=${LCD_ENABLED:-true}
-    volumes:
-      - /sys:/sys:ro      # Temperature readings
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - genslave-net
-    devices:
-      # GPIO access
-      - /dev/gpiomem:/dev/gpiomem
-      # I2C access
-      - /dev/i2c-1:/dev/i2c-1
-      # SPI access for LCD
-      - /dev/spidev0.0:/dev/spidev0.0
-      - /dev/spidev0.1:/dev/spidev0.1
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # MariaDB Database
-  db:
-    image: mariadb:10.11
-    container_name: genslave-db
-    restart: unless-stopped
-    environment:
-      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
-      - MYSQL_DATABASE=genslave
-      - MYSQL_USER=genslave
-      - MYSQL_PASSWORD=${DB_PASSWORD}
-    volumes:
-      - db_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    networks:
-      - genslave-net
-    command: >
-      --innodb_flush_log_at_trx_commit=2
-      --sync_binlog=0
-      --innodb_flush_method=O_DIRECT
-      --skip-log-bin
-      --general_log=0
-      --slow_query_log=0
-      --innodb_buffer_pool_size=48M
-      --max_connections=10
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "2"
-
-  # Tailscale Sidecar
-  tailscale:
-    image: tailscale/tailscale:latest
-    container_name: genslave-tailscale
-    hostname: genslave
-    restart: unless-stopped
-    environment:
-      - TS_AUTHKEY=${TAILSCALE_AUTHKEY}
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_USERSPACE=false
-      - TS_EXTRA_ARGS=--advertise-tags=tag:generator
-    volumes:
-      - tailscale_state:/var/lib/tailscale
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    network_mode: host
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "2"
-
-volumes:
-  db_data:
-  tailscale_state:
-
-networks:
-  genslave-net:
-    driver: bridge
-```
+**Key differences from GenMaster:**
+| Aspect | GenMaster (Docker) | GenSlave (Native) |
+|--------|-------------------|-------------------|
+| Hardware | Pi 5 8GB + NVMe | Pi Zero 2W 512MB |
+| Database | PostgreSQL 16 | SQLite |
+| Deployment | Docker Compose | systemd service |
+| Networking | Docker container | Native Tailscale |
 
 ---
 
@@ -547,73 +428,18 @@ http {
 
 ---
 
-## Database Initialization Scripts
+## Database Initialization
 
-### GenMaster init.sql
+GenMaster uses **Alembic migrations** for database schema management rather than init.sql scripts.
 
-```sql
--- genmaster/init.sql
--- This runs when the database container is first created
-
--- Create initial system_state row
-INSERT INTO system_state (id) VALUES (1)
-ON DUPLICATE KEY UPDATE id = 1;
-
--- Create initial config row with defaults
-INSERT INTO config (
-    id,
-    heartbeat_interval_seconds,
-    heartbeat_failure_threshold,
-    slave_api_url,
-    slave_api_secret,
-    webhook_enabled,
-    temp_warning_celsius,
-    temp_critical_celsius,
-    disk_warning_percent,
-    disk_critical_percent,
-    ram_warning_percent,
-    event_log_retention_days
-) VALUES (
-    1,
-    60,
-    3,
-    'http://genslave:8000',
-    'CHANGE_ME',
-    TRUE,
-    70,
-    80,
-    80,
-    90,
-    85,
-    30
-) ON DUPLICATE KEY UPDATE id = 1;
+On first startup, the entrypoint script runs:
+```bash
+alembic upgrade head
 ```
 
-### GenSlave init.sql
+This creates all tables and initializes default rows. See `02-database-schema.md` for the complete PostgreSQL schema.
 
-```sql
--- genslave/init.sql
--- This runs when the database container is first created
-
--- Create initial system_state row
-INSERT INTO system_state (id) VALUES (1)
-ON DUPLICATE KEY UPDATE id = 1;
-
--- Create initial config row
-INSERT INTO config (
-    id,
-    heartbeat_interval_seconds,
-    heartbeat_failure_threshold,
-    lcd_enabled,
-    lcd_brightness
-) VALUES (
-    1,
-    60,
-    3,
-    TRUE,
-    100
-) ON DUPLICATE KEY UPDATE id = 1;
-```
+**Note**: GenSlave uses SQLite with application-level initialization (no migrations needed for single-file database).
 
 ---
 
@@ -629,135 +455,87 @@ APP_ENV=production
 APP_DEBUG=false
 APP_SECRET_KEY=your-secret-key-change-this
 
-# Database
-DB_ROOT_PASSWORD=root-password-change-this
-DB_PASSWORD=genmaster-password-change-this
+# PostgreSQL Database
+DATABASE_USER=genmaster
+DATABASE_PASSWORD=your-database-password-change-this
+DATABASE_NAME=genmaster
 
-# GenSlave Communication
+# GenSlave Communication (use Tailscale IP)
 SLAVE_API_URL=http://100.x.x.x:8000
 SLAVE_API_SECRET=shared-secret-change-this
+
+# Heartbeat Configuration
+HEARTBEAT_INTERVAL_SECONDS=60
+HEARTBEAT_FAILURE_THRESHOLD=3
 
 # Webhooks (n8n)
 WEBHOOK_BASE_URL=http://100.x.x.x:5678/webhook/generator
 WEBHOOK_SECRET=webhook-secret-change-this
 
-# Tailscale
+# Tailscale (optional - use --profile tailscale)
 TAILSCALE_AUTHKEY=tskey-auth-xxxxx
 
-# Cloudflare Tunnel (optional)
+# Cloudflare Tunnel (optional - use --profile cloudflare)
 CLOUDFLARE_TUNNEL_TOKEN=
+
+# Logging
+LOG_LEVEL=INFO
 ```
 
-### GenSlave .env.example
-
-```bash
-# genslave/.env.example
-
-# Application
-APP_ENV=production
-APP_DEBUG=false
-APP_SECRET_KEY=your-secret-key-change-this
-
-# API Authentication (must match GenMaster's SLAVE_API_SECRET)
-API_SECRET=shared-secret-change-this
-
-# Database
-DB_ROOT_PASSWORD=root-password-change-this
-DB_PASSWORD=genslave-password-change-this
-
-# Webhooks (direct failsafe notification)
-WEBHOOK_BASE_URL=http://100.x.x.x:5678/webhook/generator
-WEBHOOK_SECRET=webhook-secret-change-this
-
-# LCD Display
-LCD_ENABLED=true
-
-# Tailscale
-TAILSCALE_AUTHKEY=tskey-auth-xxxxx
-```
+**Note**: GenSlave environment configuration is documented in `05-genslave-backend.md`.
 
 ---
 
 ## Container Management Scripts
 
-### Start Script
+These scripts are for **GenMaster only**. GenSlave uses systemd service commands (see `05-genslave-backend.md`).
+
+### Start GenMaster
 
 ```bash
 #!/bin/bash
-# scripts/start.sh
+# genmaster/scripts/start.sh
 
 set -e
+cd /opt/genmaster
 
-DEVICE=${1:-genmaster}
-
-if [ "$DEVICE" = "genmaster" ]; then
-    cd /opt/genmaster
-elif [ "$DEVICE" = "genslave" ]; then
-    cd /opt/genslave
-else
-    echo "Usage: $0 [genmaster|genslave]"
-    exit 1
-fi
-
-echo "Starting $DEVICE..."
+echo "Starting GenMaster..."
 
 # Pull latest images
 docker compose pull
 
-# Run migrations
-docker compose run --rm ${DEVICE} alembic upgrade head
-
-# Start services
+# Start services (migrations run automatically via entrypoint)
 docker compose up -d
 
-echo "$DEVICE started successfully"
+echo "GenMaster started successfully"
 docker compose ps
 ```
 
-### Stop Script
+### Stop GenMaster
 
 ```bash
 #!/bin/bash
-# scripts/stop.sh
+# genmaster/scripts/stop.sh
 
 set -e
+cd /opt/genmaster
 
-DEVICE=${1:-genmaster}
-
-if [ "$DEVICE" = "genmaster" ]; then
-    cd /opt/genmaster
-elif [ "$DEVICE" = "genslave" ]; then
-    cd /opt/genslave
-else
-    echo "Usage: $0 [genmaster|genslave]"
-    exit 1
-fi
-
-echo "Stopping $DEVICE..."
+echo "Stopping GenMaster..."
 docker compose down
 
-echo "$DEVICE stopped"
+echo "GenMaster stopped"
 ```
 
-### Logs Script
+### View Logs
 
 ```bash
 #!/bin/bash
-# scripts/logs.sh
+# genmaster/scripts/logs.sh
 
 set -e
+cd /opt/genmaster
 
-DEVICE=${1:-genmaster}
-SERVICE=${2:-}
-
-if [ "$DEVICE" = "genmaster" ]; then
-    cd /opt/genmaster
-elif [ "$DEVICE" = "genslave" ]; then
-    cd /opt/genslave
-else
-    echo "Usage: $0 [genmaster|genslave] [service]"
-    exit 1
-fi
+SERVICE=${1:-}
 
 if [ -n "$SERVICE" ]; then
     docker compose logs -f "$SERVICE"
@@ -766,47 +544,32 @@ else
 fi
 ```
 
-### Update Script
+### Update GenMaster
 
 ```bash
 #!/bin/bash
-# scripts/update.sh
+# genmaster/scripts/update.sh
 
 set -e
+cd /opt/genmaster
 
-DEVICE=${1:-genmaster}
+echo "Updating GenMaster..."
 
-if [ "$DEVICE" = "genmaster" ]; then
-    cd /opt/genmaster
-elif [ "$DEVICE" = "genslave" ]; then
-    cd /opt/genslave
-else
-    echo "Usage: $0 [genmaster|genslave]"
-    exit 1
-fi
+# Pull latest images from Docker Hub
+docker compose pull
 
-echo "Updating $DEVICE..."
-
-# Pull latest code (if using git)
-# git pull
-
-# Rebuild containers
-docker compose build --no-cache
-
-# Run migrations
-docker compose run --rm ${DEVICE} alembic upgrade head
-
-# Restart with new images
+# Restart with new images (migrations run automatically)
 docker compose up -d
 
-echo "$DEVICE updated successfully"
+echo "GenMaster updated successfully"
+docker compose ps
 ```
 
 ---
 
 ## Systemd Service
 
-### GenMaster Service
+### GenMaster Docker Service
 
 ```ini
 # /etc/systemd/system/genmaster.service
@@ -829,107 +592,88 @@ TimeoutStartSec=300
 WantedBy=multi-user.target
 ```
 
-### GenSlave Service
-
-```ini
-# /etc/systemd/system/genslave.service
-[Unit]
-Description=GenSlave Generator Control System
-Requires=docker.service
-After=docker.service network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/opt/genslave
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
-ExecReload=/usr/bin/docker compose restart
-TimeoutStartSec=300
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Enable Service
+### Enable GenMaster Service
 
 ```bash
 # Enable and start the service
 sudo systemctl daemon-reload
-sudo systemctl enable genmaster.service  # or genslave.service
+sudo systemctl enable genmaster.service
 sudo systemctl start genmaster.service
 ```
 
+**Note**: GenSlave uses a native Python systemd service (not Docker). See `05-genslave-backend.md` for the GenSlave systemd configuration.
+
 ---
 
-## Resource Limits
+## Resource Considerations
 
-For Pi Zero 2W with 512MB RAM, set container limits:
+GenMaster runs on Raspberry Pi 5 with 8GB RAM, so resource limits are optional but can be configured for stability:
 
 ```yaml
-# Add to docker-compose.yml services
+# Optional: Add to docker-compose.yml services
 services:
   genmaster:
     deploy:
       resources:
         limits:
-          memory: 150M
+          memory: 1G
         reservations:
-          memory: 100M
+          memory: 512M
 
   db:
     deploy:
       resources:
         limits:
-          memory: 100M
+          memory: 2G
         reservations:
-          memory: 80M
+          memory: 1G
 
   nginx:
     deploy:
       resources:
         limits:
-          memory: 30M
+          memory: 128M
         reservations:
-          memory: 20M
+          memory: 64M
 ```
+
+**Note**: GenSlave runs natively on Pi Zero 2W without Docker, so container resource limits don't apply to it.
 
 ---
 
 ## Building for ARM
 
-When building on a different architecture:
+GenMaster images are built for multiple architectures via GitHub Actions CI/CD:
 
 ```bash
-# Build for ARM64 (Pi Zero 2W)
-docker buildx build --platform linux/arm64 -t genmaster:latest .
+# Build multi-arch image locally
+docker buildx build --platform linux/arm64,linux/amd64 -t rjsears/genmaster:latest --push .
 
-# Or use multi-platform build
-docker buildx build --platform linux/arm64,linux/amd64 -t genmaster:latest .
+# Build for specific architecture
+docker buildx build --platform linux/arm64 -t genmaster:local .
 ```
+
+The GitHub Actions workflow automatically builds and pushes to Docker Hub on tagged releases.
 
 ---
 
 ## Backup Configuration
 
-### Database Backup Script
+### PostgreSQL Backup Script
 
 ```bash
 #!/bin/bash
-# scripts/backup.sh
+# genmaster/scripts/backup.sh
 
-DEVICE=${1:-genmaster}
-BACKUP_DIR="/opt/${DEVICE}/backups"
+BACKUP_DIR="/opt/genmaster/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="${BACKUP_DIR}/${DEVICE}_${DATE}.sql.gz"
+BACKUP_FILE="${BACKUP_DIR}/genmaster_${DATE}.sql.gz"
 
 mkdir -p "$BACKUP_DIR"
+cd /opt/genmaster
 
-cd /opt/${DEVICE}
-
-# Dump database
-docker compose exec -T db mysqldump -u root -p"${DB_ROOT_PASSWORD}" ${DEVICE} | gzip > "$BACKUP_FILE"
+# Dump PostgreSQL database
+docker compose exec -T db pg_dump -U genmaster genmaster | gzip > "$BACKUP_FILE"
 
 # Keep only last 7 backups
 ls -t "${BACKUP_DIR}"/*.sql.gz | tail -n +8 | xargs -r rm
@@ -937,37 +681,65 @@ ls -t "${BACKUP_DIR}"/*.sql.gz | tail -n +8 | xargs -r rm
 echo "Backup created: $BACKUP_FILE"
 ```
 
+### Restore from Backup
+
+```bash
+#!/bin/bash
+# genmaster/scripts/restore.sh
+
+BACKUP_FILE=$1
+if [ -z "$BACKUP_FILE" ]; then
+    echo "Usage: $0 <backup_file.sql.gz>"
+    exit 1
+fi
+
+cd /opt/genmaster
+
+# Stop application (keep database running)
+docker compose stop genmaster nginx
+
+# Restore database
+gunzip -c "$BACKUP_FILE" | docker compose exec -T db psql -U genmaster genmaster
+
+# Restart application
+docker compose start genmaster nginx
+
+echo "Restore complete"
+```
+
 ### Cron Job
 
 ```bash
 # Add to crontab
 # Daily backup at 2 AM
-0 2 * * * /opt/genmaster/scripts/backup.sh genmaster >> /var/log/genmaster-backup.log 2>&1
+0 2 * * * /opt/genmaster/scripts/backup.sh >> /var/log/genmaster-backup.log 2>&1
 ```
+
+**Note**: GenSlave uses SQLite which can be backed up by simply copying the database file. See `05-genslave-backend.md` for GenSlave backup procedures.
 
 ---
 
 ## Agent Implementation Checklist
 
-- [ ] Create GenMaster Dockerfile
-- [ ] Create GenMaster docker-compose.yml
-- [ ] Create GenMaster docker-compose.override.yml (dev)
-- [ ] Create GenMaster docker-compose.prod.yml
-- [ ] Create GenMaster nginx.conf
-- [ ] Create GenMaster init.sql
-- [ ] Create GenMaster .env.example
-- [ ] Create GenSlave Dockerfile
-- [ ] Create GenSlave docker-compose.yml
-- [ ] Create GenSlave init.sql
-- [ ] Create GenSlave .env.example
+### GenMaster (Docker)
+- [ ] Create Dockerfile with multi-arch support
+- [ ] Create docker-compose.yml with PostgreSQL
+- [ ] Create nginx configuration files
+- [ ] Create .env.example
+- [ ] Create entrypoint and helper scripts
 - [ ] Create management scripts (start, stop, logs, update)
-- [ ] Create systemd service files
-- [ ] Create backup script
-- [ ] Test GPIO access in containers
-- [ ] Test I2C/SPI access for LCD
-- [ ] Test database persistence
-- [ ] Test Tailscale connectivity
-- [ ] Verify resource limits work on Pi Zero 2W
+- [ ] Create systemd service file
+- [ ] Create backup/restore scripts
+- [ ] Test GPIO access in container (Pi 5 with gpiozero/lgpio)
+- [ ] Test PostgreSQL persistence
+- [ ] Test Tailscale connectivity (profile)
+- [ ] Test Cloudflare tunnel (profile)
+
+### GenSlave (Native - see 05-genslave-backend.md)
+- [ ] Native Python deployment
+- [ ] SQLite database setup
+- [ ] systemd service configuration
+- [ ] Native Tailscale installation
 
 ---
 

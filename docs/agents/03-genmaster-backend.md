@@ -175,8 +175,22 @@ class Settings(BaseSettings):
     app_debug: bool = False
     app_secret_key: str = "change-me-in-production"
 
-    # Database
-    database_url: str = "mysql+pymysql://genmaster:password@db:3306/genmaster"
+    # PostgreSQL Database
+    database_host: str = "db"
+    database_port: int = 5432
+    database_user: str = "genmaster"
+    database_password: str = "change-me"
+    database_name: str = "genmaster"
+
+    @property
+    def database_url(self) -> str:
+        """Construct async PostgreSQL URL for asyncpg."""
+        return f"postgresql+asyncpg://{self.database_user}:{self.database_password}@{self.database_host}:{self.database_port}/{self.database_name}"
+
+    @property
+    def database_url_sync(self) -> str:
+        """Construct sync PostgreSQL URL for Alembic migrations."""
+        return f"postgresql+psycopg2://{self.database_user}:{self.database_password}@{self.database_host}:{self.database_port}/{self.database_name}"
 
     # GenSlave Communication
     slave_api_url: str = "http://genslave:8000"
@@ -2089,8 +2103,9 @@ def get_cpu_temperature() -> Optional[float]:
 # genmaster/requirements.txt
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
-sqlalchemy>=2.0.0
-pymysql>=1.1.0
+sqlalchemy[asyncio]>=2.0.0
+asyncpg>=0.29.0                  # PostgreSQL async driver
+psycopg2-binary>=2.9.9           # PostgreSQL sync driver for Alembic
 alembic>=1.13.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0

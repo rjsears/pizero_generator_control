@@ -7,9 +7,9 @@ This document establishes the foundational project structure, coding conventions
 
 ## Project Overview
 
-**System**: Wireless generator control using two Raspberry Pi Zero 2W devices
-- **GenMaster**: Monitors Victron Cerbo GX relay signal, hosts web interface, manages state
-- **GenSlave**: Controls generator relay via Automation Hat Mini, responds to GenMaster commands
+**System**: Wireless generator control using two Raspberry Pi devices
+- **GenMaster** (Raspberry Pi 5 8GB + NVMe): Monitors Victron Cerbo GX relay signal, hosts web interface, manages state - Docker deployment with PostgreSQL
+- **GenSlave** (Raspberry Pi Zero 2W): Controls generator relay via Automation Hat Mini, responds to GenMaster commands - Native Python deployment with SQLite
 
 **Primary Goals**:
 1. Reliability - System must work consistently without manual intervention
@@ -142,12 +142,12 @@ pizero_generator_control/
 │   ├── requirements-dev.txt
 │   └── .env.example
 │
-├── genslave/
+├── genslave/                        # Native Python deployment (no Docker)
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── main.py                  # FastAPI application entry point
 │   │   ├── config.py                # Pydantic settings
-│   │   ├── database.py              # SQLAlchemy setup
+│   │   ├── database.py              # SQLite database setup
 │   │   ├── dependencies.py          # FastAPI dependencies
 │   │   │
 │   │   ├── models/
@@ -189,11 +189,11 @@ pizero_generator_control/
 │   │   ├── conftest.py
 │   │   └── ...
 │   │
-│   ├── alembic/
-│   │   └── ...
+│   ├── data/                        # SQLite database directory
+│   │   └── genslave.db              # SQLite database file
 │   │
-│   ├── Dockerfile
-│   ├── docker-compose.yml
+│   ├── setup.sh                     # Native installation script
+│   ├── genslave.service             # systemd service file
 │   ├── requirements.txt
 │   └── .env.example
 │
@@ -373,8 +373,12 @@ APP_ENV=production
 APP_DEBUG=false
 APP_SECRET_KEY=your-secret-key-here
 
-# Database
-DATABASE_URL=mysql+pymysql://genmaster:password@db:3306/genmaster
+# Database (PostgreSQL)
+DATABASE_HOST=db
+DATABASE_PORT=5432
+DATABASE_USER=genmaster
+DATABASE_PASSWORD=your-password-here
+DATABASE_NAME=genmaster
 
 # GenSlave Communication
 SLAVE_API_URL=http://100.x.x.x:8000
@@ -407,7 +411,17 @@ class Settings(BaseSettings):
     app_debug: bool = False
     app_secret_key: str
 
-    database_url: str
+    # PostgreSQL database settings
+    database_host: str = "db"
+    database_port: int = 5432
+    database_user: str = "genmaster"
+    database_password: str
+    database_name: str = "genmaster"
+
+    @property
+    def database_url(self) -> str:
+        """Construct async PostgreSQL URL for asyncpg"""
+        return f"postgresql+asyncpg://{self.database_user}:{self.database_password}@{self.database_host}:{self.database_port}/{self.database_name}"
 
     slave_api_url: str
     slave_api_secret: str

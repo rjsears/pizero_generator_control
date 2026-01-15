@@ -11,6 +11,13 @@ The networking stack provides:
 1. **Tailscale (Required)** - Secure mesh VPN for all device communication
 2. **Cloudflare Tunnel (Optional)** - Public web access without port forwarding
 
+### Deployment Methods
+
+| Device | Hardware | Tailscale Deployment | Cloudflare Tunnel |
+|--------|----------|---------------------|-------------------|
+| **GenMaster** | Pi 5 8GB | Docker container (profile) | Docker container (profile) |
+| **GenSlave** | Pi Zero 2W | Native installation | Not supported |
+
 ---
 
 ## Network Architecture
@@ -65,23 +72,25 @@ The networking stack provides:
    - **Expiry**: 90 days (or longer)
 4. Copy the key (starts with `tskey-auth-`)
 
-### Docker Container Configuration
+### GenMaster: Docker Container Configuration
 
-Tailscale runs as a sidecar container in host network mode:
+GenMaster uses Tailscale via Docker Compose profile. Enable with `--profile tailscale`:
 
 ```yaml
-# docker-compose.yml
+# genmaster/docker-compose.yml (excerpt)
 services:
   tailscale:
     image: tailscale/tailscale:latest
-    container_name: ${DEVICE_NAME}-tailscale
-    hostname: ${DEVICE_NAME}  # genmaster or genslave
+    container_name: genmaster-tailscale
+    hostname: genmaster
     restart: unless-stopped
+    profiles:
+      - tailscale
     environment:
       - TS_AUTHKEY=${TAILSCALE_AUTHKEY}
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_USERSPACE=false
-      - TS_EXTRA_ARGS=--advertise-tags=tag:generator
+      - TS_EXTRA_ARGS=${TAILSCALE_EXTRA_ARGS:---advertise-tags=tag:generator}
     volumes:
       - tailscale_state:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun
@@ -94,20 +103,27 @@ volumes:
   tailscale_state:
 ```
 
-### Native Installation (Alternative)
+Start GenMaster with Tailscale:
+```bash
+docker compose --profile tailscale up -d
+```
 
-If not using Docker for Tailscale:
+### GenSlave: Native Installation
+
+GenSlave runs Tailscale natively (no Docker) to conserve RAM on Pi Zero 2W:
 
 ```bash
-# Install Tailscale
+# Install Tailscale on GenSlave
 curl -fsSL https://tailscale.com/install.sh | sh
 
-# Authenticate
-sudo tailscale up --authkey=tskey-auth-xxxxx --hostname=genmaster
+# Authenticate with tag for ACLs
+sudo tailscale up --authkey=tskey-auth-xxxxx --hostname=genslave --advertise-tags=tag:generator
 
 # Check status
 tailscale status
 ```
+
+The GenSlave setup script (`genslave/setup.sh`) automates this installation.
 
 ### MagicDNS
 
@@ -533,18 +549,26 @@ WEBHOOK_SECRET=webhook-secret
 
 ## Agent Implementation Checklist
 
-- [ ] Generate Tailscale auth keys
-- [ ] Configure Tailscale in docker-compose
-- [ ] Set up MagicDNS
-- [ ] Configure Tailscale ACLs
-- [ ] Test GenMaster ↔ GenSlave connectivity
-- [ ] Test webhook delivery to n8n
-- [ ] (Optional) Create Cloudflare tunnel
-- [ ] (Optional) Configure Cloudflare Access
-- [ ] Configure firewall rules
+### Tailscale Setup
+- [ ] Generate Tailscale auth keys (reusable, with tag:generator)
+- [ ] Configure Tailscale ACLs in admin console
+- [ ] Enable MagicDNS
+- [ ] **GenMaster**: Configure Tailscale in docker-compose (--profile tailscale)
+- [ ] **GenSlave**: Install Tailscale natively (setup.sh handles this)
+- [ ] Test GenMaster ↔ GenSlave connectivity via Tailscale hostname
+- [ ] Test webhook delivery to n8n over Tailscale
+- [ ] Enable Tailscale SSH for maintenance
+
+### Cloudflare Tunnel (Optional - GenMaster only)
+- [ ] Create Cloudflare tunnel in Zero Trust dashboard
+- [ ] Configure tunnel in docker-compose (--profile cloudflare)
+- [ ] Configure Cloudflare Access for authentication
+- [ ] Update nginx for Cloudflare IP headers
+
+### Security
+- [ ] Configure firewall rules (UFW)
 - [ ] Test failover scenarios
 - [ ] Document Tailscale IPs for reference
-- [ ] Enable Tailscale SSH for maintenance
 
 ---
 
