@@ -223,6 +223,87 @@ pizero_generator_control/
 
 ## Coding Conventions
 
+### File Header Standard
+
+**REQUIRED**: Every file created for this project MUST include the following header block at the top of the file. Adjust the comment syntax based on file type.
+
+**Python (.py) / Shell (.sh):**
+```python
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# /full/path/to/file/filename.py
+#
+# Part of the "RPi Generator Control" suite
+# Version 1.0.0 - January 15th, 2026
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+```
+
+**JavaScript / Vue (.js, .vue):**
+```javascript
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// /full/path/to/file/filename.js
+//
+// Part of the "RPi Generator Control" suite
+// Version 1.0.0 - January 15th, 2026
+//
+// Richard J. Sears
+// richardjsears@protonmail.com
+// https://github.com/rjsears
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+```
+
+**CSS / YAML / Dockerfile:**
+```yaml
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# /full/path/to/file/filename.yaml
+#
+# Part of the "RPi Generator Control" suite
+# Version 1.0.0 - January 15th, 2026
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+```
+
+**HTML:**
+```html
+<!-- -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+     /full/path/to/file/filename.html
+
+     Part of the "RPi Generator Control" suite
+     Version 1.0.0 - January 15th, 2026
+
+     Richard J. Sears
+     richardjsears@protonmail.com
+     https://github.com/rjsears
+     -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= -->
+```
+
+**SQL:**
+```sql
+-- -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+-- /full/path/to/file/filename.sql
+--
+-- Part of the "RPi Generator Control" suite
+-- Version 1.0.0 - January 15th, 2026
+--
+-- Richard J. Sears
+-- richardjsears@protonmail.com
+-- https://github.com/rjsears
+-- -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+```
+
+**Notes:**
+- Replace `/full/path/to/file/filename.xx` with the actual file path relative to project root
+- Update version number when making significant changes
+- Update date to reflect the file creation or last major update date
+
+---
+
 ### Python (Backend)
 
 **Version**: Python 3.11+
