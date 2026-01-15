@@ -16,6 +16,31 @@ GenSlave is the secondary controller that:
 
 ---
 
+## Deployment Architecture
+
+**IMPORTANT**: GenSlave runs **natively** (no Docker) on a Pi Zero 2W to maximize available RAM.
+
+| Aspect | Decision | Rationale |
+|--------|----------|-----------|
+| Deployment | Native Python | 512MB RAM constraint |
+| Database | SQLite | ~0MB overhead vs 80-150MB for MariaDB |
+| Web Server | Uvicorn direct | No nginx reverse proxy needed |
+| Process Manager | systemd | Built-in, minimal overhead |
+| Python | 3.11+ via pyenv | Latest features, consistent version |
+
+### Memory Budget (Pi Zero 2W - 512MB)
+
+| Component | Memory |
+|-----------|--------|
+| OS + System | ~100MB |
+| Python + FastAPI + Uvicorn | ~50-80MB |
+| SQLite (file-based) | ~0MB |
+| Automation HAT libraries | ~10MB |
+| **Total Used** | **~160-190MB** |
+| **Available for Operations** | **~320-350MB** |
+
+---
+
 ## Hardware
 
 ### Automation Hat Mini
@@ -46,10 +71,12 @@ Generator Remote Start Terminal
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
-| Python | 3.11+ | Runtime |
+| Python | 3.11+ | Runtime (via pyenv) |
 | FastAPI | 0.109+ | Web framework |
-| Uvicorn | 0.27+ | ASGI server |
-| SQLAlchemy | 2.0+ | ORM |
+| Uvicorn | 0.27+ | ASGI server (direct, no nginx) |
+| SQLAlchemy | 2.0+ | ORM (sync mode for SQLite) |
+| SQLite | 3.x | Embedded database (file-based) |
+| aiosqlite | 0.19+ | Async SQLite driver |
 | automationhat | 0.4+ | HAT control library |
 | Pillow | 10.0+ | LCD image generation |
 | ST7735 | - | LCD driver (via automationhat) |
@@ -60,41 +87,49 @@ Generator Remote Start Terminal
 ## Project Structure
 
 ```
-genslave/app/
-├── __init__.py
-├── main.py              # FastAPI app & lifespan
-├── config.py            # Settings
-├── database.py          # SQLAlchemy setup
-├── dependencies.py      # FastAPI dependencies
-├── models/
-│   ├── __init__.py
-│   ├── base.py
-│   ├── system_state.py
-│   └── config.py
-├── schemas/
-│   ├── __init__.py
-│   ├── relay.py
-│   ├── heartbeat.py
-│   └── system.py
-├── routers/
-│   ├── __init__.py
-│   ├── relay.py
-│   ├── heartbeat.py
-│   ├── health.py
-│   ├── system.py
-│   └── config.py
-├── services/
-│   ├── __init__.py
-│   ├── relay_control.py
-│   ├── lcd_display.py
-│   ├── heartbeat_monitor.py
-│   ├── failsafe.py
-│   └── webhook.py
-└── utils/
+/opt/genslave/                   # Installation root
+├── .env                         # Environment configuration
+├── .env.example                 # Environment template
+├── requirements.txt             # Python dependencies
+├── data/                        # Data directory
+│   └── genslave.db             # SQLite database file
+├── logs/                        # Application logs
+│   └── genslave.log
+└── app/
     ├── __init__.py
-    ├── system_info.py
-    ├── logging.py
-    └── auth.py
+    ├── main.py                  # FastAPI app & lifespan
+    ├── config.py                # Settings
+    ├── database.py              # SQLite + SQLAlchemy setup
+    ├── dependencies.py          # FastAPI dependencies
+    ├── models/
+    │   ├── __init__.py
+    │   ├── base.py
+    │   ├── system_state.py
+    │   └── config.py
+    ├── schemas/
+    │   ├── __init__.py
+    │   ├── relay.py
+    │   ├── heartbeat.py
+    │   └── system.py
+    ├── routers/
+    │   ├── __init__.py
+    │   ├── relay.py
+    │   ├── heartbeat.py
+    │   ├── health.py
+    │   ├── system.py
+    │   └── config.py
+    ├── services/
+    │   ├── __init__.py
+    │   ├── relay_control.py
+    │   ├── lcd_display.py
+    │   ├── heartbeat_monitor.py
+    │   ├── failsafe.py
+    │   └── webhook.py
+    └── utils/
+        ├── __init__.py
+        ├── system_info.py
+        ├── logging.py
+        └── auth.py
 ```
 
 ---
@@ -108,6 +143,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.database import init_database, ensure_default_records
 from app.routers import relay, heartbeat, health, system, config as config_router
 from app.services.relay_control import RelayControl
 from app.services.lcd_display import LCDDisplay
@@ -127,6 +163,13 @@ async def lifespan(app: FastAPI):
     global relay_control, lcd_display, heartbeat_monitor, failsafe_service
 
     print("Starting GenSlave services...")
+
+    # Ensure directories exist
+    settings.ensure_directories()
+
+    # Initialize SQLite database (create tables if needed)
+    init_database()
+    ensure_default_records()
 
     # Initialize relay control
     relay_control = RelayControl()
@@ -227,6 +270,7 @@ def get_failsafe_service() -> FailsafeService:
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import Optional
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -235,8 +279,18 @@ class Settings(BaseSettings):
     app_debug: bool = False
     app_secret_key: str = "change-me"
 
-    # Database
-    database_url: str = "mysql+pymysql://genslave:password@db:3306/genslave"
+    # Database (SQLite - file-based, no server needed)
+    database_path: str = "/opt/genslave/data/genslave.db"
+
+    @property
+    def database_url(self) -> str:
+        """Generate SQLite database URL."""
+        return f"sqlite+aiosqlite:///{self.database_path}"
+
+    @property
+    def sync_database_url(self) -> str:
+        """Sync database URL for migrations/scripts."""
+        return f"sqlite:///{self.database_path}"
 
     # API Authentication
     api_secret: str = "change-me"
@@ -256,10 +310,19 @@ class Settings(BaseSettings):
     lcd_enabled: bool = True
     lcd_brightness: int = 100
 
+    # Logging
+    log_path: str = "/opt/genslave/logs/genslave.log"
+    log_level: str = "INFO"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"
+
+    def ensure_directories(self):
+        """Ensure data and log directories exist."""
+        Path(self.database_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(self.log_path).parent.mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache
@@ -268,6 +331,253 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+```
+
+---
+
+## Database Setup (SQLite)
+
+GenSlave uses SQLite for zero-overhead persistent storage. Unlike GenMaster which uses PostgreSQL with Alembic migrations, GenSlave creates tables directly on startup.
+
+```python
+# genslave/app/database.py
+from sqlalchemy import create_engine, event
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, Session
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from app.config import settings
+
+
+# Ensure database directory exists
+Path(settings.database_path).parent.mkdir(parents=True, exist_ok=True)
+
+# Async engine for FastAPI
+async_engine = create_async_engine(
+    settings.database_url,
+    echo=settings.app_debug,
+    # SQLite-specific: check_same_thread needed for async
+    connect_args={"check_same_thread": False}
+)
+
+# Sync engine for table creation and direct operations
+sync_engine = create_engine(
+    settings.sync_database_url,
+    echo=settings.app_debug,
+    connect_args={"check_same_thread": False}
+)
+
+
+# Enable SQLite optimizations
+@event.listens_for(sync_engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """Configure SQLite for better performance."""
+    cursor = dbapi_connection.cursor()
+    # Enable Write-Ahead Logging for better concurrent access
+    cursor.execute("PRAGMA journal_mode=WAL")
+    # Faster writes (data still safe due to WAL)
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    # Use more memory for better performance
+    cursor.execute("PRAGMA cache_size=-8000")  # 8MB cache
+    # Enable foreign keys
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
+# Async session factory
+AsyncSessionLocal = sessionmaker(
+    bind=async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+)
+
+# Sync session factory (for startup/shutdown)
+SessionLocal = sessionmaker(
+    bind=sync_engine,
+    expire_on_commit=False,
+    autoflush=False,
+)
+
+
+@asynccontextmanager
+async def get_async_session() -> AsyncSession:
+    """Async context manager for database sessions."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
+def get_sync_session() -> Session:
+    """Get synchronous session for startup operations."""
+    return SessionLocal()
+
+
+# FastAPI dependency
+async def get_db():
+    """FastAPI dependency for database sessions."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
+def init_database():
+    """Initialize database tables (called on first startup)."""
+    from app.models.base import Base
+    from app.models import system_state, config  # Import all models
+
+    # Create all tables
+    Base.metadata.create_all(bind=sync_engine)
+    print(f"Database initialized at {settings.database_path}")
+
+
+def ensure_default_records():
+    """Ensure default configuration records exist."""
+    from app.models.system_state import SystemState
+    from app.models.config import Config
+
+    db = SessionLocal()
+    try:
+        # Ensure SystemState singleton exists
+        if not db.query(SystemState).first():
+            db.add(SystemState())
+            db.commit()
+            print("Created default SystemState record")
+
+        # Ensure Config singleton exists
+        if not db.query(Config).first():
+            db.add(Config())
+            db.commit()
+            print("Created default Config record")
+    finally:
+        db.close()
+```
+
+### SQLite Models (No Alembic)
+
+GenSlave models are simplified and don't use Alembic migrations. Tables are created directly on startup.
+
+```python
+# genslave/app/models/base.py
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import Integer, DateTime, func
+
+
+class Base(DeclarativeBase):
+    """Base class for all models."""
+    pass
+
+
+class TimestampMixin:
+    """Mixin for created/updated timestamps."""
+    created_at: Mapped[int] = mapped_column(Integer, default=lambda: int(__import__('time').time()))
+    updated_at: Mapped[int] = mapped_column(
+        Integer,
+        default=lambda: int(__import__('time').time()),
+        onupdate=lambda: int(__import__('time').time())
+    )
+```
+
+```python
+# genslave/app/models/system_state.py
+from sqlalchemy import Integer, Boolean, String
+from sqlalchemy.orm import Mapped, mapped_column, Session
+
+from app.models.base import Base, TimestampMixin
+
+
+class SystemState(Base, TimestampMixin):
+    """Singleton table for system state persistence."""
+    __tablename__ = "system_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+
+    # Relay state
+    relay_state: Mapped[bool] = mapped_column(Boolean, default=False)
+    relay_on_time: Mapped[int] = mapped_column(Integer, nullable=True)
+    relay_off_time: Mapped[int] = mapped_column(Integer, nullable=True)
+
+    # Last command
+    last_command: Mapped[str] = mapped_column(String(20), nullable=True)
+    last_command_time: Mapped[int] = mapped_column(Integer, nullable=True)
+    last_command_source: Mapped[str] = mapped_column(String(50), nullable=True)
+
+    # Heartbeat tracking
+    last_heartbeat_received: Mapped[int] = mapped_column(Integer, nullable=True)
+    missed_heartbeat_count: Mapped[int] = mapped_column(Integer, default=0)
+    master_connection_status: Mapped[str] = mapped_column(String(20), default="unknown")
+
+    # Failsafe
+    failsafe_triggered: Mapped[bool] = mapped_column(Boolean, default=False)
+    failsafe_time: Mapped[int] = mapped_column(Integer, nullable=True)
+
+    @classmethod
+    def get_instance(cls, db: Session) -> "SystemState":
+        """Get singleton instance, create if needed."""
+        state = db.query(cls).first()
+        if not state:
+            state = cls(id=1)
+            db.add(state)
+            db.commit()
+        return state
+```
+
+```python
+# genslave/app/models/config.py
+from sqlalchemy import Integer, Boolean, String
+from sqlalchemy.orm import Mapped, mapped_column, Session
+
+from app.models.base import Base, TimestampMixin
+
+
+class Config(Base, TimestampMixin):
+    """Singleton table for configuration (pushed from GenMaster)."""
+    __tablename__ = "config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+
+    # Heartbeat settings
+    heartbeat_interval_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    heartbeat_failure_threshold: Mapped[int] = mapped_column(Integer, default=3)
+
+    # Webhook settings
+    webhook_base_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    webhook_secret: Mapped[str] = mapped_column(String(100), nullable=True)
+
+    # LCD settings
+    lcd_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    lcd_brightness: Mapped[int] = mapped_column(Integer, default=100)
+
+    # GenMaster reference
+    master_api_url: Mapped[str] = mapped_column(String(500), nullable=True)
+
+    @classmethod
+    def get_instance(cls, db: Session) -> "Config":
+        """Get singleton instance, create if needed."""
+        config = db.query(cls).first()
+        if not config:
+            config = cls(id=1)
+            db.add(config)
+            db.commit()
+        return config
+```
+
+```python
+# genslave/app/models/__init__.py
+from app.models.base import Base, TimestampMixin
+from app.models.system_state import SystemState
+from app.models.config import Config
+
+__all__ = ["Base", "TimestampMixin", "SystemState", "Config"]
 ```
 
 ---
@@ -1365,22 +1675,51 @@ The GenSlave uses simpler tables:
 ## Requirements
 
 ```
-# genslave/requirements.txt
+# /opt/genslave/requirements.txt
+# Core Framework
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
+
+# Database (SQLite - no external server needed)
 sqlalchemy>=2.0.0
-pymysql>=1.1.0
-alembic>=1.13.0
+aiosqlite>=0.19.0
+
+# Data Validation
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
+
+# Hardware Control (Automation Hat Mini)
 automationhat>=0.4.0
-Pillow>=10.0.0
-ST7735>=0.0.4
-httpx>=0.26.0
-psutil>=5.9.0
-python-dotenv>=1.0.0
 RPi.GPIO>=0.7.0
 spidev>=3.5
+
+# LCD Display
+Pillow>=10.0.0
+ST7735>=0.0.4
+
+# HTTP Client (for webhooks)
+httpx>=0.26.0
+
+# System Monitoring
+psutil>=5.9.0
+
+# Configuration
+python-dotenv>=1.0.0
+```
+
+### Development Requirements (Optional)
+
+```
+# /opt/genslave/requirements-dev.txt
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Type checking
+mypy>=1.7.0
+
+# Linting
+ruff>=0.1.0
 ```
 
 ---
@@ -1440,34 +1779,323 @@ print("LCD test complete - check display")
 
 ---
 
+## Native Installation
+
+GenSlave runs natively (no Docker) to conserve RAM on the Pi Zero 2W.
+
+### Directory Structure
+
+```bash
+# Create installation directories
+sudo mkdir -p /opt/genslave/{app,data,logs}
+sudo chown -R pi:pi /opt/genslave
+
+# Create Python virtual environment
+python3 -m venv /opt/genslave/venv
+source /opt/genslave/venv/bin/activate
+
+# Install dependencies
+pip install -r /opt/genslave/requirements.txt
+```
+
+### Environment Configuration
+
+```bash
+# /opt/genslave/.env
+APP_ENV=production
+APP_DEBUG=false
+APP_SECRET_KEY=<generate-with-openssl-rand-hex-32>
+
+# Database (auto-created, no configuration needed)
+DATABASE_PATH=/opt/genslave/data/genslave.db
+
+# API Authentication (must match GenMaster)
+API_SECRET=<shared-secret-with-genmaster>
+
+# Heartbeat defaults (can be updated by GenMaster)
+HEARTBEAT_INTERVAL_SECONDS=60
+HEARTBEAT_FAILURE_THRESHOLD=3
+
+# Webhook (optional, for failsafe notifications)
+WEBHOOK_BASE_URL=http://n8n:5678/webhook/generator
+WEBHOOK_SECRET=<webhook-secret>
+
+# GenMaster reference
+MASTER_API_URL=http://genmaster:8000
+
+# LCD Display
+LCD_ENABLED=true
+LCD_BRIGHTNESS=100
+
+# Logging
+LOG_PATH=/opt/genslave/logs/genslave.log
+LOG_LEVEL=INFO
+```
+
+### .env.example Template
+
+```bash
+# /opt/genslave/.env.example
+APP_ENV=production
+APP_DEBUG=false
+APP_SECRET_KEY=change-me-generate-with-openssl
+
+DATABASE_PATH=/opt/genslave/data/genslave.db
+
+API_SECRET=change-me-must-match-genmaster
+
+HEARTBEAT_INTERVAL_SECONDS=60
+HEARTBEAT_FAILURE_THRESHOLD=3
+
+# WEBHOOK_BASE_URL=http://n8n:5678/webhook/generator
+# WEBHOOK_SECRET=
+
+# MASTER_API_URL=http://genmaster:8000
+
+LCD_ENABLED=true
+LCD_BRIGHTNESS=100
+
+LOG_PATH=/opt/genslave/logs/genslave.log
+LOG_LEVEL=INFO
+```
+
+---
+
+## Systemd Service
+
+```ini
+# /etc/systemd/system/genslave.service
+[Unit]
+Description=GenSlave Generator Controller
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/genslave
+Environment="PATH=/opt/genslave/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/genslave/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+# Resource limits for Pi Zero 2W
+MemoryMax=200M
+MemoryHigh=150M
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/genslave/data /opt/genslave/logs
+
+# GPIO access
+SupplementaryGroups=gpio i2c spi
+
+# Logging
+StandardOutput=append:/opt/genslave/logs/genslave.log
+StandardError=append:/opt/genslave/logs/genslave.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Enable and Start Service
+
+```bash
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Enable on boot
+sudo systemctl enable genslave
+
+# Start service
+sudo systemctl start genslave
+
+# Check status
+sudo systemctl status genslave
+
+# View logs
+journalctl -u genslave -f
+# Or:
+tail -f /opt/genslave/logs/genslave.log
+```
+
+---
+
+## Log Rotation
+
+```bash
+# /etc/logrotate.d/genslave
+/opt/genslave/logs/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 0640 pi pi
+    postrotate
+        systemctl restart genslave > /dev/null 2>&1 || true
+    endscript
+}
+```
+
+---
+
+## Tailscale Integration
+
+GenSlave connects to GenMaster via Tailscale VPN.
+
+```bash
+# Install Tailscale (native, not Docker)
+curl -fsSL https://tailscale.com/install.sh | sh
+
+# Authenticate with auth key
+sudo tailscale up --authkey=tskey-auth-xxxxx --hostname=genslave
+
+# Verify connection
+tailscale status
+tailscale ping genmaster
+```
+
+### Configure GenMaster URL
+
+Once Tailscale is running, update the MASTER_API_URL to use the Tailscale hostname:
+
+```bash
+# /opt/genslave/.env
+MASTER_API_URL=http://genmaster:8000
+```
+
+---
+
+## Database Backup
+
+SQLite database can be backed up with a simple file copy:
+
+```bash
+# Manual backup
+cp /opt/genslave/data/genslave.db /opt/genslave/data/genslave.db.backup
+
+# Automated backup script
+#!/bin/bash
+# /opt/genslave/backup.sh
+BACKUP_DIR="/opt/genslave/backups"
+mkdir -p "$BACKUP_DIR"
+cp /opt/genslave/data/genslave.db "$BACKUP_DIR/genslave-$(date +%Y%m%d-%H%M%S).db"
+
+# Keep only last 7 backups
+ls -t "$BACKUP_DIR"/genslave-*.db | tail -n +8 | xargs -r rm
+```
+
+Add to crontab:
+```bash
+# Backup daily at 2am
+0 2 * * * /opt/genslave/backup.sh
+```
+
+---
+
+## Health Check Script
+
+```bash
+#!/bin/bash
+# /opt/genslave/health-check.sh
+
+set -e
+
+echo "=== GenSlave Health Check ==="
+
+# Check service status
+if systemctl is-active --quiet genslave; then
+    echo "✓ Service: running"
+else
+    echo "✗ Service: not running"
+    exit 1
+fi
+
+# Check API health
+if curl -s http://localhost:8000/api/health | grep -q "healthy"; then
+    echo "✓ API: healthy"
+else
+    echo "✗ API: not responding"
+    exit 1
+fi
+
+# Check database
+if [ -f /opt/genslave/data/genslave.db ]; then
+    DB_SIZE=$(du -h /opt/genslave/data/genslave.db | cut -f1)
+    echo "✓ Database: $DB_SIZE"
+else
+    echo "✗ Database: missing"
+    exit 1
+fi
+
+# Check memory usage
+MEM_USED=$(free -m | awk 'NR==2{printf "%.0f%%", $3*100/$2}')
+echo "• Memory: $MEM_USED"
+
+# Check Tailscale
+if tailscale status &>/dev/null; then
+    echo "✓ Tailscale: connected"
+else
+    echo "✗ Tailscale: not connected"
+fi
+
+echo "=== Health Check Complete ==="
+```
+
+---
+
 ## Agent Implementation Checklist
 
+### Phase 1: Core Setup
+- [ ] Create `/opt/genslave/` directory structure
+- [ ] Create `requirements.txt`
+- [ ] Create `.env.example`
 - [ ] Create `app/config.py` with settings
-- [ ] Create `app/main.py` with FastAPI app and lifespan
+- [ ] Create `app/database.py` with SQLite setup
 - [ ] Create database models in `app/models/`
+- [ ] Test SQLite database initialization
+
+### Phase 2: API Implementation
+- [ ] Create `app/main.py` with FastAPI app and lifespan
 - [ ] Create Pydantic schemas in `app/schemas/`
 - [ ] Create all routers in `app/routers/`
+- [ ] Create `app/utils/auth.py`
+- [ ] Create `app/utils/system_info.py`
+- [ ] Test API endpoints (without hardware)
+
+### Phase 3: Hardware Services
 - [ ] Create `app/services/relay_control.py`
 - [ ] Create `app/services/lcd_display.py`
+- [ ] Test relay hardware control
+- [ ] Test LCD display
+
+### Phase 4: Communication Services
 - [ ] Create `app/services/heartbeat_monitor.py`
 - [ ] Create `app/services/failsafe.py`
 - [ ] Create `app/services/webhook.py`
-- [ ] Create `app/utils/auth.py`
-- [ ] Create `app/utils/system_info.py`
-- [ ] Create `requirements.txt`
-- [ ] Create `.env.example`
-- [ ] Set up Alembic migrations
-- [ ] Test relay hardware control
-- [ ] Test LCD display
 - [ ] Test heartbeat monitoring
 - [ ] Test failsafe trigger
-- [ ] Test API authentication
+- [ ] Test webhook notifications
+
+### Phase 5: Deployment
+- [ ] Create systemd service file
+- [ ] Configure log rotation
+- [ ] Test service startup/restart
+- [ ] Install and configure Tailscale
+- [ ] Test GenMaster ↔ GenSlave connectivity
+- [ ] Create backup script
+- [ ] Create health check script
 
 ---
 
 ## Related Documents
 
 - `01-project-structure.md` - Conventions and patterns
-- `02-database-schema.md` - GenSlave database tables
+- `02-database-schema.md` - GenSlave database tables (SQLite section)
 - `03-genmaster-backend.md` - GenMaster that sends commands
-- `06-docker-infrastructure.md` - Container configuration
+- `08-setup-scripts.md` - GenSlave setup automation
