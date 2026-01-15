@@ -75,14 +75,24 @@ This document defines the complete database schema for both GenMaster and GenSla
 └─────────────────────┘     │ last_executed       │
                             └─────────────────────┘
 
-┌─────────────────────┐
-│     event_log       │
-├─────────────────────┤
-│ id (PK)             │
-│ event_type          │
-│ event_data (JSONB)  │
-│ created_at          │
-└─────────────────────┘
+┌─────────────────────┐     ┌─────────────────────┐
+│       users         │     │      sessions       │
+├─────────────────────┤     ├─────────────────────┤
+│ id (PK)             │     │ id (PK)             │
+│ username            │◄────│ user_id (FK)        │
+│ password_hash       │     │ token               │
+│ created_at          │     │ expires_at          │
+└─────────────────────┘     │ created_at          │
+                            └─────────────────────┘
+
+┌─────────────────────┐     ┌─────────────────────┐
+│     event_log       │     │      settings       │
+├─────────────────────┤     ├─────────────────────┤
+│ id (PK)             │     │ id (PK)             │
+│ event_type          │     │ key (unique)        │
+│ event_data (JSONB)  │     │ value (JSONB)       │
+│ created_at          │     │ updated_at          │
+└─────────────────────┘     └─────────────────────┘
 ```
 
 ### Table: system_state
@@ -581,6 +591,264 @@ class EventLog(Base):
         return event
 ```
 
+### Table: users
+
+Stores user accounts for web UI authentication.
+
+```sql
+-- PostgreSQL
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+
+    -- Authentication
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+
+    -- Profile
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_users_username ON users(username);
+
+CREATE TRIGGER update_users_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+```
+
+**SQLAlchemy Model**:
+
+```python
+# genmaster/app/models/user.py
+from datetime import datetime
+from typing import Optional
+from sqlalchemy import Index, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from passlib.hash import bcrypt
+from app.models.base import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        Index("idx_username", "username", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Authentication
+    username: Mapped[str] = mapped_column(unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(nullable=False)
+
+    # Profile
+    is_active: Mapped[bool] = mapped_column(default=True)
+    is_admin: Mapped[bool] = mapped_column(default=False)
+
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    # Relationships
+    sessions: Mapped[list["Session"]] = relationship(
+        "Session", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    def set_password(self, password: str) -> None:
+        """Hash and set password."""
+        self.password_hash = bcrypt.hash(password)
+
+    def verify_password(self, password: str) -> bool:
+        """Verify password against hash."""
+        return bcrypt.verify(password, self.password_hash)
+
+    @classmethod
+    def create(cls, db, username: str, password: str, is_admin: bool = False) -> "User":
+        """Create a new user."""
+        user = cls(username=username, is_admin=is_admin)
+        user.set_password(password)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+```
+
+### Table: sessions
+
+Stores user authentication sessions.
+
+```sql
+-- PostgreSQL
+CREATE TABLE sessions (
+    id SERIAL PRIMARY KEY,
+
+    -- Session Data
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+
+    -- Client Info
+    user_agent TEXT NULL,
+    ip_address VARCHAR(45) NULL,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_sessions_token ON sessions(token);
+CREATE INDEX idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
+```
+
+**SQLAlchemy Model**:
+
+```python
+# genmaster/app/models/session.py
+from datetime import datetime
+from typing import Optional
+from sqlalchemy import ForeignKey, Index, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.models.base import Base
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+    __table_args__ = (
+        Index("idx_token", "token", unique=True),
+        Index("idx_user_id", "user_id"),
+        Index("idx_expires_at", "expires_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Session Data
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token: Mapped[str] = mapped_column(unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(nullable=False)
+
+    # Client Info
+    user_agent: Mapped[Optional[str]] = mapped_column(nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(nullable=True)
+
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="sessions")
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if session has expired."""
+        return datetime.utcnow() > self.expires_at
+
+    @classmethod
+    def cleanup_expired(cls, db) -> int:
+        """Remove all expired sessions. Returns count deleted."""
+        result = db.query(cls).filter(cls.expires_at < datetime.utcnow()).delete()
+        db.commit()
+        return result
+```
+
+### Table: settings
+
+Flexible key-value settings storage for UI configuration.
+
+```sql
+-- PostgreSQL
+CREATE TABLE settings (
+    id SERIAL PRIMARY KEY,
+
+    -- Key-Value Data
+    key VARCHAR(100) NOT NULL UNIQUE,
+    value JSONB NULL,
+    description TEXT NULL,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_settings_key ON settings(key);
+
+CREATE TRIGGER update_settings_updated_at
+    BEFORE UPDATE ON settings
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+```
+
+**SQLAlchemy Model**:
+
+```python
+# genmaster/app/models/settings.py
+from datetime import datetime
+from typing import Optional, Any, List
+from sqlalchemy import Index, func
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, Session
+from app.models.base import Base
+
+
+class Settings(Base):
+    __tablename__ = "settings"
+    __table_args__ = (
+        Index("idx_key", "key", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Key-Value Data
+    key: Mapped[str] = mapped_column(unique=True, nullable=False)
+    value: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(nullable=True)
+
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    @classmethod
+    def get(cls, db: Session, key: str) -> Optional["Settings"]:
+        """Get setting by key."""
+        return db.query(cls).filter(cls.key == key).first()
+
+    @classmethod
+    def get_value(cls, db: Session, key: str, default: Any = None) -> Any:
+        """Get setting value by key, returning default if not found."""
+        setting = cls.get(db, key)
+        return setting.value if setting else default
+
+    @classmethod
+    def set(cls, db: Session, key: str, value: Any, description: str = None) -> "Settings":
+        """Set or update a setting."""
+        setting = cls.get(db, key)
+        if setting:
+            setting.value = value
+            if description is not None:
+                setting.description = description
+        else:
+            setting = cls(key=key, value=value, description=description)
+            db.add(setting)
+        db.commit()
+        db.refresh(setting)
+        return setting
+
+    @classmethod
+    def get_all(cls, db: Session) -> List["Settings"]:
+        """Get all settings."""
+        return db.query(cls).all()
+```
+
 ---
 
 ## GenSlave Database Schema (SQLite)
@@ -953,7 +1221,14 @@ services:
 
 ### GenMaster (PostgreSQL)
 - [ ] Create `app/models/base.py` with Base class
-- [ ] Create all model files in `app/models/`
+- [ ] Create `app/models/system_state.py`
+- [ ] Create `app/models/config.py`
+- [ ] Create `app/models/generator_runs.py`
+- [ ] Create `app/models/scheduled_runs.py`
+- [ ] Create `app/models/event_log.py`
+- [ ] Create `app/models/user.py` (authentication)
+- [ ] Create `app/models/session.py` (authentication)
+- [ ] Create `app/models/settings.py` (flexible key-value storage)
 - [ ] Create `app/models/__init__.py` exporting all models
 - [ ] Create `app/database.py` with async PostgreSQL engine
 - [ ] Initialize Alembic in `alembic/` directory
@@ -962,6 +1237,7 @@ services:
 - [ ] Create repository classes in `app/repositories/`
 - [ ] Test migrations with `alembic upgrade head`
 - [ ] Test async database operations
+- [ ] Create default admin user in initial migration
 
 ### GenSlave (SQLite)
 - [ ] Create `app/models/base.py` with Base class

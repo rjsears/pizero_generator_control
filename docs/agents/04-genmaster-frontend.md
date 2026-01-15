@@ -1,7 +1,34 @@
 # Agent Handoff: GenMaster Frontend
 
 ## Purpose
-This document provides complete specifications for building the GenMaster Vue.js frontend, including all components, views, API integration, and styling with Tailwind CSS.
+This document provides complete specifications for building the Gen Management Vue.js frontend, modeled after the n8n_nginx management interface. The frontend provides a comprehensive web-based control panel for managing the generator control system.
+
+---
+
+## Overview
+
+### Application Name
+**Gen Management** - Generator Control System Management Interface
+
+### Design Philosophy
+The frontend is modeled after the n8n_nginx management interface, providing:
+- Clean, modern UI with Tailwind CSS
+- Dark/light theme support
+- Real-time system monitoring
+- Comprehensive container management
+- Generator-specific controls and scheduling
+
+### Navigation Structure
+
+| Tab | Purpose | Based On |
+|-----|---------|----------|
+| **Dashboard** | System overview, metrics, generator status | n8n Dashboard |
+| **Generator** | Generator control, manual start/stop, Victron monitoring | New |
+| **Schedule** | Scheduled generator run times | New |
+| **History** | Generator run history and statistics | New |
+| **Containers** | Docker container management | n8n Containers |
+| **System** | Health checks, network, terminal | n8n System |
+| **Settings** | Appearance, notifications, security, account | n8n Settings (simplified) |
 
 ---
 
@@ -13,9 +40,12 @@ This document provides complete specifications for building the GenMaster Vue.js
 | Vite | 5.0+ | Build tool |
 | Tailwind CSS | 3.4+ | Utility-first CSS |
 | Pinia | 2.1+ | State management |
-| Chart.js | 4.4+ | Runtime graphs |
+| Vue Router | 4.2+ | Client-side routing |
+| Chart.js | 4.4+ | Runtime graphs and metrics |
 | vue-chartjs | 5.3+ | Vue wrapper for Chart.js |
 | Axios | 1.6+ | HTTP client |
+| @heroicons/vue | 2.1+ | Icon library |
+| xterm.js | 5.3+ | Terminal emulator |
 
 ---
 
@@ -24,45 +54,58 @@ This document provides complete specifications for building the GenMaster Vue.js
 ```
 genmaster/frontend/
 ├── src/
-│   ├── main.js                 # App entry point
-│   ├── App.vue                 # Root component
-│   ├── api/                    # API client modules
-│   │   ├── index.js            # Axios instance
-│   │   ├── generator.js        # Generator endpoints
-│   │   ├── health.js           # Health endpoints
-│   │   ├── system.js           # System endpoints
-│   │   ├── schedule.js         # Schedule endpoints
-│   │   └── config.js           # Config endpoints
-│   ├── components/             # Reusable components
-│   │   ├── StatusCard.vue
-│   │   ├── HealthGauge.vue
-│   │   ├── RuntimeChart.vue
-│   │   ├── ScheduleTable.vue
-│   │   ├── ScheduleModal.vue
-│   │   ├── ConfirmDialog.vue
-│   │   ├── ToastNotification.vue
-│   │   ├── LoadingSpinner.vue
-│   │   └── Toggle.vue
-│   ├── views/                  # Page components
-│   │   ├── Dashboard.vue       # Main dashboard
-│   │   ├── History.vue         # Run history
-│   │   ├── Schedule.vue        # Schedule management
-│   │   └── Settings.vue        # Configuration
-│   ├── stores/                 # Pinia stores
-│   │   ├── index.js
-│   │   ├── generator.js        # Generator state
-│   │   ├── system.js           # System state
-│   │   └── notifications.js    # Toast notifications
-│   ├── composables/            # Reusable logic
-│   │   ├── usePolling.js       # Polling helper
-│   │   └── useFormatters.js    # Date/time formatters
+│   ├── main.js                       # App entry point
+│   ├── App.vue                       # Root component with layout
 │   ├── router/
-│   │   └── index.js            # Vue Router config
-│   └── assets/
-│       └── styles/
-│           └── main.css        # Tailwind imports
+│   │   └── index.js                  # Vue Router configuration
+│   ├── services/
+│   │   └── api.js                    # Axios instance + API modules
+│   ├── stores/                       # Pinia stores
+│   │   ├── auth.js                   # Authentication state
+│   │   ├── containers.js             # Container state
+│   │   ├── generator.js              # Generator state
+│   │   ├── notifications.js          # Toast notifications
+│   │   ├── system.js                 # System health state
+│   │   └── theme.js                  # Theme preferences
+│   ├── composables/                  # Reusable composition functions
+│   │   ├── usePoll.js                # Polling helper
+│   │   └── useFormatters.js          # Date/time/byte formatters
+│   ├── config/
+│   │   └── constants.js              # Polling intervals, etc.
+│   ├── utils/
+│   │   └── formatters.js             # Formatting utilities
+│   ├── components/
+│   │   ├── common/                   # Shared components
+│   │   │   ├── Card.vue
+│   │   │   ├── StatusBadge.vue
+│   │   │   ├── LoadingSpinner.vue
+│   │   │   ├── EmptyState.vue
+│   │   │   ├── ConfirmDialog.vue
+│   │   │   └── SystemMetricsLoader.vue
+│   │   ├── generator/                # Generator-specific components
+│   │   │   ├── GeneratorStatus.vue
+│   │   │   ├── VictronMonitor.vue
+│   │   │   ├── ManualControl.vue
+│   │   │   ├── OverridePanel.vue
+│   │   │   └── RuntimeChart.vue
+│   │   ├── schedule/                 # Schedule components
+│   │   │   ├── ScheduleTable.vue
+│   │   │   └── ScheduleModal.vue
+│   │   └── settings/                 # Settings components
+│   │       ├── WebhookSettings.vue
+│   │       └── AppearanceSettings.vue
+│   └── views/                        # Page components
+│       ├── LoginView.vue
+│       ├── DashboardView.vue
+│       ├── GeneratorView.vue
+│       ├── ScheduleView.vue
+│       ├── HistoryView.vue
+│       ├── ContainersView.vue
+│       ├── SystemView.vue
+│       └── SettingsView.vue
 ├── index.html
 ├── package.json
+├── pnpm-lock.yaml
 ├── vite.config.js
 ├── tailwind.config.js
 ├── postcss.config.js
@@ -77,7 +120,7 @@ genmaster/frontend/
 
 ```json
 {
-  "name": "genmaster-frontend",
+  "name": "gen-management",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -93,7 +136,10 @@ genmaster/frontend/
     "pinia": "^2.1.0",
     "axios": "^1.6.0",
     "chart.js": "^4.4.0",
-    "vue-chartjs": "^5.3.0"
+    "vue-chartjs": "^5.3.0",
+    "@heroicons/vue": "^2.1.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",
@@ -126,6 +172,10 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true
+      },
+      '/ws': {
+        target: 'ws://localhost:8000',
+        ws: true
       }
     }
   },
@@ -147,25 +197,14 @@ export default {
     './index.html',
     './src/**/*.{vue,js,ts,jsx,tsx}'
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        // Custom color palette
+        // Generator-specific colors
         'gen-green': '#22C55E',
         'gen-red': '#EF4444',
         'gen-amber': '#F59E0B',
-        'gen-gray': {
-          50: '#F9FAFB',
-          100: '#F3F4F6',
-          200: '#E5E7EB',
-          300: '#D1D5DB',
-          400: '#9CA3AF',
-          500: '#6B7280',
-          600: '#4B5563',
-          700: '#374151',
-          800: '#1F2937',
-          900: '#111827'
-        }
       },
       fontFamily: {
         mono: ['JetBrains Mono', 'Consolas', 'monospace']
@@ -173,17 +212,6 @@ export default {
     }
   },
   plugins: []
-};
-```
-
-### postcss.config.js
-
-```javascript
-export default {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {}
-  }
 };
 ```
 
@@ -195,263 +223,186 @@ export default {
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --color-primary: theme('colors.blue.600');
+    --color-primary-dark: theme('colors.blue.500');
+  }
+
   body {
-    @apply bg-gen-gray-900 text-gen-gray-50 antialiased;
+    @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased;
   }
 }
 
 @layer components {
+  /* Text color utilities */
+  .text-primary {
+    @apply text-gray-900 dark:text-white;
+  }
+
+  .text-secondary {
+    @apply text-gray-600 dark:text-gray-400;
+  }
+
+  .text-muted {
+    @apply text-gray-500 dark:text-gray-500;
+  }
+
+  /* Surface colors */
+  .bg-surface {
+    @apply bg-white dark:bg-gray-800;
+  }
+
+  .bg-surface-hover {
+    @apply bg-gray-50 dark:bg-gray-700/50;
+  }
+
+  /* Card styles */
   .card {
-    @apply bg-gen-gray-800 rounded-lg p-4 shadow-lg;
+    @apply bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm;
   }
 
-  .card-header {
-    @apply text-sm font-semibold text-gen-gray-400 uppercase tracking-wide mb-3;
-  }
-
+  /* Button styles */
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200;
+    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 inline-flex items-center justify-center gap-2;
   }
 
   .btn-primary {
-    @apply bg-gen-green text-white hover:bg-green-600;
-  }
-
-  .btn-danger {
-    @apply bg-gen-red text-white hover:bg-red-600;
+    @apply bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-secondary {
-    @apply bg-gen-gray-700 text-gen-gray-200 hover:bg-gen-gray-600;
+    @apply bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600;
   }
 
-  .btn-disabled {
-    @apply opacity-50 cursor-not-allowed;
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700;
   }
 
+  .btn-success {
+    @apply bg-emerald-600 text-white hover:bg-emerald-700;
+  }
+
+  /* Form inputs */
+  .input-field {
+    @apply w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600
+           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+           placeholder-gray-400 dark:placeholder-gray-500;
+  }
+
+  .select-field {
+    @apply input-field cursor-pointer;
+  }
+
+  /* Status indicators */
   .status-dot {
-    @apply w-3 h-3 rounded-full inline-block mr-2;
+    @apply w-3 h-3 rounded-full inline-block;
   }
 
   .status-running {
-    @apply bg-gen-green animate-pulse;
+    @apply bg-emerald-500 animate-pulse;
   }
 
   .status-stopped {
-    @apply bg-gen-gray-500;
+    @apply bg-gray-400;
   }
 
   .status-warning {
-    @apply bg-gen-amber;
+    @apply bg-amber-500;
   }
 
   .status-error {
-    @apply bg-gen-red;
-  }
-
-  .input {
-    @apply bg-gen-gray-700 border border-gen-gray-600 rounded-lg px-3 py-2
-           text-gen-gray-100 placeholder-gen-gray-500
-           focus:outline-none focus:ring-2 focus:ring-gen-green focus:border-transparent;
+    @apply bg-red-500;
   }
 }
 ```
 
 ---
 
-## Entry Point & App Shell
-
-### index.html
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GenMaster Control Panel</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
-</html>
-```
-
-### src/main.js
-
-```javascript
-import { createApp } from 'vue';
-import { createPinia } from 'pinia';
-import App from './App.vue';
-import router from './router';
-import './assets/styles/main.css';
-
-const app = createApp(App);
-
-app.use(createPinia());
-app.use(router);
-
-app.mount('#app');
-```
-
-### src/App.vue
-
-```vue
-<script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
-import { RouterView, RouterLink, useRoute } from 'vue-router';
-import { useGeneratorStore } from '@/stores/generator';
-import { useSystemStore } from '@/stores/system';
-import { useNotificationStore } from '@/stores/notifications';
-import ToastNotification from '@/components/ToastNotification.vue';
-
-const route = useRoute();
-const generatorStore = useGeneratorStore();
-const systemStore = useSystemStore();
-const notificationStore = useNotificationStore();
-
-const navItems = [
-  { path: '/', label: 'Dashboard', icon: 'dashboard' },
-  { path: '/history', label: 'History', icon: 'history' },
-  { path: '/schedule', label: 'Schedule', icon: 'schedule' },
-  { path: '/settings', label: 'Settings', icon: 'settings' }
-];
-
-let pollInterval = null;
-
-onMounted(() => {
-  // Initial fetch
-  generatorStore.fetchStatus();
-  systemStore.fetchHealth();
-
-  // Start polling every 5 seconds
-  pollInterval = setInterval(() => {
-    generatorStore.fetchStatus();
-    systemStore.fetchHealth();
-  }, 5000);
-});
-
-onUnmounted(() => {
-  if (pollInterval) {
-    clearInterval(pollInterval);
-  }
-});
-</script>
-
-<template>
-  <div class="min-h-screen flex flex-col">
-    <!-- Header -->
-    <header class="bg-gen-gray-800 border-b border-gen-gray-700 px-4 py-3">
-      <div class="max-w-7xl mx-auto flex items-center justify-between">
-        <h1 class="text-xl font-bold text-gen-gray-100">
-          GenMaster Control Panel
-        </h1>
-
-        <!-- Quick Status -->
-        <div class="flex items-center gap-4">
-          <div class="flex items-center">
-            <span
-              class="status-dot"
-              :class="generatorStore.isRunning ? 'status-running' : 'status-stopped'"
-            ></span>
-            <span class="text-sm">
-              Generator: {{ generatorStore.isRunning ? 'Running' : 'Stopped' }}
-            </span>
-          </div>
-          <div class="flex items-center">
-            <span
-              class="status-dot"
-              :class="{
-                'status-running': systemStore.slaveConnected,
-                'status-error': !systemStore.slaveConnected
-              }"
-            ></span>
-            <span class="text-sm">
-              Slave: {{ systemStore.slaveConnected ? 'Online' : 'Offline' }}
-            </span>
-          </div>
-        </div>
-      </div>
-    </header>
-
-    <!-- Navigation -->
-    <nav class="bg-gen-gray-800 border-b border-gen-gray-700">
-      <div class="max-w-7xl mx-auto px-4">
-        <div class="flex gap-1">
-          <RouterLink
-            v-for="item in navItems"
-            :key="item.path"
-            :to="item.path"
-            class="px-4 py-3 text-sm font-medium transition-colors"
-            :class="[
-              route.path === item.path
-                ? 'text-gen-green border-b-2 border-gen-green'
-                : 'text-gen-gray-400 hover:text-gen-gray-200'
-            ]"
-          >
-            {{ item.label }}
-          </RouterLink>
-        </div>
-      </div>
-    </nav>
-
-    <!-- Main Content -->
-    <main class="flex-1 p-4">
-      <div class="max-w-7xl mx-auto">
-        <RouterView />
-      </div>
-    </main>
-
-    <!-- Footer -->
-    <footer class="bg-gen-gray-800 border-t border-gen-gray-700 px-4 py-2">
-      <div class="max-w-7xl mx-auto text-center text-sm text-gen-gray-500">
-        GenMaster v1.0.0
-      </div>
-    </footer>
-
-    <!-- Toast Notifications -->
-    <ToastNotification />
-  </div>
-</template>
-```
+## Router Configuration
 
 ### src/router/index.js
 
 ```javascript
 import { createRouter, createWebHistory } from 'vue-router';
-import Dashboard from '@/views/Dashboard.vue';
-import History from '@/views/History.vue';
-import Schedule from '@/views/Schedule.vue';
-import Settings from '@/views/Settings.vue';
+import { useAuthStore } from '../stores/auth';
 
 const routes = [
   {
-    path: '/',
-    name: 'Dashboard',
-    component: Dashboard
+    path: '/login',
+    name: 'login',
+    component: () => import('../views/LoginView.vue'),
+    meta: { guest: true },
   },
   {
-    path: '/history',
-    name: 'History',
-    component: History
+    path: '/',
+    name: 'dashboard',
+    component: () => import('../views/DashboardView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/generator',
+    name: 'generator',
+    component: () => import('../views/GeneratorView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/schedule',
-    name: 'Schedule',
-    component: Schedule
+    name: 'schedule',
+    component: () => import('../views/ScheduleView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/history',
+    name: 'history',
+    component: () => import('../views/HistoryView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/containers',
+    name: 'containers',
+    component: () => import('../views/ContainersView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/system',
+    name: 'system',
+    component: () => import('../views/SystemView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/settings',
-    name: 'Settings',
-    component: Settings
-  }
+    name: 'settings',
+    component: () => import('../views/SettingsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/',
+  },
 ];
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+});
+
+// Navigation guard
+router.beforeEach(async (to, from, next) => {
+  const authStore = useAuthStore();
+
+  // Initialize auth if token exists
+  if (!authStore.user && authStore.token) {
+    await authStore.fetchCurrentUser();
+  }
+
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    next({ name: 'login', query: { redirect: to.fullPath } });
+  } else if (to.meta.guest && authStore.isAuthenticated) {
+    next({ name: 'dashboard' });
+  } else {
+    next();
+  }
 });
 
 export default router;
@@ -459,188 +410,137 @@ export default router;
 
 ---
 
-## API Client
+## API Service
 
-### src/api/index.js
+### src/services/api.js
 
 ```javascript
 import axios from 'axios';
+import router from '../router';
 
+// Create axios instance
 const api = axios.create({
   baseURL: '/api',
-  timeout: 10000,
+  timeout: 30000,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
 });
 
-// Response interceptor for error handling
+// Request interceptor - add auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor - handle errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message = error.response?.data?.detail || error.message || 'An error occurred';
-    console.error('API Error:', message);
+    if (error.response?.status === 401) {
+      localStorage.removeItem('auth_token');
+      if (router.currentRoute.value.name !== 'login') {
+        router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } });
+      }
+    }
     return Promise.reject(error);
   }
 );
 
 export default api;
-```
 
-### src/api/generator.js
+// =============================================================================
+// API Modules
+// =============================================================================
 
-```javascript
-import api from './index';
+export const authApi = {
+  login: (credentials) => api.post('/auth/login', credentials),
+  logout: () => api.post('/auth/logout'),
+  me: () => api.get('/auth/me'),
+  changePassword: (data) => api.put('/auth/password', data),
+};
 
 export const generatorApi = {
-  getStatus() {
-    return api.get('/status');
-  },
+  // Status & Control
+  getStatus: () => api.get('/status'),
+  getState: () => api.get('/generator/state'),
+  start: (durationMinutes, notes = null) => api.post('/generator/start', { duration_minutes: durationMinutes, notes }),
+  stop: (reason = null) => api.post('/generator/stop', { reason }),
 
-  getState() {
-    return api.get('/generator/state');
-  },
+  // Victron Monitoring
+  getVictronStatus: () => api.get('/victron/status'),
 
-  start(durationMinutes, notes = null) {
-    return api.post('/generator/start', {
-      duration_minutes: durationMinutes,
-      notes
-    });
-  },
+  // Override Control
+  getOverride: () => api.get('/override'),
+  enableOverride: (type) => api.post('/override/enable', { type }),
+  disableOverride: () => api.post('/override/disable'),
 
-  stop(reason = null) {
-    return api.post('/generator/stop', {
-      reason
-    });
-  },
-
-  getHistory(limit = 10, offset = 0) {
-    return api.get('/generator/history', {
-      params: { limit, offset }
-    });
-  },
-
-  getStats(days = 30) {
-    return api.get('/generator/stats', {
-      params: { days }
-    });
-  }
+  // History & Statistics
+  getHistory: (limit = 10, offset = 0) => api.get('/generator/history', { params: { limit, offset } }),
+  getStats: (days = 30) => api.get('/generator/stats', { params: { days } }),
 };
-```
-
-### src/api/health.js
-
-```javascript
-import api from './index';
-
-export const healthApi = {
-  getSlaveHealth() {
-    return api.get('/health/slave');
-  },
-
-  testHeartbeat() {
-    return api.post('/health/test-heartbeat');
-  },
-
-  testWebhook() {
-    return api.post('/health/test-webhook');
-  }
-};
-```
-
-### src/api/system.js
-
-```javascript
-import api from './index';
-
-export const systemApi = {
-  getHealth() {
-    return api.get('/system/health');
-  },
-
-  getAllHealth() {
-    return api.get('/system/health/all');
-  },
-
-  getVictronStatus() {
-    return api.get('/system/victron');
-  },
-
-  reboot() {
-    return api.post('/system/reboot');
-  },
-
-  getOverrideStatus() {
-    return api.get('/override');
-  },
-
-  enableOverride(type) {
-    return api.post('/override/enable', { type });
-  },
-
-  disableOverride() {
-    return api.post('/override/disable');
-  }
-};
-```
-
-### src/api/schedule.js
-
-```javascript
-import api from './index';
 
 export const scheduleApi = {
-  list(enabledOnly = false) {
-    return api.get('/schedule', {
-      params: { enabled_only: enabledOnly }
-    });
-  },
-
-  get(id) {
-    return api.get(`/schedule/${id}`);
-  },
-
-  create(data) {
-    return api.post('/schedule', data);
-  },
-
-  update(id, data) {
-    return api.put(`/schedule/${id}`, data);
-  },
-
-  delete(id) {
-    return api.delete(`/schedule/${id}`);
-  }
+  list: (enabledOnly = false) => api.get('/schedule', { params: { enabled_only: enabledOnly } }),
+  get: (id) => api.get(`/schedule/${id}`),
+  create: (data) => api.post('/schedule', data),
+  update: (id, data) => api.put(`/schedule/${id}`, data),
+  delete: (id) => api.delete(`/schedule/${id}`),
+  toggle: (id, enabled) => api.patch(`/schedule/${id}`, { enabled }),
 };
-```
 
-### src/api/config.js
+export const healthApi = {
+  getSlaveHealth: () => api.get('/health/slave'),
+  getSlaveConnection: () => api.get('/health/slave/connection'),
+  testHeartbeat: () => api.post('/health/test-heartbeat'),
+  testWebhook: () => api.post('/health/test-webhook'),
+};
 
-```javascript
-import api from './index';
+export const systemApi = {
+  health: () => api.get('/system/health'),
+  healthFull: () => api.get('/system/health/full'),
+  info: () => api.get('/system/info'),
+  metrics: () => api.get('/system/metrics'),
+  metricsCached: (historyMinutes = 60) => api.get('/system/host-metrics/cached', { params: { history_minutes: historyMinutes } }),
+  network: () => api.get('/system/network'),
+  tailscale: () => api.get('/system/tailscale'),
+  terminalTargets: () => api.get('/system/terminal/targets'),
+  reboot: () => api.post('/system/reboot'),
+};
+
+export const containersApi = {
+  list: (all = true) => api.get('/containers/', { params: { all } }),
+  get: (name) => api.get(`/containers/${name}`),
+  stats: () => api.get('/containers/stats'),
+  health: () => api.get('/containers/health'),
+  start: (name) => api.post(`/containers/${name}/start`),
+  stop: (name) => api.post(`/containers/${name}/stop`),
+  restart: (name) => api.post(`/containers/${name}/restart`),
+  logs: (name, params) => api.get(`/containers/${name}/logs`, { params }),
+};
+
+export const settingsApi = {
+  getAll: () => api.get('/settings/'),
+  get: (key) => api.get(`/settings/${key}`),
+  update: (key, data) => api.put(`/settings/${key}`, data),
+
+  // Webhook configuration
+  getWebhooks: () => api.get('/settings/webhooks'),
+  updateWebhooks: (data) => api.put('/settings/webhooks', data),
+  testWebhook: (eventType) => api.post('/settings/webhooks/test', { event_type: eventType }),
+};
 
 export const configApi = {
-  get() {
-    return api.get('/config');
-  },
-
-  update(data) {
-    return api.put('/config', data);
-  },
-
-  createBackup() {
-    return api.post('/backup');
-  },
-
-  listBackups() {
-    return api.get('/backup/list');
-  },
-
-  downloadBackup() {
-    return api.get('/backup/download', {
-      responseType: 'blob'
-    });
-  }
+  get: () => api.get('/config'),
+  update: (data) => api.put('/config', data),
+  createBackup: () => api.post('/backup'),
+  downloadBackup: () => api.get('/backup/download', { responseType: 'blob' }),
 };
 ```
 
@@ -648,20 +548,12 @@ export const configApi = {
 
 ## Pinia Stores
 
-### src/stores/index.js
-
-```javascript
-export { useGeneratorStore } from './generator';
-export { useSystemStore } from './system';
-export { useNotificationStore } from './notifications';
-```
-
 ### src/stores/generator.js
 
 ```javascript
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { generatorApi } from '@/api/generator';
+import { generatorApi } from '@/services/api';
 import { useNotificationStore } from './notifications';
 
 export const useGeneratorStore = defineStore('generator', () => {
@@ -671,16 +563,22 @@ export const useGeneratorStore = defineStore('generator', () => {
     start_time: null,
     runtime_seconds: null,
     trigger: 'idle',
-    current_run_id: null
+    current_run_id: null,
   });
   const victron = ref({
     signal_active: false,
     gpio_pin: 17,
-    last_change: null
+    last_change: null,
   });
   const override = ref({
     enabled: false,
-    type: 'none'
+    type: 'none',
+  });
+  const slaveConnection = ref({
+    status: 'unknown',
+    last_heartbeat: null,
+    last_heartbeat_ago_seconds: null,
+    missed_count: 0,
   });
   const stats = ref(null);
   const history = ref([]);
@@ -689,33 +587,36 @@ export const useGeneratorStore = defineStore('generator', () => {
 
   // Getters
   const isRunning = computed(() => status.value.running);
+
   const runtimeFormatted = computed(() => {
     if (!status.value.runtime_seconds) return '--:--:--';
     const hours = Math.floor(status.value.runtime_seconds / 3600);
     const minutes = Math.floor((status.value.runtime_seconds % 3600) / 60);
     const seconds = status.value.runtime_seconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   });
+
   const triggerLabel = computed(() => {
     const labels = {
       idle: 'Idle',
       victron: 'Victron',
       manual: 'Manual',
-      scheduled: 'Scheduled'
+      scheduled: 'Scheduled',
     };
     return labels[status.value.trigger] || status.value.trigger;
   });
+
+  const slaveConnected = computed(() => slaveConnection.value.status === 'connected');
 
   // Actions
   async function fetchStatus() {
     try {
       const response = await generatorApi.getStatus();
       const data = response.data;
-
       status.value = data.generator;
       victron.value = data.victron;
       override.value = data.override;
-
+      slaveConnection.value = data.slave_connection;
       error.value = null;
     } catch (e) {
       error.value = e.message;
@@ -725,7 +626,6 @@ export const useGeneratorStore = defineStore('generator', () => {
   async function start(durationMinutes, notes = null) {
     const notifications = useNotificationStore();
     loading.value = true;
-
     try {
       const response = await generatorApi.start(durationMinutes, notes);
       notifications.success('Generator started successfully');
@@ -743,7 +643,6 @@ export const useGeneratorStore = defineStore('generator', () => {
   async function stop(reason = null) {
     const notifications = useNotificationStore();
     loading.value = true;
-
     try {
       const response = await generatorApi.stop(reason);
       notifications.success('Generator stopped');
@@ -758,34 +657,11 @@ export const useGeneratorStore = defineStore('generator', () => {
     }
   }
 
-  async function fetchStats(days = 30) {
-    try {
-      const response = await generatorApi.getStats(days);
-      stats.value = response.data;
-    } catch (e) {
-      console.error('Failed to fetch stats:', e);
-    }
-  }
-
-  async function fetchHistory(limit = 10) {
-    try {
-      const response = await generatorApi.getHistory(limit);
-      history.value = response.data;
-    } catch (e) {
-      console.error('Failed to fetch history:', e);
-    }
-  }
-
   async function enableOverride(type) {
     const notifications = useNotificationStore();
     try {
-      const response = await fetch('/api/override/enable', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type })
-      });
-      const data = await response.json();
-      override.value = data;
+      const response = await generatorApi.enableOverride(type);
+      override.value = response.data;
       notifications.warning(`Override enabled: ${type}`);
     } catch (e) {
       notifications.error('Failed to enable override');
@@ -795,14 +671,29 @@ export const useGeneratorStore = defineStore('generator', () => {
   async function disableOverride() {
     const notifications = useNotificationStore();
     try {
-      const response = await fetch('/api/override/disable', {
-        method: 'POST'
-      });
-      const data = await response.json();
-      override.value = data;
+      const response = await generatorApi.disableOverride();
+      override.value = response.data;
       notifications.success('Override disabled');
     } catch (e) {
       notifications.error('Failed to disable override');
+    }
+  }
+
+  async function fetchStats(days = 30) {
+    try {
+      const response = await generatorApi.getStats(days);
+      stats.value = response.data;
+    } catch (e) {
+      console.error('Failed to fetch stats:', e);
+    }
+  }
+
+  async function fetchHistory(limit = 10, offset = 0) {
+    try {
+      const response = await generatorApi.getHistory(limit, offset);
+      history.value = response.data;
+    } catch (e) {
+      console.error('Failed to fetch history:', e);
     }
   }
 
@@ -811,6 +702,7 @@ export const useGeneratorStore = defineStore('generator', () => {
     status,
     victron,
     override,
+    slaveConnection,
     stats,
     history,
     loading,
@@ -819,102 +711,136 @@ export const useGeneratorStore = defineStore('generator', () => {
     isRunning,
     runtimeFormatted,
     triggerLabel,
+    slaveConnected,
     // Actions
     fetchStatus,
     start,
     stop,
+    enableOverride,
+    disableOverride,
     fetchStats,
     fetchHistory,
-    enableOverride,
-    disableOverride
   };
 });
 ```
 
-### src/stores/system.js
+### src/stores/containers.js
 
 ```javascript
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import { systemApi } from '@/api/system';
-import { healthApi } from '@/api/health';
+import { ref } from 'vue';
+import { containersApi } from '@/services/api';
+import { useNotificationStore } from './notifications';
 
-export const useSystemStore = defineStore('system', () => {
-  // State
-  const masterHealth = ref(null);
-  const slaveHealth = ref(null);
-  const slaveConnection = ref({
-    status: 'unknown',
-    last_heartbeat: null,
-    missed_count: 0
-  });
+export const useContainerStore = defineStore('containers', () => {
+  const containers = ref([]);
+  const loading = ref(false);
 
-  // Getters
-  const slaveConnected = computed(() =>
-    slaveConnection.value.status === 'connected'
-  );
-
-  const masterHealthStatus = computed(() =>
-    masterHealth.value?.health_status || 'unknown'
-  );
-
-  const slaveHealthStatus = computed(() =>
-    slaveHealth.value?.health_status || 'unknown'
-  );
-
-  // Actions
-  async function fetchHealth() {
+  async function fetchContainers() {
+    loading.value = true;
     try {
-      // Fetch master health
-      const masterResponse = await systemApi.getHealth();
-      masterHealth.value = masterResponse.data;
-
-      // Fetch slave connection status
-      const slaveResponse = await healthApi.getSlaveHealth();
-      slaveConnection.value = slaveResponse.data;
-
-      // Try to get slave system health if connected
-      if (slaveConnection.value.status === 'connected') {
-        try {
-          const allHealth = await systemApi.getAllHealth();
-          slaveHealth.value = allHealth.data.genslave;
-        } catch {
-          slaveHealth.value = null;
-        }
-      }
+      const response = await containersApi.list();
+      containers.value = response.data;
     } catch (e) {
-      console.error('Failed to fetch health:', e);
+      console.error('Failed to fetch containers:', e);
+    } finally {
+      loading.value = false;
     }
   }
 
-  async function testHeartbeat() {
+  async function startContainer(name) {
+    const notifications = useNotificationStore();
     try {
-      const response = await healthApi.testHeartbeat();
-      return response.data;
+      await containersApi.start(name);
+      notifications.success(`Container ${name} started`);
+      await fetchContainers();
     } catch (e) {
+      notifications.error(`Failed to start ${name}`);
       throw e;
     }
   }
 
-  async function testWebhook() {
+  async function stopContainer(name) {
+    const notifications = useNotificationStore();
     try {
-      const response = await healthApi.testWebhook();
+      await containersApi.stop(name);
+      notifications.success(`Container ${name} stopped`);
+      await fetchContainers();
+    } catch (e) {
+      notifications.error(`Failed to stop ${name}`);
+      throw e;
+    }
+  }
+
+  async function restartContainer(name) {
+    const notifications = useNotificationStore();
+    try {
+      await containersApi.restart(name);
+      notifications.success(`Container ${name} restarted`);
+      await fetchContainers();
+    } catch (e) {
+      notifications.error(`Failed to restart ${name}`);
+      throw e;
+    }
+  }
+
+  async function getContainerLogs(name, params) {
+    try {
+      const response = await containersApi.logs(name, params);
       return response.data;
     } catch (e) {
+      console.error('Failed to fetch logs:', e);
       throw e;
     }
   }
 
   return {
-    masterHealth,
-    slaveHealth,
-    slaveConnection,
-    slaveConnected,
-    masterHealthStatus,
-    slaveHealthStatus,
-    fetchHealth,
-    testHeartbeat,
-    testWebhook
+    containers,
+    loading,
+    fetchContainers,
+    startContainer,
+    stopContainer,
+    restartContainer,
+    getContainerLogs,
+  };
+});
+```
+
+### src/stores/theme.js
+
+```javascript
+import { defineStore } from 'pinia';
+import { ref, watch } from 'vue';
+
+export const useThemeStore = defineStore('theme', () => {
+  const colorMode = ref(localStorage.getItem('theme') || 'dark');
+
+  // Apply theme to document
+  function applyTheme() {
+    if (colorMode.value === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', colorMode.value);
+  }
+
+  function setColorMode(mode) {
+    colorMode.value = mode;
+    applyTheme();
+  }
+
+  function toggleTheme() {
+    setColorMode(colorMode.value === 'dark' ? 'light' : 'dark');
+  }
+
+  // Apply on init
+  applyTheme();
+
+  return {
+    colorMode,
+    setColorMode,
+    toggleTheme,
   };
 });
 ```
@@ -934,9 +860,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     notifications.value.push({ id, type, message });
 
     if (duration > 0) {
-      setTimeout(() => {
-        remove(id);
-      }, duration);
+      setTimeout(() => remove(id), duration);
     }
   }
 
@@ -947,21 +871,10 @@ export const useNotificationStore = defineStore('notifications', () => {
     }
   }
 
-  function success(message) {
-    add('success', message);
-  }
-
-  function error(message) {
-    add('error', message, 8000);
-  }
-
-  function warning(message) {
-    add('warning', message);
-  }
-
-  function info(message) {
-    add('info', message);
-  }
+  function success(message) { add('success', message); }
+  function error(message) { add('error', message, 8000); }
+  function warning(message) { add('warning', message); }
+  function info(message) { add('info', message); }
 
   return {
     notifications,
@@ -970,336 +883,399 @@ export const useNotificationStore = defineStore('notifications', () => {
     success,
     error,
     warning,
-    info
+    info,
   };
 });
 ```
 
 ---
 
-## Components
+## Views
 
-### src/components/StatusCard.vue
+### DashboardView.vue
+
+The Dashboard provides a system overview combining metrics from n8n_nginx with generator status:
+
+**Sections:**
+1. **Quick Stats Row** - CPU, Memory, Disk usage, Uptime (like n8n Dashboard)
+2. **Generator Status Card** - Current running state, runtime, trigger type
+3. **GenSlave Connection** - Heartbeat status, connectivity
+4. **Charts** - CPU/Memory history (last hour)
+5. **Container Summary** - Total, running, stopped, unhealthy counts
+6. **Network I/O** - Download/upload rates
+
+**Key Features:**
+- Real-time metrics polling (every 30 seconds)
+- Progress bars with color thresholds
+- Click-through to containers view
+- Generator status indicator in header
+
+### GeneratorView.vue
+
+The Generator view provides comprehensive generator control:
+
+**Sections:**
+1. **Generator Status** - Large status display (RUNNING/STOPPED), runtime timer
+2. **Victron Monitor** - GPIO17 signal status, last change time
+3. **Manual Control** - Duration input, Start/Stop buttons
+4. **Override Panel** - Enable/disable manual override
+5. **Recent Activity** - Last 5 runs summary
+6. **Statistics** - Today/week/month runtime summaries
+
+**Key Features:**
+- Big green/red status indicator
+- Live runtime counter when running
+- Confirmation dialogs for start/stop
+- Override warnings
+
+### ScheduleView.vue
+
+Schedule management for automated generator runs:
+
+**Sections:**
+1. **Upcoming Schedules** - Next scheduled runs
+2. **Schedule List** - All schedules with enable/disable toggles
+3. **Add Schedule Modal** - Create new scheduled runs
+
+**Schedule Properties:**
+- Name (optional)
+- Scheduled start (date/time)
+- Duration (minutes)
+- Recurring (daily/weekly/custom)
+- Enabled status
+
+### HistoryView.vue
+
+Generator run history and statistics:
+
+**Sections:**
+1. **Runtime Chart** - Bar chart of daily runtime (last 14 days)
+2. **Statistics Summary** - Total runtime, run count, averages
+3. **Run History Table** - Detailed list with pagination
+
+**Table Columns:**
+- Start time
+- Stop time
+- Duration
+- Trigger type (Victron/Manual/Scheduled)
+- Stop reason
+
+### ContainersView.vue
+
+Docker container management (adapted from n8n_nginx):
+
+**Features:**
+- Container list with status badges
+- Expand/collapse for details
+- CPU/Memory/Network stats
+- Start/Stop/Restart actions
+- Log viewer dialog
+- Terminal link to System view
+
+**Remove from n8n version:**
+- n8n-specific container handling
+- Notification settings per container
+- Recreate with pull functionality
+
+### SystemView.vue
+
+System health and management (adapted from n8n_nginx):
+
+**Tabs:**
+1. **Health** - Comprehensive health checks, disk usage, container memory
+2. **Network** - Interfaces, Tailscale status, DNS
+3. **Terminal** - Web terminal to containers
+
+**Remove from n8n version:**
+- SSL certificate management (not needed)
+- Cloudflare tunnel management (handled in Docker profiles)
+
+### SettingsView.vue
+
+Application settings (simplified from n8n_nginx):
+
+**Tabs:**
+1. **Appearance** - Light/Dark theme toggle
+2. **Notifications** - Webhook URL configuration (simplified)
+3. **Security** - Session timeout, login attempts
+4. **Account** - Change password
+
+---
+
+## Webhook Notification Settings
+
+### Simplified Notification System
+
+Unlike the n8n_nginx complex notification system with services, groups, and rules, Gen Management uses a simple webhook configuration:
+
+```javascript
+// Settings structure
+{
+  webhooks: {
+    enabled: true,
+    base_url: "http://n8n:5678/webhook/generator",
+    secret: "webhook-secret",
+    events: {
+      generator_started: true,
+      generator_stopped: true,
+      generator_failed: true,
+      heartbeat_lost: true,
+      heartbeat_restored: true,
+      failsafe_triggered: true,
+      schedule_executed: true,
+      override_enabled: true,
+      override_disabled: true,
+      system_warning: true,
+      system_error: true,
+    }
+  }
+}
+```
+
+### WebhookSettings.vue Component
+
+```vue
+<script setup>
+import { ref, onMounted } from 'vue';
+import { settingsApi } from '@/services/api';
+import { useNotificationStore } from '@/stores/notifications';
+
+const notifications = useNotificationStore();
+const webhooks = ref({
+  enabled: false,
+  base_url: '',
+  secret: '',
+  events: {},
+});
+const loading = ref(true);
+const saving = ref(false);
+const testing = ref(false);
+
+const eventTypes = [
+  { key: 'generator_started', label: 'Generator Started', description: 'When generator starts running' },
+  { key: 'generator_stopped', label: 'Generator Stopped', description: 'When generator stops (any reason)' },
+  { key: 'generator_failed', label: 'Generator Failed', description: 'When generator fails to start/stop' },
+  { key: 'heartbeat_lost', label: 'Heartbeat Lost', description: 'When GenSlave connection is lost' },
+  { key: 'heartbeat_restored', label: 'Heartbeat Restored', description: 'When GenSlave connection is restored' },
+  { key: 'failsafe_triggered', label: 'Failsafe Triggered', description: 'When GenSlave triggers failsafe stop' },
+  { key: 'schedule_executed', label: 'Schedule Executed', description: 'When scheduled run starts' },
+  { key: 'override_enabled', label: 'Override Enabled', description: 'When manual override is enabled' },
+  { key: 'override_disabled', label: 'Override Disabled', description: 'When manual override is disabled' },
+  { key: 'system_warning', label: 'System Warning', description: 'High temp, low disk, etc.' },
+  { key: 'system_error', label: 'System Error', description: 'Critical system errors' },
+];
+
+onMounted(async () => {
+  try {
+    const response = await settingsApi.getWebhooks();
+    webhooks.value = response.data;
+  } catch (e) {
+    console.error('Failed to load webhook settings:', e);
+  } finally {
+    loading.value = false;
+  }
+});
+
+async function save() {
+  saving.value = true;
+  try {
+    await settingsApi.updateWebhooks(webhooks.value);
+    notifications.success('Webhook settings saved');
+  } catch (e) {
+    notifications.error('Failed to save webhook settings');
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function testWebhook() {
+  testing.value = true;
+  try {
+    const response = await settingsApi.testWebhook('test');
+    if (response.data.success) {
+      notifications.success(`Webhook test successful (${response.data.response_time_ms}ms)`);
+    } else {
+      notifications.error(`Webhook test failed: ${response.data.error}`);
+    }
+  } catch (e) {
+    notifications.error('Webhook test failed');
+  } finally {
+    testing.value = false;
+  }
+}
+</script>
+
+<template>
+  <div class="space-y-6">
+    <!-- Master Enable -->
+    <div class="flex items-center justify-between p-4 rounded-lg bg-surface-hover">
+      <div>
+        <p class="font-medium text-primary">Enable Webhooks</p>
+        <p class="text-sm text-secondary">Send notifications to external webhook URL</p>
+      </div>
+      <Toggle v-model="webhooks.enabled" />
+    </div>
+
+    <!-- Webhook URL -->
+    <div :class="{ 'opacity-50 pointer-events-none': !webhooks.enabled }">
+      <label class="block text-sm font-medium text-secondary mb-2">Webhook URL</label>
+      <input
+        v-model="webhooks.base_url"
+        type="url"
+        class="input-field"
+        placeholder="https://n8n.example.com/webhook/generator"
+      />
+      <p class="text-xs text-muted mt-1">
+        URL will receive POST requests with event data
+      </p>
+    </div>
+
+    <!-- Secret -->
+    <div :class="{ 'opacity-50 pointer-events-none': !webhooks.enabled }">
+      <label class="block text-sm font-medium text-secondary mb-2">Webhook Secret</label>
+      <input
+        v-model="webhooks.secret"
+        type="password"
+        class="input-field"
+        placeholder="Enter webhook secret"
+      />
+      <p class="text-xs text-muted mt-1">
+        Sent in X-Webhook-Secret header for verification
+      </p>
+    </div>
+
+    <!-- Event Types -->
+    <div :class="{ 'opacity-50 pointer-events-none': !webhooks.enabled }">
+      <h4 class="font-medium text-primary mb-3">Event Types</h4>
+      <div class="space-y-2">
+        <div
+          v-for="event in eventTypes"
+          :key="event.key"
+          class="flex items-center gap-3 p-3 rounded-lg hover:bg-surface-hover"
+        >
+          <input
+            type="checkbox"
+            v-model="webhooks.events[event.key]"
+            class="form-checkbox h-4 w-4 text-blue-600 rounded"
+          />
+          <div>
+            <p class="text-sm font-medium text-primary">{{ event.label }}</p>
+            <p class="text-xs text-muted">{{ event.description }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+      <button
+        @click="testWebhook"
+        :disabled="!webhooks.enabled || !webhooks.base_url || testing"
+        class="btn btn-secondary"
+      >
+        {{ testing ? 'Testing...' : 'Test Webhook' }}
+      </button>
+      <button
+        @click="save"
+        :disabled="saving"
+        class="btn btn-primary"
+      >
+        {{ saving ? 'Saving...' : 'Save Settings' }}
+      </button>
+    </div>
+  </div>
+</template>
+```
+
+---
+
+## Common Components
+
+### Card.vue
 
 ```vue
 <script setup>
 defineProps({
-  title: {
-    type: String,
-    required: true
-  },
-  loading: {
+  title: String,
+  subtitle: String,
+  padding: {
     type: Boolean,
-    default: false
-  }
+    default: true,
+  },
 });
 </script>
 
 <template>
   <div class="card">
-    <div class="card-header">{{ title }}</div>
-    <div v-if="loading" class="flex justify-center py-4">
-      <LoadingSpinner />
+    <div v-if="title" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+      <h3 class="font-semibold text-primary">{{ title }}</h3>
+      <p v-if="subtitle" class="text-sm text-muted">{{ subtitle }}</p>
     </div>
-    <div v-else>
+    <div :class="padding ? 'p-4' : ''">
       <slot></slot>
     </div>
   </div>
 </template>
 ```
 
-### src/components/HealthGauge.vue
+### StatusBadge.vue
 
 ```vue
 <script setup>
 import { computed } from 'vue';
 
 const props = defineProps({
-  label: {
+  status: {
     type: String,
-    required: true
+    required: true,
   },
-  value: {
-    type: Number,
-    required: true
-  },
-  max: {
-    type: Number,
-    default: 100
-  },
-  unit: {
+  size: {
     type: String,
-    default: '%'
+    default: 'md', // sm, md
   },
-  warningThreshold: {
-    type: Number,
-    default: 70
-  },
-  criticalThreshold: {
-    type: Number,
-    default: 90
-  }
 });
 
-const percentage = computed(() => (props.value / props.max) * 100);
-
-const barColor = computed(() => {
-  if (percentage.value >= props.criticalThreshold) return 'bg-gen-red';
-  if (percentage.value >= props.warningThreshold) return 'bg-gen-amber';
-  return 'bg-gen-green';
-});
-
-const textColor = computed(() => {
-  if (percentage.value >= props.criticalThreshold) return 'text-gen-red';
-  if (percentage.value >= props.warningThreshold) return 'text-gen-amber';
-  return 'text-gen-gray-300';
-});
-</script>
-
-<template>
-  <div class="mb-3">
-    <div class="flex justify-between text-sm mb-1">
-      <span class="text-gen-gray-400">{{ label }}</span>
-      <span :class="textColor">{{ value }}{{ unit }}</span>
-    </div>
-    <div class="h-2 bg-gen-gray-700 rounded-full overflow-hidden">
-      <div
-        class="h-full rounded-full transition-all duration-300"
-        :class="barColor"
-        :style="{ width: `${percentage}%` }"
-      ></div>
-    </div>
-  </div>
-</template>
-```
-
-### src/components/RuntimeChart.vue
-
-```vue
-<script setup>
-import { ref, watch, onMounted } from 'vue';
-import { Bar } from 'vue-chartjs';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-} from 'chart.js';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
-
-const props = defineProps({
-  data: {
-    type: Array,
-    required: true
-  }
-});
-
-const chartData = ref({
-  labels: [],
-  datasets: []
-});
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: false
-    },
-    tooltip: {
-      callbacks: {
-        label: (context) => {
-          const hours = Math.floor(context.raw / 60);
-          const minutes = context.raw % 60;
-          return `${hours}h ${minutes}m`;
-        }
-      }
-    }
-  },
-  scales: {
-    x: {
-      grid: {
-        color: '#374151'
-      },
-      ticks: {
-        color: '#9CA3AF'
-      }
-    },
-    y: {
-      grid: {
-        color: '#374151'
-      },
-      ticks: {
-        color: '#9CA3AF',
-        callback: (value) => `${Math.floor(value / 60)}h`
-      }
-    }
-  }
+const statusStyles = {
+  running: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400',
+  stopped: 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
+  healthy: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400',
+  unhealthy: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
+  warning: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
+  starting: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
+  exited: 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
-function updateChart() {
-  // Group runs by date
-  const byDate = {};
-  props.data.forEach(run => {
-    const date = new Date(run.start_time * 1000).toLocaleDateString();
-    if (!byDate[date]) byDate[date] = 0;
-    byDate[date] += (run.duration_seconds || 0) / 60; // Convert to minutes
-  });
+const sizeClasses = {
+  sm: 'px-2 py-0.5 text-xs',
+  md: 'px-2.5 py-1 text-sm',
+};
 
-  chartData.value = {
-    labels: Object.keys(byDate).slice(-14), // Last 14 days
-    datasets: [{
-      data: Object.values(byDate).slice(-14),
-      backgroundColor: '#22C55E',
-      borderRadius: 4
-    }]
-  };
-}
-
-watch(() => props.data, updateChart, { immediate: true });
+const badgeClass = computed(() => [
+  'rounded-full font-medium inline-flex items-center',
+  statusStyles[props.status] || statusStyles.stopped,
+  sizeClasses[props.size],
+]);
 </script>
 
 <template>
-  <div class="h-64">
-    <Bar :data="chartData" :options="chartOptions" />
-  </div>
+  <span :class="badgeClass">
+    {{ status }}
+  </span>
 </template>
 ```
 
-### src/components/ScheduleTable.vue
-
-```vue
-<script setup>
-import { computed } from 'vue';
-
-const props = defineProps({
-  schedules: {
-    type: Array,
-    required: true
-  }
-});
-
-const emit = defineEmits(['edit', 'delete', 'toggle']);
-
-function formatDate(timestamp) {
-  if (!timestamp) return '--';
-  return new Date(timestamp * 1000).toLocaleString();
-}
-
-function formatDuration(minutes) {
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-</script>
-
-<template>
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="text-left text-gen-gray-400 border-b border-gen-gray-700">
-          <th class="py-2 px-3">Name</th>
-          <th class="py-2 px-3">Next Run</th>
-          <th class="py-2 px-3">Duration</th>
-          <th class="py-2 px-3">Recurring</th>
-          <th class="py-2 px-3">Status</th>
-          <th class="py-2 px-3">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="schedule in schedules"
-          :key="schedule.id"
-          class="border-b border-gen-gray-700 hover:bg-gen-gray-750"
-        >
-          <td class="py-3 px-3">{{ schedule.name || `Schedule #${schedule.id}` }}</td>
-          <td class="py-3 px-3">{{ formatDate(schedule.next_execution) }}</td>
-          <td class="py-3 px-3">{{ formatDuration(schedule.duration_minutes) }}</td>
-          <td class="py-3 px-3">
-            <span v-if="schedule.recurring" class="text-gen-green">
-              {{ schedule.recurrence_pattern }}
-            </span>
-            <span v-else class="text-gen-gray-500">Once</span>
-          </td>
-          <td class="py-3 px-3">
-            <span
-              class="px-2 py-1 rounded text-xs"
-              :class="schedule.enabled
-                ? 'bg-gen-green/20 text-gen-green'
-                : 'bg-gen-gray-600 text-gen-gray-400'"
-            >
-              {{ schedule.enabled ? 'Active' : 'Disabled' }}
-            </span>
-          </td>
-          <td class="py-3 px-3">
-            <div class="flex gap-2">
-              <button
-                @click="emit('edit', schedule)"
-                class="text-gen-gray-400 hover:text-gen-gray-200"
-              >
-                Edit
-              </button>
-              <button
-                @click="emit('delete', schedule)"
-                class="text-gen-red hover:text-red-400"
-              >
-                Delete
-              </button>
-            </div>
-          </td>
-        </tr>
-        <tr v-if="schedules.length === 0">
-          <td colspan="6" class="py-8 text-center text-gen-gray-500">
-            No scheduled runs
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</template>
-```
-
-### src/components/ConfirmDialog.vue
+### ConfirmDialog.vue
 
 ```vue
 <script setup>
 const props = defineProps({
-  show: {
-    type: Boolean,
-    required: true
-  },
-  title: {
-    type: String,
-    default: 'Confirm'
-  },
-  message: {
-    type: String,
-    required: true
-  },
-  confirmText: {
-    type: String,
-    default: 'Confirm'
-  },
-  cancelText: {
-    type: String,
-    default: 'Cancel'
-  },
-  danger: {
-    type: Boolean,
-    default: false
-  }
+  open: Boolean,
+  title: String,
+  message: String,
+  confirmText: { type: String, default: 'Confirm' },
+  cancelText: { type: String, default: 'Cancel' },
+  danger: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['confirm', 'cancel']);
@@ -1307,1027 +1283,181 @@ const emit = defineEmits(['confirm', 'cancel']);
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="show"
-      class="fixed inset-0 z-50 flex items-center justify-center"
-    >
-      <!-- Backdrop -->
-      <div
-        class="absolute inset-0 bg-black/60"
-        @click="emit('cancel')"
-      ></div>
-
-      <!-- Dialog -->
-      <div class="relative bg-gen-gray-800 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-        <h3 class="text-lg font-semibold mb-2">{{ title }}</h3>
-        <p class="text-gen-gray-400 mb-6">{{ message }}</p>
-
-        <div class="flex justify-end gap-3">
-          <button
-            @click="emit('cancel')"
-            class="btn btn-secondary"
-          >
-            {{ cancelText }}
-          </button>
-          <button
-            @click="emit('confirm')"
-            class="btn"
-            :class="danger ? 'btn-danger' : 'btn-primary'"
-          >
-            {{ confirmText }}
-          </button>
+    <Transition name="modal">
+      <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50" @click="emit('cancel')"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-200 dark:border-gray-700">
+          <div class="p-6">
+            <h3 class="text-lg font-semibold text-primary mb-2">{{ title }}</h3>
+            <p class="text-secondary">{{ message }}</p>
+          </div>
+          <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-lg flex justify-end gap-3">
+            <button @click="emit('cancel')" :disabled="loading" class="btn btn-secondary">
+              {{ cancelText }}
+            </button>
+            <button
+              @click="emit('confirm')"
+              :disabled="loading"
+              :class="['btn', danger ? 'btn-danger' : 'btn-primary']"
+            >
+              {{ loading ? 'Processing...' : confirmText }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </Teleport>
-</template>
-```
-
-### src/components/ToastNotification.vue
-
-```vue
-<script setup>
-import { useNotificationStore } from '@/stores/notifications';
-
-const store = useNotificationStore();
-
-const typeStyles = {
-  success: 'bg-gen-green/20 border-gen-green text-gen-green',
-  error: 'bg-gen-red/20 border-gen-red text-gen-red',
-  warning: 'bg-gen-amber/20 border-gen-amber text-gen-amber',
-  info: 'bg-blue-500/20 border-blue-500 text-blue-400'
-};
-</script>
-
-<template>
-  <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-    <TransitionGroup name="toast">
-      <div
-        v-for="notification in store.notifications"
-        :key="notification.id"
-        class="px-4 py-3 rounded-lg border shadow-lg min-w-[300px]"
-        :class="typeStyles[notification.type]"
-      >
-        <div class="flex justify-between items-start">
-          <span>{{ notification.message }}</span>
-          <button
-            @click="store.remove(notification.id)"
-            class="ml-4 opacity-60 hover:opacity-100"
-          >
-            &times;
-          </button>
-        </div>
-      </div>
-    </TransitionGroup>
-  </div>
 </template>
 
 <style scoped>
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s ease;
+.modal-enter-active, .modal-leave-active {
+  transition: opacity 0.2s ease;
 }
-
-.toast-enter-from {
+.modal-enter-from, .modal-leave-to {
   opacity: 0;
-  transform: translateX(100%);
-}
-
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(100%);
 }
 </style>
 ```
 
-### src/components/Toggle.vue
+---
 
-```vue
-<script setup>
-const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    required: true
-  },
-  disabled: {
-    type: Boolean,
-    default: false
-  }
-});
+## Polling Configuration
 
-const emit = defineEmits(['update:modelValue']);
+### src/config/constants.js
 
-function toggle() {
-  if (!props.disabled) {
-    emit('update:modelValue', !props.modelValue);
-  }
-}
-</script>
+```javascript
+export const POLLING = {
+  // Dashboard metrics - every 30 seconds
+  DASHBOARD_METRICS: 30000,
 
-<template>
-  <button
-    type="button"
-    @click="toggle"
-    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-    :class="[
-      modelValue ? 'bg-gen-green' : 'bg-gen-gray-600',
-      disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-    ]"
-  >
-    <span
-      class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-      :class="modelValue ? 'translate-x-6' : 'translate-x-1'"
-    />
-  </button>
-</template>
+  // Generator status - every 5 seconds
+  GENERATOR_STATUS: 5000,
+
+  // Container stats - every 30 seconds
+  CONTAINER_STATS: 30000,
+
+  // Health checks - every 60 seconds
+  HEALTH_CHECKS: 60000,
+};
 ```
 
-### src/components/LoadingSpinner.vue
+### src/composables/usePoll.js
 
-```vue
-<template>
-  <div class="animate-spin rounded-full h-6 w-6 border-2 border-gen-gray-600 border-t-gen-green"></div>
-</template>
+```javascript
+import { onMounted, onUnmounted, ref } from 'vue';
+
+export function usePoll(callback, interval, immediate = true) {
+  const intervalId = ref(null);
+
+  function start() {
+    if (immediate) callback();
+    intervalId.value = setInterval(callback, interval);
+  }
+
+  function stop() {
+    if (intervalId.value) {
+      clearInterval(intervalId.value);
+      intervalId.value = null;
+    }
+  }
+
+  onMounted(start);
+  onUnmounted(stop);
+
+  return { start, stop };
+}
 ```
 
 ---
 
-## Views
-
-### src/views/Dashboard.vue
-
-```vue
-<script setup>
-import { ref, onMounted } from 'vue';
-import { useGeneratorStore } from '@/stores/generator';
-import { useSystemStore } from '@/stores/system';
-import StatusCard from '@/components/StatusCard.vue';
-import HealthGauge from '@/components/HealthGauge.vue';
-import RuntimeChart from '@/components/RuntimeChart.vue';
-import Toggle from '@/components/Toggle.vue';
-import ConfirmDialog from '@/components/ConfirmDialog.vue';
-
-const generatorStore = useGeneratorStore();
-const systemStore = useSystemStore();
-
-const showStartDialog = ref(false);
-const showStopDialog = ref(false);
-const startDuration = ref(30);
-
-onMounted(() => {
-  generatorStore.fetchStats();
-  generatorStore.fetchHistory(30);
-});
-
-async function handleStart() {
-  await generatorStore.start(startDuration.value);
-  showStartDialog.value = false;
-}
-
-async function handleStop() {
-  await generatorStore.stop('manual');
-  showStopDialog.value = false;
-}
-
-function formatRuntime(seconds) {
-  if (!seconds) return '--';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return `${h}h ${m}m`;
-}
-</script>
-
-<template>
-  <div class="space-y-4">
-    <!-- Top Row: Generator Status & Communication -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- Generator Status -->
-      <StatusCard title="Generator Status">
-        <div class="flex items-center mb-4">
-          <span
-            class="status-dot w-4 h-4"
-            :class="generatorStore.isRunning ? 'status-running' : 'status-stopped'"
-          ></span>
-          <span class="text-2xl font-bold">
-            {{ generatorStore.isRunning ? 'RUNNING' : 'STOPPED' }}
-          </span>
-        </div>
-
-        <div v-if="generatorStore.isRunning" class="space-y-2 mb-4">
-          <div class="flex justify-between text-sm">
-            <span class="text-gen-gray-400">Runtime</span>
-            <span class="font-mono">{{ generatorStore.runtimeFormatted }}</span>
-          </div>
-          <div class="flex justify-between text-sm">
-            <span class="text-gen-gray-400">Trigger</span>
-            <span>{{ generatorStore.triggerLabel }}</span>
-          </div>
-        </div>
-
-        <div class="flex gap-2">
-          <button
-            v-if="!generatorStore.isRunning"
-            @click="showStartDialog = true"
-            class="btn btn-primary flex-1"
-            :disabled="generatorStore.loading"
-          >
-            Start Generator
-          </button>
-          <button
-            v-else
-            @click="showStopDialog = true"
-            class="btn btn-danger flex-1"
-            :disabled="generatorStore.loading"
-          >
-            Stop Generator
-          </button>
-        </div>
-      </StatusCard>
-
-      <!-- Communication Status -->
-      <StatusCard title="Communication">
-        <div class="space-y-3">
-          <div class="flex justify-between items-center">
-            <span class="text-gen-gray-400">GenSlave</span>
-            <div class="flex items-center">
-              <span
-                class="status-dot"
-                :class="systemStore.slaveConnected ? 'status-running' : 'status-error'"
-              ></span>
-              <span>{{ systemStore.slaveConnected ? 'Online' : 'Offline' }}</span>
-            </div>
-          </div>
-
-          <div class="flex justify-between text-sm">
-            <span class="text-gen-gray-400">Last Heartbeat</span>
-            <span>
-              {{ systemStore.slaveConnection.last_heartbeat_ago_seconds
-                ? `${systemStore.slaveConnection.last_heartbeat_ago_seconds}s ago`
-                : '--' }}
-            </span>
-          </div>
-
-          <div class="flex justify-between text-sm">
-            <span class="text-gen-gray-400">Missed</span>
-            <span :class="systemStore.slaveConnection.missed_count > 0 ? 'text-gen-amber' : ''">
-              {{ systemStore.slaveConnection.missed_count }}
-            </span>
-          </div>
-
-          <button
-            @click="systemStore.testHeartbeat()"
-            class="btn btn-secondary w-full text-sm"
-          >
-            Test Connection
-          </button>
-        </div>
-      </StatusCard>
-    </div>
-
-    <!-- Second Row: Victron Input & Override -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- Victron Input -->
-      <StatusCard title="Victron Input">
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="flex items-center mb-1">
-              <span
-                class="status-dot"
-                :class="generatorStore.victron.signal_active ? 'status-running' : 'status-stopped'"
-              ></span>
-              <span class="text-lg font-semibold">
-                GPIO17: {{ generatorStore.victron.signal_active ? 'ACTIVE' : 'INACTIVE' }}
-              </span>
-            </div>
-            <p class="text-sm text-gen-gray-400">
-              {{ generatorStore.victron.signal_active
-                ? 'Run Requested'
-                : 'No Run Request' }}
-            </p>
-          </div>
-        </div>
-      </StatusCard>
-
-      <!-- Manual Override -->
-      <StatusCard title="Manual Override">
-        <div class="space-y-3">
-          <div class="flex justify-between items-center">
-            <span>Override Active</span>
-            <Toggle
-              :model-value="generatorStore.override.enabled"
-              @update:model-value="val => val
-                ? generatorStore.enableOverride('force_stop')
-                : generatorStore.disableOverride()"
-            />
-          </div>
-
-          <div v-if="generatorStore.override.enabled" class="text-sm">
-            <span class="text-gen-gray-400">Mode: </span>
-            <span class="text-gen-amber">{{ generatorStore.override.type }}</span>
-          </div>
-
-          <p class="text-xs text-gen-gray-500">
-            Override ignores Victron signals
-          </p>
-        </div>
-      </StatusCard>
-    </div>
-
-    <!-- Manual Start Section -->
-    <StatusCard title="Manual Start">
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2">
-          <label class="text-gen-gray-400">Duration:</label>
-          <input
-            v-model.number="startDuration"
-            type="number"
-            min="1"
-            max="480"
-            class="input w-20"
-          />
-          <span class="text-gen-gray-400">minutes</span>
-        </div>
-        <button
-          @click="showStartDialog = true"
-          class="btn btn-primary"
-          :disabled="generatorStore.isRunning || generatorStore.loading"
-        >
-          Start Generator
-        </button>
-      </div>
-    </StatusCard>
-
-    <!-- Statistics -->
-    <StatusCard title="Runtime Statistics (Last 30 Days)">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-        <div>
-          <div class="text-2xl font-bold text-gen-green">
-            {{ generatorStore.stats?.total_runtime_formatted || '--' }}
-          </div>
-          <div class="text-sm text-gen-gray-400">Total Runtime</div>
-        </div>
-        <div>
-          <div class="text-2xl font-bold">
-            {{ generatorStore.stats?.run_count || 0 }}
-          </div>
-          <div class="text-sm text-gen-gray-400">Run Count</div>
-        </div>
-        <div>
-          <div class="text-2xl font-bold">
-            {{ formatRuntime(generatorStore.stats?.avg_runtime_seconds) }}
-          </div>
-          <div class="text-sm text-gen-gray-400">Avg Runtime</div>
-        </div>
-        <div>
-          <div class="text-2xl font-bold">
-            {{ generatorStore.stats?.by_trigger?.victron?.count || 0 }}
-          </div>
-          <div class="text-sm text-gen-gray-400">Victron Triggers</div>
-        </div>
-      </div>
-
-      <RuntimeChart :data="generatorStore.history" />
-    </StatusCard>
-
-    <!-- System Health -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- GenMaster Health -->
-      <StatusCard title="GenMaster Health">
-        <template v-if="systemStore.masterHealth">
-          <HealthGauge
-            label="CPU"
-            :value="systemStore.masterHealth.cpu_percent"
-          />
-          <HealthGauge
-            label="RAM"
-            :value="systemStore.masterHealth.ram_percent"
-            :warning-threshold="80"
-          />
-          <HealthGauge
-            label="Disk"
-            :value="systemStore.masterHealth.disk_percent"
-            :warning-threshold="80"
-          />
-          <div class="flex justify-between text-sm mt-3">
-            <span class="text-gen-gray-400">Temperature</span>
-            <span :class="systemStore.masterHealth.temperature_celsius > 70 ? 'text-gen-amber' : ''">
-              {{ systemStore.masterHealth.temperature_celsius || '--' }}°C
-            </span>
-          </div>
-        </template>
-        <div v-else class="text-gen-gray-500">Loading...</div>
-      </StatusCard>
-
-      <!-- GenSlave Health -->
-      <StatusCard title="GenSlave Health">
-        <template v-if="systemStore.slaveHealth">
-          <HealthGauge
-            label="CPU"
-            :value="systemStore.slaveHealth.cpu_percent"
-          />
-          <HealthGauge
-            label="RAM"
-            :value="systemStore.slaveHealth.ram_percent"
-            :warning-threshold="80"
-          />
-          <HealthGauge
-            label="Disk"
-            :value="systemStore.slaveHealth.disk_percent"
-            :warning-threshold="80"
-          />
-          <div class="flex justify-between text-sm mt-3">
-            <span class="text-gen-gray-400">Temperature</span>
-            <span :class="systemStore.slaveHealth.temperature_celsius > 70 ? 'text-gen-amber' : ''">
-              {{ systemStore.slaveHealth.temperature_celsius || '--' }}°C
-            </span>
-          </div>
-        </template>
-        <div v-else-if="!systemStore.slaveConnected" class="text-gen-gray-500">
-          GenSlave offline
-        </div>
-        <div v-else class="text-gen-gray-500">Loading...</div>
-      </StatusCard>
-    </div>
-
-    <!-- Confirm Dialogs -->
-    <ConfirmDialog
-      :show="showStartDialog"
-      title="Start Generator"
-      :message="`Start the generator for ${startDuration} minutes?`"
-      confirm-text="Start"
-      @confirm="handleStart"
-      @cancel="showStartDialog = false"
-    />
-
-    <ConfirmDialog
-      :show="showStopDialog"
-      title="Stop Generator"
-      message="Are you sure you want to stop the generator?"
-      confirm-text="Stop"
-      :danger="true"
-      @confirm="handleStop"
-      @cancel="showStopDialog = false"
-    />
-  </div>
-</template>
-```
-
-### src/views/History.vue
-
-```vue
-<script setup>
-import { ref, onMounted } from 'vue';
-import { useGeneratorStore } from '@/stores/generator';
-import StatusCard from '@/components/StatusCard.vue';
-
-const generatorStore = useGeneratorStore();
-const limit = ref(25);
-
-onMounted(() => {
-  generatorStore.fetchHistory(limit.value);
-});
-
-function formatDate(timestamp) {
-  if (!timestamp) return '--';
-  return new Date(timestamp * 1000).toLocaleString();
-}
-
-function formatDuration(seconds) {
-  if (!seconds) return '--';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
-function loadMore() {
-  limit.value += 25;
-  generatorStore.fetchHistory(limit.value);
-}
-</script>
-
-<template>
-  <div class="space-y-4">
-    <StatusCard title="Generator Run History">
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-gen-gray-400 border-b border-gen-gray-700">
-              <th class="py-2 px-3">Start Time</th>
-              <th class="py-2 px-3">Stop Time</th>
-              <th class="py-2 px-3">Duration</th>
-              <th class="py-2 px-3">Trigger</th>
-              <th class="py-2 px-3">Stop Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="run in generatorStore.history"
-              :key="run.id"
-              class="border-b border-gen-gray-700"
-            >
-              <td class="py-3 px-3">{{ formatDate(run.start_time) }}</td>
-              <td class="py-3 px-3">{{ formatDate(run.stop_time) }}</td>
-              <td class="py-3 px-3 font-mono">{{ formatDuration(run.duration_seconds) }}</td>
-              <td class="py-3 px-3">
-                <span
-                  class="px-2 py-1 rounded text-xs"
-                  :class="{
-                    'bg-blue-500/20 text-blue-400': run.trigger_type === 'victron',
-                    'bg-purple-500/20 text-purple-400': run.trigger_type === 'manual',
-                    'bg-gen-amber/20 text-gen-amber': run.trigger_type === 'scheduled'
-                  }"
-                >
-                  {{ run.trigger_type }}
-                </span>
-              </td>
-              <td class="py-3 px-3 text-gen-gray-400">
-                {{ run.stop_reason || (run.stop_time ? '--' : 'Running') }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="mt-4 text-center">
-        <button @click="loadMore" class="btn btn-secondary">
-          Load More
-        </button>
-      </div>
-    </StatusCard>
-  </div>
-</template>
-```
-
-### src/views/Schedule.vue
-
-```vue
-<script setup>
-import { ref, onMounted } from 'vue';
-import { scheduleApi } from '@/api/schedule';
-import { useNotificationStore } from '@/stores/notifications';
-import StatusCard from '@/components/StatusCard.vue';
-import ScheduleTable from '@/components/ScheduleTable.vue';
-import ConfirmDialog from '@/components/ConfirmDialog.vue';
-
-const notifications = useNotificationStore();
-
-const schedules = ref([]);
-const showAddModal = ref(false);
-const showDeleteDialog = ref(false);
-const selectedSchedule = ref(null);
-const loading = ref(false);
-
-// Form state
-const form = ref({
-  name: '',
-  scheduledDate: '',
-  scheduledTime: '',
-  durationMinutes: 30,
-  recurring: false,
-  recurrencePattern: 'daily'
-});
-
-onMounted(fetchSchedules);
-
-async function fetchSchedules() {
-  try {
-    const response = await scheduleApi.list();
-    schedules.value = response.data;
-  } catch (e) {
-    notifications.error('Failed to load schedules');
-  }
-}
-
-async function createSchedule() {
-  loading.value = true;
-  try {
-    // Convert date/time to timestamp
-    const dateTime = new Date(`${form.value.scheduledDate}T${form.value.scheduledTime}`);
-    const timestamp = Math.floor(dateTime.getTime() / 1000);
-
-    await scheduleApi.create({
-      name: form.value.name || null,
-      scheduled_start: timestamp,
-      duration_minutes: form.value.durationMinutes,
-      recurring: form.value.recurring,
-      recurrence_pattern: form.value.recurring ? form.value.recurrencePattern : null
-    });
-
-    notifications.success('Schedule created');
-    showAddModal.value = false;
-    resetForm();
-    await fetchSchedules();
-  } catch (e) {
-    notifications.error('Failed to create schedule');
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function deleteSchedule() {
-  if (!selectedSchedule.value) return;
-
-  try {
-    await scheduleApi.delete(selectedSchedule.value.id);
-    notifications.success('Schedule deleted');
-    showDeleteDialog.value = false;
-    selectedSchedule.value = null;
-    await fetchSchedules();
-  } catch (e) {
-    notifications.error('Failed to delete schedule');
-  }
-}
-
-function handleEdit(schedule) {
-  // For now, just show info. Full edit modal can be added later.
-  notifications.info(`Editing schedule #${schedule.id} - coming soon`);
-}
-
-function handleDelete(schedule) {
-  selectedSchedule.value = schedule;
-  showDeleteDialog.value = true;
-}
-
-function resetForm() {
-  form.value = {
-    name: '',
-    scheduledDate: '',
-    scheduledTime: '',
-    durationMinutes: 30,
-    recurring: false,
-    recurrencePattern: 'daily'
-  };
-}
-</script>
-
-<template>
-  <div class="space-y-4">
-    <StatusCard title="Scheduled Runs">
-      <div class="flex justify-end mb-4">
-        <button @click="showAddModal = true" class="btn btn-primary">
-          + Add Schedule
-        </button>
-      </div>
-
-      <ScheduleTable
-        :schedules="schedules"
-        @edit="handleEdit"
-        @delete="handleDelete"
-      />
-    </StatusCard>
-
-    <!-- Add Schedule Modal -->
-    <Teleport to="body">
-      <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/60" @click="showAddModal = false"></div>
-
-        <div class="relative bg-gen-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
-          <h3 class="text-lg font-semibold mb-4">New Scheduled Run</h3>
-
-          <form @submit.prevent="createSchedule" class="space-y-4">
-            <div>
-              <label class="block text-sm text-gen-gray-400 mb-1">Name (optional)</label>
-              <input v-model="form.name" type="text" class="input w-full" placeholder="Morning run" />
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm text-gen-gray-400 mb-1">Date</label>
-                <input v-model="form.scheduledDate" type="date" class="input w-full" required />
-              </div>
-              <div>
-                <label class="block text-sm text-gen-gray-400 mb-1">Time</label>
-                <input v-model="form.scheduledTime" type="time" class="input w-full" required />
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-sm text-gen-gray-400 mb-1">Duration (minutes)</label>
-              <input
-                v-model.number="form.durationMinutes"
-                type="number"
-                min="1"
-                max="480"
-                class="input w-full"
-                required
-              />
-            </div>
-
-            <div class="flex items-center gap-3">
-              <input
-                v-model="form.recurring"
-                type="checkbox"
-                id="recurring"
-                class="w-4 h-4"
-              />
-              <label for="recurring" class="text-sm">Recurring</label>
-            </div>
-
-            <div v-if="form.recurring">
-              <label class="block text-sm text-gen-gray-400 mb-1">Repeat</label>
-              <select v-model="form.recurrencePattern" class="input w-full">
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-              </select>
-            </div>
-
-            <div class="flex justify-end gap-3 mt-6">
-              <button type="button" @click="showAddModal = false" class="btn btn-secondary">
-                Cancel
-              </button>
-              <button type="submit" class="btn btn-primary" :disabled="loading">
-                {{ loading ? 'Creating...' : 'Create Schedule' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Delete Confirmation -->
-    <ConfirmDialog
-      :show="showDeleteDialog"
-      title="Delete Schedule"
-      :message="`Delete '${selectedSchedule?.name || 'this schedule'}'?`"
-      confirm-text="Delete"
-      :danger="true"
-      @confirm="deleteSchedule"
-      @cancel="showDeleteDialog = false"
-    />
-  </div>
-</template>
-```
-
-### src/views/Settings.vue
-
-```vue
-<script setup>
-import { ref, onMounted } from 'vue';
-import { configApi } from '@/api/config';
-import { useSystemStore } from '@/stores/system';
-import { useNotificationStore } from '@/stores/notifications';
-import StatusCard from '@/components/StatusCard.vue';
-import Toggle from '@/components/Toggle.vue';
-import ConfirmDialog from '@/components/ConfirmDialog.vue';
-
-const systemStore = useSystemStore();
-const notifications = useNotificationStore();
-
-const config = ref(null);
-const loading = ref(false);
-const showRebootDialog = ref(false);
-
-onMounted(fetchConfig);
-
-async function fetchConfig() {
-  try {
-    const response = await configApi.get();
-    config.value = response.data;
-  } catch (e) {
-    notifications.error('Failed to load configuration');
-  }
-}
-
-async function saveConfig() {
-  loading.value = true;
-  try {
-    await configApi.update(config.value);
-    notifications.success('Configuration saved');
-  } catch (e) {
-    notifications.error('Failed to save configuration');
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function createBackup() {
-  try {
-    const response = await configApi.createBackup();
-    notifications.success(`Backup created: ${response.data.filename}`);
-  } catch (e) {
-    notifications.error('Failed to create backup');
-  }
-}
-
-async function downloadBackup() {
-  try {
-    const response = await configApi.downloadBackup();
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'genmaster-backup.sql.gz');
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  } catch (e) {
-    notifications.error('Failed to download backup');
-  }
-}
-
-async function testWebhook() {
-  try {
-    const result = await systemStore.testWebhook();
-    if (result.success) {
-      notifications.success(`Webhook test successful (${result.response_time_ms}ms)`);
-    } else {
-      notifications.error(`Webhook test failed: ${result.error}`);
-    }
-  } catch (e) {
-    notifications.error('Webhook test failed');
-  }
-}
-
-async function rebootSystem() {
-  try {
-    await fetch('/api/system/reboot', { method: 'POST' });
-    notifications.warning('System rebooting...');
-    showRebootDialog.value = false;
-  } catch (e) {
-    notifications.error('Failed to initiate reboot');
-  }
-}
-</script>
-
-<template>
-  <div class="space-y-4">
-    <!-- Heartbeat Settings -->
-    <StatusCard title="Heartbeat Settings">
-      <div v-if="config" class="space-y-4">
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm text-gen-gray-400 mb-1">Interval (seconds)</label>
-            <input
-              v-model.number="config.heartbeat_interval_seconds"
-              type="number"
-              min="10"
-              max="300"
-              class="input w-full"
-            />
-          </div>
-          <div>
-            <label class="block text-sm text-gen-gray-400 mb-1">Failure Threshold</label>
-            <input
-              v-model.number="config.heartbeat_failure_threshold"
-              type="number"
-              min="1"
-              max="10"
-              class="input w-full"
-            />
-          </div>
-        </div>
-      </div>
-    </StatusCard>
-
-    <!-- Webhook Settings -->
-    <StatusCard title="Webhook Settings">
-      <div v-if="config" class="space-y-4">
-        <div class="flex items-center justify-between">
-          <span>Webhooks Enabled</span>
-          <Toggle v-model="config.webhook_enabled" />
-        </div>
-
-        <div>
-          <label class="block text-sm text-gen-gray-400 mb-1">Webhook URL</label>
-          <input
-            v-model="config.webhook_base_url"
-            type="url"
-            class="input w-full"
-            placeholder="https://n8n.example.com/webhook/..."
-          />
-        </div>
-
-        <button @click="testWebhook" class="btn btn-secondary">
-          Test Webhook
-        </button>
-      </div>
-    </StatusCard>
-
-    <!-- Health Thresholds -->
-    <StatusCard title="Health Thresholds">
-      <div v-if="config" class="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div>
-          <label class="block text-sm text-gen-gray-400 mb-1">Temp Warning (°C)</label>
-          <input
-            v-model.number="config.temp_warning_celsius"
-            type="number"
-            class="input w-full"
-          />
-        </div>
-        <div>
-          <label class="block text-sm text-gen-gray-400 mb-1">Temp Critical (°C)</label>
-          <input
-            v-model.number="config.temp_critical_celsius"
-            type="number"
-            class="input w-full"
-          />
-        </div>
-        <div>
-          <label class="block text-sm text-gen-gray-400 mb-1">Disk Warning (%)</label>
-          <input
-            v-model.number="config.disk_warning_percent"
-            type="number"
-            class="input w-full"
-          />
-        </div>
-        <div>
-          <label class="block text-sm text-gen-gray-400 mb-1">Disk Critical (%)</label>
-          <input
-            v-model.number="config.disk_critical_percent"
-            type="number"
-            class="input w-full"
-          />
-        </div>
-        <div>
-          <label class="block text-sm text-gen-gray-400 mb-1">RAM Warning (%)</label>
-          <input
-            v-model.number="config.ram_warning_percent"
-            type="number"
-            class="input w-full"
-          />
-        </div>
-        <div>
-          <label class="block text-sm text-gen-gray-400 mb-1">Log Retention (days)</label>
-          <input
-            v-model.number="config.event_log_retention_days"
-            type="number"
-            class="input w-full"
-          />
-        </div>
-      </div>
-    </StatusCard>
-
-    <!-- Save Button -->
-    <div class="flex justify-end">
-      <button @click="saveConfig" class="btn btn-primary" :disabled="loading">
-        {{ loading ? 'Saving...' : 'Save Configuration' }}
-      </button>
-    </div>
-
-    <!-- Backup & System -->
-    <StatusCard title="Backup & System">
-      <div class="space-y-4">
-        <div class="flex gap-2">
-          <button @click="createBackup" class="btn btn-secondary">
-            Create Backup
-          </button>
-          <button @click="downloadBackup" class="btn btn-secondary">
-            Download Backup
-          </button>
-        </div>
-
-        <hr class="border-gen-gray-700" />
-
-        <div>
-          <button @click="showRebootDialog = true" class="btn btn-danger">
-            Reboot System
-          </button>
-          <p class="text-xs text-gen-gray-500 mt-1">
-            Reboots GenMaster. Generator state is preserved.
-          </p>
-        </div>
-      </div>
-    </StatusCard>
-
-    <!-- Reboot Confirmation -->
-    <ConfirmDialog
-      :show="showRebootDialog"
-      title="Reboot System"
-      message="Are you sure you want to reboot GenMaster? The system will be unavailable for approximately 1-2 minutes."
-      confirm-text="Reboot"
-      :danger="true"
-      @confirm="rebootSystem"
-      @cancel="showRebootDialog = false"
-    />
-  </div>
-</template>
-```
+## Key Differences from n8n_nginx
+
+### Removed Features
+1. **Backup Management** - No backup/restore views
+2. **Flows View** - No n8n workflow management
+3. **Complex Notifications** - No services, groups, rules (replaced with simple webhooks)
+4. **ntfy Integration** - Not needed for generator control
+5. **External Routes** - nginx routes managed via Docker
+6. **n8n API Key** - Not applicable
+
+### Added Features
+1. **Generator View** - Dedicated generator control page
+2. **Schedule View** - Scheduled run management
+3. **History View** - Generator run history with statistics
+4. **Victron Monitoring** - GPIO17 signal status display
+5. **Override Controls** - Manual override management
+6. **Runtime Statistics** - Generator usage analytics
+
+### Modified Features
+1. **Dashboard** - Added generator status summary
+2. **System View** - Removed SSL/Cloudflare management
+3. **Settings** - Simplified to webhooks + appearance + security
+4. **Containers** - Removed n8n-specific features
 
 ---
 
 ## Agent Implementation Checklist
 
-- [ ] Initialize Vue project with Vite
-- [ ] Configure Tailwind CSS
-- [ ] Create `main.css` with custom styles
-- [ ] Set up Vue Router
-- [ ] Create all API client modules in `src/api/`
-- [ ] Create Pinia stores in `src/stores/`
-- [ ] Create all components in `src/components/`
-- [ ] Create all views in `src/views/`
-- [ ] Create `App.vue` with navigation and layout
-- [ ] Test polling and real-time updates
+### Phase 1: Project Setup
+- [ ] Initialize Vue project with Vite and pnpm
+- [ ] Configure Tailwind CSS with dark mode
+- [ ] Set up project structure (directories)
+- [ ] Create main.css with custom styles
+- [ ] Configure Vue Router
+- [ ] Set up API service with axios
+
+### Phase 2: Stores
+- [ ] Create auth store
+- [ ] Create generator store
+- [ ] Create containers store
+- [ ] Create system store
+- [ ] Create theme store
+- [ ] Create notifications store
+
+### Phase 3: Common Components
+- [ ] Card.vue
+- [ ] StatusBadge.vue
+- [ ] LoadingSpinner.vue
+- [ ] EmptyState.vue
+- [ ] ConfirmDialog.vue
+- [ ] SystemMetricsLoader.vue
+- [ ] Toggle.vue
+- [ ] Toast notifications
+
+### Phase 4: Views
+- [ ] LoginView.vue
+- [ ] DashboardView.vue (adapted from n8n)
+- [ ] GeneratorView.vue (new)
+- [ ] ScheduleView.vue (new)
+- [ ] HistoryView.vue (new)
+- [ ] ContainersView.vue (adapted from n8n)
+- [ ] SystemView.vue (adapted from n8n)
+- [ ] SettingsView.vue (simplified)
+
+### Phase 5: Generator Components
+- [ ] GeneratorStatus.vue
+- [ ] VictronMonitor.vue
+- [ ] ManualControl.vue
+- [ ] OverridePanel.vue
+- [ ] RuntimeChart.vue
+
+### Phase 6: Settings Components
+- [ ] WebhookSettings.vue
+- [ ] AppearanceSettings.vue
+
+### Phase 7: Testing & Polish
 - [ ] Test all API integrations
-- [ ] Verify responsive design on mobile
-- [ ] Test dark theme consistency
+- [ ] Test polling and real-time updates
+- [ ] Verify responsive design
+- [ ] Test dark/light themes
+- [ ] Test authentication flow
 - [ ] Build production bundle
 
 ---
 
 ## Related Documents
 
-- `01-project-structure.md` - Conventions and patterns
-- `03-genmaster-backend.md` - API this frontend consumes
+- `01-project-structure.md` - Project conventions
+- `03-genmaster-backend.md` - API endpoints this frontend consumes
 - `06-docker-infrastructure.md` - Nginx static file serving
+- `05-genslave-backend.md` - GenSlave API for health monitoring

@@ -63,8 +63,8 @@ from app.config import settings
 from app.database import engine
 from app.models import Base
 from app.routers import (
-    generator, health, system, schedule,
-    config as config_router, backup, override
+    auth, generator, health, system, schedule,
+    config as config_router, backup, override, containers, settings
 )
 from app.services.gpio_monitor import GPIOMonitor
 from app.services.heartbeat import HeartbeatService
@@ -132,6 +132,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(generator.router, prefix="/api/generator", tags=["Generator"])
 app.include_router(health.router, prefix="/api/health", tags=["Health"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
@@ -139,6 +140,8 @@ app.include_router(schedule.router, prefix="/api/schedule", tags=["Schedule"])
 app.include_router(config_router.router, prefix="/api/config", tags=["Config"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
 app.include_router(override.router, prefix="/api/override", tags=["Override"])
+app.include_router(containers.router, prefix="/api/containers", tags=["Containers"])
+app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
 
 
 @app.get("/api/status")
@@ -543,6 +546,134 @@ class WebhookEvent:
 
 ## API Routers
 
+### Auth Router
+
+```python
+# genmaster/app/routers/auth.py
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional
+import secrets
+import hashlib
+from datetime import datetime, timedelta
+
+from app.database import get_db
+from app.models import User, Session as SessionModel
+
+router = APIRouter()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    created_at: int
+
+    class Config:
+        from_attributes = True
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+) -> User:
+    """Get current user from token."""
+    session = db.query(SessionModel).filter(
+        SessionModel.token == token,
+        SessionModel.expires_at > datetime.utcnow()
+    ).first()
+
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
+
+    return session.user
+
+
+@router.post("/login", response_model=LoginResponse)
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    """Authenticate user and return token."""
+    user = db.query(User).filter(User.username == form_data.username).first()
+
+    if not user or not user.verify_password(form_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password"
+        )
+
+    # Create session
+    token = secrets.token_urlsafe(32)
+    session = SessionModel(
+        user_id=user.id,
+        token=token,
+        expires_at=datetime.utcnow() + timedelta(days=7)
+    )
+    db.add(session)
+    db.commit()
+
+    return LoginResponse(access_token=token)
+
+
+@router.post("/logout")
+async def logout(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    """Invalidate current session."""
+    db.query(SessionModel).filter(SessionModel.token == token).delete()
+    db.commit()
+    return {"message": "Logged out successfully"}
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user)
+):
+    """Get current user information."""
+    return current_user
+
+
+@router.put("/password")
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Change user password."""
+    if not current_user.verify_password(request.current_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+
+    current_user.set_password(request.new_password)
+    db.commit()
+
+    return {"message": "Password changed successfully"}
+```
+
 ### Generator Router
 
 ```python
@@ -760,6 +891,100 @@ async def get_victron_status(
 ):
     """Get Victron relay input status."""
     return await state_machine.get_victron_status()
+
+
+@router.get("/info")
+async def get_system_info():
+    """Get system information."""
+    import platform
+    import os
+    return {
+        "hostname": platform.node(),
+        "platform": platform.system(),
+        "platform_release": platform.release(),
+        "architecture": platform.machine(),
+        "python_version": platform.python_version(),
+        "cpu_count": os.cpu_count(),
+    }
+
+
+@router.get("/metrics")
+async def get_system_metrics():
+    """Get current system metrics."""
+    return get_system_health()
+
+
+@router.get("/host-metrics/cached")
+async def get_cached_host_metrics(history_minutes: int = 60):
+    """Get cached host metrics with history."""
+    from app.services.metrics_cache import MetricsCache
+    cache = MetricsCache()
+    return cache.get_history(minutes=history_minutes)
+
+
+@router.get("/network")
+async def get_network_info():
+    """Get network interface information."""
+    import psutil
+    interfaces = {}
+    for name, addrs in psutil.net_if_addrs().items():
+        interfaces[name] = {
+            "addresses": [
+                {"family": str(addr.family), "address": addr.address, "netmask": addr.netmask}
+                for addr in addrs
+            ]
+        }
+
+    # Get IO counters
+    io_counters = psutil.net_io_counters()
+    return {
+        "interfaces": interfaces,
+        "io": {
+            "bytes_sent": io_counters.bytes_sent,
+            "bytes_recv": io_counters.bytes_recv,
+            "packets_sent": io_counters.packets_sent,
+            "packets_recv": io_counters.packets_recv,
+        }
+    }
+
+
+@router.get("/tailscale")
+async def get_tailscale_status():
+    """Get Tailscale connection status."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            import json
+            status = json.loads(result.stdout)
+            return {
+                "connected": True,
+                "self": status.get("Self", {}),
+                "peers": len(status.get("Peer", {})),
+            }
+    except Exception as e:
+        pass
+
+    return {"connected": False, "error": "Tailscale not available"}
+
+
+@router.get("/terminal/targets")
+async def get_terminal_targets():
+    """Get available terminal targets (containers)."""
+    import docker
+    client = docker.from_env()
+    containers = client.containers.list()
+    return {
+        "targets": [
+            {"name": c.name, "id": c.short_id, "status": c.status}
+            for c in containers if c.status == "running"
+        ]
+    }
 
 
 @router.post("/reboot")
@@ -1074,6 +1299,317 @@ async def list_backups():
     backup_service = BackupService()
     backups = backup_service.list_backups()
     return {"backups": backups}
+```
+
+### Containers Router
+
+```python
+# genmaster/app/routers/containers.py
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from typing import List, Optional
+import docker
+from docker.errors import NotFound, APIError
+
+router = APIRouter()
+client = docker.from_env()
+
+
+class ContainerInfo(BaseModel):
+    id: str
+    name: str
+    status: str
+    state: str
+    image: str
+    created: int
+    started_at: Optional[str]
+    health: Optional[str]
+    ports: dict
+
+
+class ContainerStats(BaseModel):
+    name: str
+    cpu_percent: float
+    memory_usage_mb: float
+    memory_limit_mb: float
+    memory_percent: float
+    network_rx_mb: float
+    network_tx_mb: float
+
+
+class ContainerLogs(BaseModel):
+    logs: str
+    container_name: str
+
+
+@router.get("/", response_model=List[ContainerInfo])
+async def list_containers(all: bool = Query(True, description="Include stopped containers")):
+    """List all Docker containers."""
+    containers = client.containers.list(all=all)
+    result = []
+
+    for container in containers:
+        info = ContainerInfo(
+            id=container.short_id,
+            name=container.name,
+            status=container.status,
+            state=container.attrs['State']['Status'],
+            image=container.image.tags[0] if container.image.tags else container.image.short_id,
+            created=int(container.attrs['Created'].split('.')[0].replace('Z', '')),
+            started_at=container.attrs['State'].get('StartedAt'),
+            health=container.attrs['State'].get('Health', {}).get('Status'),
+            ports=container.attrs['NetworkSettings']['Ports'] or {}
+        )
+        result.append(info)
+
+    return result
+
+
+@router.get("/{name}", response_model=ContainerInfo)
+async def get_container(name: str):
+    """Get specific container details."""
+    try:
+        container = client.containers.get(name)
+        return ContainerInfo(
+            id=container.short_id,
+            name=container.name,
+            status=container.status,
+            state=container.attrs['State']['Status'],
+            image=container.image.tags[0] if container.image.tags else container.image.short_id,
+            created=0,
+            started_at=container.attrs['State'].get('StartedAt'),
+            health=container.attrs['State'].get('Health', {}).get('Status'),
+            ports=container.attrs['NetworkSettings']['Ports'] or {}
+        )
+    except NotFound:
+        raise HTTPException(status_code=404, detail=f"Container {name} not found")
+
+
+@router.get("/stats", response_model=List[ContainerStats])
+async def get_container_stats():
+    """Get stats for all running containers."""
+    containers = client.containers.list()
+    result = []
+
+    for container in containers:
+        stats = container.stats(stream=False)
+        cpu_delta = stats['cpu_stats']['cpu_usage']['total_usage'] - stats['precpu_stats']['cpu_usage']['total_usage']
+        system_delta = stats['cpu_stats']['system_cpu_usage'] - stats['precpu_stats']['system_cpu_usage']
+        cpu_percent = (cpu_delta / system_delta) * 100.0 if system_delta > 0 else 0
+
+        memory_usage = stats['memory_stats'].get('usage', 0) / (1024 * 1024)
+        memory_limit = stats['memory_stats'].get('limit', 0) / (1024 * 1024)
+
+        networks = stats.get('networks', {})
+        rx_bytes = sum(n.get('rx_bytes', 0) for n in networks.values()) / (1024 * 1024)
+        tx_bytes = sum(n.get('tx_bytes', 0) for n in networks.values()) / (1024 * 1024)
+
+        result.append(ContainerStats(
+            name=container.name,
+            cpu_percent=round(cpu_percent, 2),
+            memory_usage_mb=round(memory_usage, 2),
+            memory_limit_mb=round(memory_limit, 2),
+            memory_percent=round((memory_usage / memory_limit) * 100, 2) if memory_limit > 0 else 0,
+            network_rx_mb=round(rx_bytes, 2),
+            network_tx_mb=round(tx_bytes, 2)
+        ))
+
+    return result
+
+
+@router.get("/health")
+async def get_containers_health():
+    """Get health status summary for all containers."""
+    containers = client.containers.list(all=True)
+
+    total = len(containers)
+    running = sum(1 for c in containers if c.status == 'running')
+    stopped = sum(1 for c in containers if c.status in ('exited', 'stopped'))
+    unhealthy = sum(1 for c in containers if c.attrs['State'].get('Health', {}).get('Status') == 'unhealthy')
+
+    return {
+        "total": total,
+        "running": running,
+        "stopped": stopped,
+        "unhealthy": unhealthy
+    }
+
+
+@router.post("/{name}/start")
+async def start_container(name: str):
+    """Start a container."""
+    try:
+        container = client.containers.get(name)
+        container.start()
+        return {"message": f"Container {name} started"}
+    except NotFound:
+        raise HTTPException(status_code=404, detail=f"Container {name} not found")
+    except APIError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{name}/stop")
+async def stop_container(name: str):
+    """Stop a container."""
+    try:
+        container = client.containers.get(name)
+        container.stop(timeout=10)
+        return {"message": f"Container {name} stopped"}
+    except NotFound:
+        raise HTTPException(status_code=404, detail=f"Container {name} not found")
+    except APIError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{name}/restart")
+async def restart_container(name: str):
+    """Restart a container."""
+    try:
+        container = client.containers.get(name)
+        container.restart(timeout=10)
+        return {"message": f"Container {name} restarted"}
+    except NotFound:
+        raise HTTPException(status_code=404, detail=f"Container {name} not found")
+    except APIError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{name}/logs", response_model=ContainerLogs)
+async def get_container_logs(
+    name: str,
+    tail: int = Query(100, description="Number of lines from end"),
+    since: Optional[int] = Query(None, description="Unix timestamp to get logs since")
+):
+    """Get container logs."""
+    try:
+        container = client.containers.get(name)
+        logs = container.logs(
+            tail=tail,
+            since=since,
+            timestamps=True
+        ).decode('utf-8')
+        return ContainerLogs(logs=logs, container_name=name)
+    except NotFound:
+        raise HTTPException(status_code=404, detail=f"Container {name} not found")
+```
+
+### Settings Router
+
+```python
+# genmaster/app/routers/settings.py
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional, Dict
+
+from app.database import get_db
+from app.models import Settings
+from app.services.webhook import WebhookService
+
+router = APIRouter()
+
+
+class WebhookSettings(BaseModel):
+    enabled: bool = False
+    base_url: Optional[str] = None
+    secret: Optional[str] = None
+    events: Dict[str, bool] = {}
+
+
+class WebhookTestRequest(BaseModel):
+    event_type: str = "test"
+
+
+class WebhookTestResponse(BaseModel):
+    success: bool
+    response_time_ms: Optional[int] = None
+    error: Optional[str] = None
+
+
+@router.get("/")
+async def get_all_settings(db: Session = Depends(get_db)):
+    """Get all settings."""
+    settings = Settings.get_all(db)
+    return {s.key: s.value for s in settings}
+
+
+@router.get("/{key}")
+async def get_setting(key: str, db: Session = Depends(get_db)):
+    """Get specific setting."""
+    setting = Settings.get(db, key)
+    if not setting:
+        raise HTTPException(status_code=404, detail=f"Setting {key} not found")
+    return {"key": key, "value": setting.value}
+
+
+@router.put("/{key}")
+async def update_setting(
+    key: str,
+    data: dict,
+    db: Session = Depends(get_db)
+):
+    """Update a setting."""
+    Settings.set(db, key, data.get("value"))
+    return {"key": key, "value": data.get("value")}
+
+
+@router.get("/webhooks", response_model=WebhookSettings)
+async def get_webhook_settings(db: Session = Depends(get_db)):
+    """Get webhook configuration."""
+    return WebhookSettings(
+        enabled=Settings.get_value(db, "webhook_enabled", False),
+        base_url=Settings.get_value(db, "webhook_base_url"),
+        secret=Settings.get_value(db, "webhook_secret"),
+        events=Settings.get_value(db, "webhook_events", {
+            "generator_started": True,
+            "generator_stopped": True,
+            "generator_failed": True,
+            "heartbeat_lost": True,
+            "heartbeat_restored": True,
+            "failsafe_triggered": True,
+            "schedule_executed": True,
+            "override_enabled": True,
+            "override_disabled": True,
+            "system_warning": True,
+            "system_error": True,
+        })
+    )
+
+
+@router.put("/webhooks", response_model=WebhookSettings)
+async def update_webhook_settings(
+    settings: WebhookSettings,
+    db: Session = Depends(get_db)
+):
+    """Update webhook configuration."""
+    Settings.set(db, "webhook_enabled", settings.enabled)
+    Settings.set(db, "webhook_base_url", settings.base_url)
+    if settings.secret:  # Only update if provided
+        Settings.set(db, "webhook_secret", settings.secret)
+    Settings.set(db, "webhook_events", settings.events)
+
+    return await get_webhook_settings(db)
+
+
+@router.post("/webhooks/test", response_model=WebhookTestResponse)
+async def test_webhook(
+    request: WebhookTestRequest,
+    db: Session = Depends(get_db)
+):
+    """Send a test webhook."""
+    webhook_service = WebhookService()
+    try:
+        result = await webhook_service.send_test()
+        return WebhookTestResponse(
+            success=result.success,
+            response_time_ms=result.response_time_ms,
+            error=result.error
+        )
+    except Exception as e:
+        return WebhookTestResponse(
+            success=False,
+            error=str(e)
+        )
 ```
 
 ---
@@ -2114,16 +2650,43 @@ gpiozero>=2.0
 httpx>=0.26.0
 psutil>=5.9.0
 python-dotenv>=1.0.0
+docker>=7.0.0                    # Docker SDK for container management
+passlib[bcrypt]>=1.7.0           # Password hashing for auth
+python-jose[cryptography]>=3.3.0 # JWT tokens for auth
 ```
 
 ---
 
 ## Agent Implementation Checklist
 
+### Phase 1: Core Setup
 - [ ] Create `app/config.py` with Pydantic settings
 - [ ] Create `app/main.py` with FastAPI app and lifespan
-- [ ] Create all Pydantic schemas in `app/schemas/`
-- [ ] Create all routers in `app/routers/`
+- [ ] Create `app/database.py` with PostgreSQL async setup
+- [ ] Create `requirements.txt`
+- [ ] Create `.env.example`
+
+### Phase 2: Pydantic Schemas
+- [ ] Create `app/schemas/generator.py`
+- [ ] Create `app/schemas/health.py`
+- [ ] Create `app/schemas/system.py`
+- [ ] Create `app/schemas/schedule.py`
+- [ ] Create `app/schemas/config.py`
+- [ ] Create `app/schemas/webhook.py`
+
+### Phase 3: API Routers
+- [ ] Create `app/routers/auth.py` (login, logout, me, change password)
+- [ ] Create `app/routers/generator.py` (state, start, stop, history, stats)
+- [ ] Create `app/routers/health.py` (slave health, test heartbeat/webhook)
+- [ ] Create `app/routers/system.py` (health, info, metrics, network, tailscale)
+- [ ] Create `app/routers/schedule.py` (CRUD for scheduled runs)
+- [ ] Create `app/routers/config.py` (system configuration)
+- [ ] Create `app/routers/backup.py` (database backups)
+- [ ] Create `app/routers/override.py` (override controls)
+- [ ] Create `app/routers/containers.py` (Docker container management)
+- [ ] Create `app/routers/settings.py` (webhook settings)
+
+### Phase 4: Services
 - [ ] Create `app/services/state_machine.py`
 - [ ] Create `app/services/gpio_monitor.py`
 - [ ] Create `app/services/heartbeat.py`
@@ -2131,16 +2694,21 @@ python-dotenv>=1.0.0
 - [ ] Create `app/services/webhook.py`
 - [ ] Create `app/services/scheduler.py`
 - [ ] Create `app/services/backup.py`
+- [ ] Create `app/services/metrics_cache.py`
+
+### Phase 5: Utilities & Data Access
 - [ ] Create `app/utils/system_info.py`
-- [ ] Create `app/utils/auth.py` for API key validation
-- [ ] Create `app/repositories/` for data access
-- [ ] Create `requirements.txt`
-- [ ] Create `.env.example`
+- [ ] Create `app/utils/auth.py` for authentication helpers
+- [ ] Create `app/repositories/` for data access patterns
+
+### Phase 6: Testing
 - [ ] Write tests for all services
 - [ ] Write tests for all API endpoints
 - [ ] Test GPIO monitoring with hardware
 - [ ] Test heartbeat communication
 - [ ] Test webhook delivery
+- [ ] Test container management API
+- [ ] Test authentication flow
 
 ---
 
