@@ -3,9 +3,9 @@
 # This workflow builds and publishes multi-architecture Docker images to Docker Hub.
 #
 # Triggers:
-# - Push to main branch (builds 'latest' tag)
-# - Push of version tags (v1.0.0, etc.)
-# - Manual workflow dispatch
+# - Manual workflow dispatch only (automatic triggers disabled until source code exists)
+#
+# To re-enable automatic builds, uncomment the push/pull_request sections below.
 #
 # Required Secrets:
 # - DOCKERHUB_USERNAME: Docker Hub username
@@ -14,19 +14,20 @@
 name: Build and Publish Docker Image
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*.*.*'
-    paths:
-      - 'genmaster/**'
-      - '.github/workflows/docker-publish.yml'
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'genmaster/**'
+  # Automatic triggers disabled until backend/frontend source code exists
+  # push:
+  #   branches:
+  #     - main
+  #   tags:
+  #     - 'v*.*.*'
+  #   paths:
+  #     - 'genmaster/**'
+  #     - '.github/workflows/docker-publish.yml'
+  # pull_request:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'genmaster/**'
   workflow_dispatch:
     inputs:
       tag:
