@@ -90,19 +90,19 @@ log_error() { log "ERROR" "$*"; }
 print_header() {
     clear
     echo -e "${CYAN}"
-    echo "╔════════════════════════════════════════════════════════════════════╗"
-    echo "║                                                                    ║"
-    echo "║   ██████╗ ███████╗███╗   ██╗███████╗██╗      █████╗ ██╗   ██╗███████╗  ║"
-    echo "║  ██╔════╝ ██╔════╝████╗  ██║██╔════╝██║     ██╔══██╗██║   ██║██╔════╝  ║"
-    echo "║  ██║  ███╗█████╗  ██╔██╗ ██║███████╗██║     ███████║██║   ██║█████╗    ║"
-    echo "║  ██║   ██║██╔══╝  ██║╚██╗██║╚════██║██║     ██╔══██║╚██╗ ██╔╝██╔══╝    ║"
-    echo "║  ╚██████╔╝███████╗██║ ╚████║███████║███████╗██║  ██║ ╚████╔╝ ███████╗  ║"
-    echo "║   ╚═════╝ ╚══════╝╚═╝  ╚═══╝╚══════╝╚══════╝╚═╝  ╚═╝  ╚═══╝  ╚══════╝  ║"
-    echo "║                                                                    ║"
-    echo "║              Generator Control System - Slave Setup                ║"
-    echo "║                        Version ${SCRIPT_VERSION}                            ║"
-    echo "║                                                                    ║"
-    echo "╚════════════════════════════════════════════════════════════════════╝"
+    echo "╔═════════════════════════════════════════════════════════════════════════════════╗"
+    echo "║                                                                                 ║"
+    echo "║   ██████╗ ███████╗███╗   ██╗███████╗██╗      █████╗ ██╗   ██╗███████╗           ║"
+    echo "║  ██╔════╝ ██╔════╝████╗  ██║██╔════╝██║     ██╔══██╗██║   ██║██╔════╝           ║"
+    echo "║  ██║  ███╗█████╗  ██╔██╗ ██║███████╗██║     ███████║██║   ██║█████╗             ║"
+    echo "║  ██║   ██║██╔══╝  ██║╚██╗██║╚════██║██║     ██╔══██║╚██╗ ██╔╝██╔══╝             ║"
+    echo "║  ╚██████╔╝███████╗██║ ╚████║███████║███████╗██║  ██║ ╚████╔╝ ███████╗           ║"
+    echo "║   ╚═════╝ ╚══════╝╚═╝  ╚═══╝╚══════╝╚══════╝╚═╝  ╚═╝  ╚═══╝  ╚══════╝           ║"
+    echo "║                                                                                 ║"
+    echo "║                   Generator Control System - Slave Setup                        ║"
+    echo "║                              Version ${SCRIPT_VERSION}                                  ║"
+    echo "║                                                                                 ║"
+    echo "╚═════════════════════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     echo ""
 }
@@ -162,14 +162,64 @@ prompt_input() {
     eval "$var_name=\"$input\""
 }
 
+# Read sensitive input with masking (shows first 10 chars, rest as *)
+read_masked_token() {
+    MASKED_INPUT=""
+    local char=""
+    local display=""
+
+    # Disable echo and enable raw mode
+    stty -echo
+
+    while IFS= read -r -n1 char; do
+        # Check for Enter (empty char after read -n1)
+        if [[ -z "$char" ]]; then
+            break
+        fi
+
+        # Check for backspace (ASCII 127 or 8)
+        if [[ "$char" == $'\x7f' ]] || [[ "$char" == $'\x08' ]]; then
+            if [[ -n "$MASKED_INPUT" ]]; then
+                # Remove last character from input
+                MASKED_INPUT="${MASKED_INPUT%?}"
+                # Clear line and redisplay
+                echo -ne "\r\033[K"
+                local len=${#MASKED_INPUT}
+                if [[ $len -le 10 ]]; then
+                    display="$MASKED_INPUT"
+                else
+                    display="${MASKED_INPUT:0:10}$(printf '%*s' $((len - 10)) '' | tr ' ' '*')"
+                fi
+                echo -ne "$display"
+            fi
+            continue
+        fi
+
+        # Add character to input
+        MASKED_INPUT+="$char"
+
+        # Display: first 10 chars visible, rest as *
+        local len=${#MASKED_INPUT}
+        if [[ $len -le 10 ]]; then
+            echo -ne "$char"
+        else
+            echo -ne "*"
+        fi
+    done
+
+    # Re-enable echo
+    stty echo
+    echo ""  # New line after input
+}
+
 prompt_secret() {
     local prompt="$1"
     local var_name="$2"
     local allow_empty="${3:-false}"
     while true; do
         echo -en "  ${MAGENTA}?${NC} ${prompt}: "
-        read -rs input
-        echo ""
+        read_masked_token
+        local input="$MASKED_INPUT"
         if [ -z "$input" ] && [ "$allow_empty" = "false" ]; then
             print_error "This field cannot be empty"
             continue
