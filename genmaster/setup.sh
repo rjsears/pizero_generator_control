@@ -218,6 +218,56 @@ run_privileged() {
     fi
 }
 
+# Read sensitive input with masking (shows first 10 chars, rest as *)
+read_masked_token() {
+    MASKED_INPUT=""
+    local char=""
+    local display=""
+
+    # Disable echo and enable raw mode
+    stty -echo
+
+    while IFS= read -r -n1 char; do
+        # Check for Enter (empty char after read -n1)
+        if [[ -z "$char" ]]; then
+            break
+        fi
+
+        # Check for backspace (ASCII 127 or 8)
+        if [[ "$char" == $'\x7f' ]] || [[ "$char" == $'\x08' ]]; then
+            if [[ -n "$MASKED_INPUT" ]]; then
+                # Remove last character from input
+                MASKED_INPUT="${MASKED_INPUT%?}"
+                # Clear line and redisplay
+                echo -ne "\r\033[K"
+                local len=${#MASKED_INPUT}
+                if [[ $len -le 10 ]]; then
+                    display="$MASKED_INPUT"
+                else
+                    display="${MASKED_INPUT:0:10}$(printf '%*s' $((len - 10)) '' | tr ' ' '*')"
+                fi
+                echo -ne "$display"
+            fi
+            continue
+        fi
+
+        # Add character to input
+        MASKED_INPUT+="$char"
+
+        # Display: first 10 chars visible, rest as *
+        local len=${#MASKED_INPUT}
+        if [[ $len -le 10 ]]; then
+            echo -ne "$char"
+        else
+            echo -ne "*"
+        fi
+    done
+
+    # Re-enable echo
+    stty echo
+    echo ""  # New line after input
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # HARDWARE DETECTION
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -617,7 +667,7 @@ load_preconfig() {
     GENMASTER_CONTAINER="${GENMASTER_CONTAINER:-$DEFAULT_GENMASTER_CONTAINER}"
     NGINX_CONTAINER="${NGINX_CONTAINER:-$DEFAULT_NGINX_CONTAINER}"
     REDIS_CONTAINER="${REDIS_CONTAINER:-$DEFAULT_REDIS_CONTAINER}"
-    TIMEZONE="${TIMEZONE:-America/Phoenix}"
+    TIMEZONE="${TIMEZONE:-America/Los_Angeles}"
 
     # Generate missing credentials
     if [ -z "$DB_PASSWORD" ]; then
@@ -1171,7 +1221,7 @@ configure_timezone() {
         return
     fi
 
-    local default_tz="America/Phoenix"
+    local default_tz="America/Los_Angeles"
     local system_tz=""
 
     # Detect system timezone for reference
@@ -1468,8 +1518,14 @@ configure_optional_services() {
     if confirm_prompt "Enable Cloudflare Tunnel?" "n"; then
         INSTALL_CLOUDFLARE_TUNNEL=true
         echo -ne "${WHITE}  Tunnel token${NC}: "
-        read CLOUDFLARE_TUNNEL_TOKEN
-        print_success "Cloudflare Tunnel enabled"
+        read_masked_token
+        CLOUDFLARE_TUNNEL_TOKEN="$MASKED_INPUT"
+        if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
+            print_success "Cloudflare Tunnel enabled"
+        else
+            print_warning "No token provided - Cloudflare Tunnel disabled"
+            INSTALL_CLOUDFLARE_TUNNEL=false
+        fi
     fi
 
     # Tailscale
@@ -1481,9 +1537,15 @@ configure_optional_services() {
     if confirm_prompt "Enable Tailscale?" "n"; then
         INSTALL_TAILSCALE=true
         echo -ne "${WHITE}  Auth key${NC}: "
-        read TAILSCALE_AUTH_KEY
-        prompt_with_default "Hostname" "genmaster" "TAILSCALE_HOSTNAME"
-        print_success "Tailscale enabled"
+        read_masked_token
+        TAILSCALE_AUTH_KEY="$MASKED_INPUT"
+        if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+            prompt_with_default "Hostname" "genmaster" "TAILSCALE_HOSTNAME"
+            print_success "Tailscale enabled"
+        else
+            print_warning "No auth key provided - Tailscale disabled"
+            INSTALL_TAILSCALE=false
+        fi
     fi
 
     # Portainer
@@ -1655,6 +1717,8 @@ volumes:
   genmaster_logs:
   genmaster_data:
   nginx_logs:
+  tailscale_state:
+  portainer_data:
 
 services:
   # ===========================================================================
@@ -1717,7 +1781,7 @@ services:
       - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - WEBHOOK_ENABLED=${WEBHOOK_ENABLED:-false}
-      - TZ=${TIMEZONE:-America/Phoenix}
+      - TZ=${TIMEZONE:-America/Los_Angeles}
     volumes:
       - genmaster_logs:/app/logs
       - genmaster_data:/app/data
@@ -1801,9 +1865,6 @@ EOF
       - genmaster-external
     profiles:
       - tailscale
-
-volumes:
-  tailscale_state:
 EOF
     fi
 
@@ -1826,9 +1887,6 @@ EOF
       - genmaster-internal
     profiles:
       - portainer
-
-volumes:
-  portainer_data:
 EOF
     fi
 
