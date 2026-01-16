@@ -548,9 +548,17 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Tailscale](https://tailscale.com/) - Zero-config VPN
 - [Cloudflare](https://www.cloudflare.com/) - Tunnel and security services
 
-I would also like to thank my family for their continued support and understanding during the many hours spent developing and testing this system. Without them, this project would not be possible.
+## Support
 
-And last but not least, my brother James who is a continual source of inspiration to me and to others. Everyone should have a brother as awesome as mine!
+- **Issues:** [GitHub Issues](https://github.com/rjsears/pizero_generator_control/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/rjsears/pizero_generator_control/discussions)
+
+---
+
+## Special Thanks
+
+* **My amazing and loving family!** My family puts up with all my coding and automation projects and encourages me in everything. Without them, my projects would not be possible.
+* **My brother James**, who is a continual source of inspiration to me and others. Everyone should have a brother as awesome as mine!
 
 ---
 
@@ -561,4 +569,4 @@ And last but not least, my brother James who is a continual source of inspiratio
 
 ---
 
-*Built with ❤️ for the off-grid community*
+*Welcome to the off-grid community*
