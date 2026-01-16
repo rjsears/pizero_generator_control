@@ -351,6 +351,12 @@ detect_os() {
             PKG_UPDATE="pacman -Sy"
             PKG_INSTALL="pacman -S --noconfirm"
             ;;
+        opensuse*|sles)
+            DISTRO_FAMILY="suse"
+            PKG_MANAGER="zypper"
+            PKG_UPDATE="zypper refresh"
+            PKG_INSTALL="zypper install -y"
+            ;;
         alpine)
             DISTRO_FAMILY="alpine"
             PKG_MANAGER="apk"
@@ -412,6 +418,10 @@ update_system() {
             run_privileged apk update -q
             run_privileged apk upgrade -q
             ;;
+        suse)
+            run_privileged zypper refresh -q
+            run_privileged zypper update -y -q
+            ;;
         *)
             print_warning "System update not supported for this distribution"
             return 1
@@ -434,6 +444,7 @@ install_required_utilities() {
     command_exists git || missing_utils="$missing_utils git"
     command_exists openssl || missing_utils="$missing_utils openssl"
     command_exists jq || missing_utils="$missing_utils jq"
+    command_exists tmux || missing_utils="$missing_utils tmux"
 
     if [ -z "$missing_utils" ]; then
         print_success "All required utilities are installed"
@@ -442,9 +453,29 @@ install_required_utilities() {
 
     print_info "Installing:$missing_utils"
     run_privileged $PKG_UPDATE
-    run_privileged $PKG_INSTALL $missing_utils
 
-    print_success "Required utilities installed"
+    # Alpine uses different package handling
+    if [ "$DISTRO_FAMILY" = "alpine" ]; then
+        run_privileged apk add $missing_utils
+    else
+        run_privileged $PKG_INSTALL $missing_utils
+    fi
+
+    # Verify installation
+    local failed_utils=""
+    for util in $missing_utils; do
+        if ! command_exists "$util"; then
+            failed_utils="$failed_utils $util"
+        fi
+    done
+
+    if [ -n "$failed_utils" ]; then
+        print_warning "Failed to install:$failed_utils"
+        print_info "You may need to install these manually"
+    else
+        print_success "Required utilities installed"
+    fi
+
     return 0
 }
 
@@ -722,6 +753,16 @@ backup_existing_config() {
 check_and_install_docker() {
     print_section "Docker Check"
 
+    # Detect platform
+    local CURRENT_PLATFORM=""
+    if [ "$(uname)" = "Darwin" ]; then
+        CURRENT_PLATFORM="macos"
+    elif grep -qiE "(microsoft|wsl)" /proc/version 2>/dev/null; then
+        CURRENT_PLATFORM="wsl"
+    else
+        CURRENT_PLATFORM="linux"
+    fi
+
     if command_exists docker; then
         local docker_version=$(docker --version 2>/dev/null | cut -d' ' -f3 | tr -d ',')
         print_success "Docker installed (version $docker_version)"
@@ -730,9 +771,19 @@ check_and_install_docker() {
             print_success "Docker daemon running"
         else
             print_warning "Docker daemon not running"
+
+            if [ "$CURRENT_PLATFORM" = "macos" ]; then
+                print_error "Please start Docker Desktop on macOS"
+                exit 1
+            elif [ "$CURRENT_PLATFORM" = "wsl" ]; then
+                print_error "Please start Docker Desktop on Windows"
+                exit 1
+            fi
+
             if confirm_prompt "Start Docker daemon?"; then
                 run_privileged systemctl start docker
-                print_success "Docker daemon started"
+                run_privileged systemctl enable docker
+                print_success "Docker daemon started and enabled"
             else
                 print_error "Docker daemon required"
                 exit 1
@@ -740,6 +791,15 @@ check_and_install_docker() {
         fi
     else
         print_warning "Docker not installed"
+
+        if [ "$CURRENT_PLATFORM" = "macos" ]; then
+            print_error "Please install Docker Desktop for macOS: https://docs.docker.com/desktop/install/mac-install/"
+            exit 1
+        elif [ "$CURRENT_PLATFORM" = "wsl" ]; then
+            print_error "Please install Docker Desktop for Windows: https://docs.docker.com/desktop/install/windows-install/"
+            exit 1
+        fi
+
         if confirm_prompt "Install Docker now?"; then
             install_docker_linux
         else
@@ -754,7 +814,8 @@ check_and_install_docker() {
         print_success "Docker Compose plugin ($compose_version)"
         USE_STANDALONE_COMPOSE=false
     elif command_exists docker-compose; then
-        print_success "Docker Compose standalone"
+        local compose_version=$(docker-compose version 2>/dev/null | grep -oP 'v\d+\.\d+\.\d+' | head -1)
+        print_success "Docker Compose standalone ($compose_version)"
         USE_STANDALONE_COMPOSE=true
     else
         print_error "Docker Compose not installed"
@@ -818,34 +879,119 @@ install_docker_linux() {
 perform_system_checks() {
     print_section "System Requirements Check"
 
-    # Memory
-    local mem_total=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print int($2/1024)}')
-    if [ -n "$mem_total" ]; then
-        if [ "$mem_total" -ge 512 ]; then
-            print_success "Memory: ${mem_total}MB"
+    local checks_failed=false
+
+    # Detect platform for platform-specific checks
+    local CHECK_PLATFORM=""
+    if [ "$(uname)" = "Darwin" ]; then
+        CHECK_PLATFORM="macos"
+    else
+        CHECK_PLATFORM="linux"
+    fi
+
+    # Memory check (in GB)
+    local total_memory=""
+    if [ "$CHECK_PLATFORM" = "macos" ]; then
+        total_memory=$(sysctl -n hw.memsize 2>/dev/null | awk '{printf "%.0f", $1/1024/1024/1024}')
+    else
+        total_memory=$(free -g 2>/dev/null | awk '/^Mem:/{print $2}')
+    fi
+    if [ -n "$total_memory" ] && [ "$total_memory" -gt 0 ]; then
+        if [ "$total_memory" -ge 1 ]; then
+            print_success "Memory: ${total_memory}GB"
         else
-            print_warning "Memory: ${mem_total}MB (512MB+ recommended)"
+            print_warning "Memory: ${total_memory}GB (1GB+ recommended)"
+            checks_failed=true
+        fi
+    else
+        # Fallback to MB for systems with less than 1GB
+        local mem_total_mb=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print int($2/1024)}')
+        if [ -n "$mem_total_mb" ]; then
+            if [ "$mem_total_mb" -ge 512 ]; then
+                print_success "Memory: ${mem_total_mb}MB"
+            else
+                print_warning "Memory: ${mem_total_mb}MB (512MB+ recommended)"
+                checks_failed=true
+            fi
         fi
     fi
 
-    # Disk
-    local disk_avail=$(df -m "${SCRIPT_DIR}" 2>/dev/null | tail -1 | awk '{print $4}')
+    # Disk check (in GB)
+    local disk_avail=""
+    if [ "$CHECK_PLATFORM" = "macos" ]; then
+        disk_avail=$(df -g "${SCRIPT_DIR}" 2>/dev/null | tail -1 | awk '{print $4}')
+    else
+        disk_avail=$(df -BG "${SCRIPT_DIR}" 2>/dev/null | tail -1 | awk '{print $4}' | tr -d 'G')
+    fi
     if [ -n "$disk_avail" ]; then
-        if [ "$disk_avail" -ge 5000 ]; then
-            print_success "Disk: ${disk_avail}MB available"
+        if [ "$disk_avail" -ge 5 ]; then
+            print_success "Disk: ${disk_avail}GB available"
         else
-            print_warning "Disk: ${disk_avail}MB (5GB+ recommended)"
+            print_warning "Disk: ${disk_avail}GB available (5GB+ recommended)"
+            checks_failed=true
         fi
     fi
 
-    # Network
+    # Port 443 availability check
+    local port_in_use=false
+    if command_exists ss; then
+        if ss -tulpn 2>/dev/null | grep -q ':443 '; then
+            port_in_use=true
+        fi
+    elif command_exists netstat; then
+        if netstat -tulpn 2>/dev/null | grep -q ':443 '; then
+            port_in_use=true
+        fi
+    fi
+    if [ "$port_in_use" = true ]; then
+        print_warning "Port 443: Already in use (may conflict with nginx)"
+        checks_failed=true
+    else
+        print_success "Port 443: Available"
+    fi
+
+    # OpenSSL check
+    if command_exists openssl; then
+        print_success "OpenSSL: Available"
+    else
+        print_warning "OpenSSL: Not found (required for SSL certificates)"
+        checks_failed=true
+    fi
+
+    # Curl check
+    if command_exists curl; then
+        print_success "Curl: Available"
+    else
+        print_warning "Curl: Not found (required for downloads)"
+        checks_failed=true
+    fi
+
+    # Network connectivity
     if ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1; then
         print_success "Network: OK"
     else
         print_warning "Network: Cannot reach external servers"
+        checks_failed=true
+    fi
+
+    # Docker Hub connectivity
+    if curl -s --connect-timeout 5 https://hub.docker.com >/dev/null 2>&1; then
+        print_success "Docker Hub: Reachable"
+    else
+        print_warning "Docker Hub: Cannot reach (may affect image pulls)"
+        checks_failed=true
     fi
 
     echo ""
+
+    # Ask to continue if checks failed
+    if [ "$checks_failed" = true ]; then
+        print_warning "Some system checks failed"
+        if ! confirm_prompt "Continue anyway?"; then
+            print_error "Setup cancelled"
+            exit 1
+        fi
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -920,6 +1066,14 @@ validate_domain() {
         validation_passed=false
     else
         print_success "Domain resolves to: $domain_ip"
+
+        # Test connectivity to resolved IP
+        print_info "Testing connectivity to $domain_ip..."
+        if ping -c 1 -W 5 "$domain_ip" >/dev/null 2>&1; then
+            print_success "Host $domain_ip is reachable"
+        else
+            print_warning "Cannot ping $domain_ip (may be blocked by firewall)"
+        fi
 
         # Check if the resolved IP matches any local IP
         local ip_matches=false
