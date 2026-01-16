@@ -34,12 +34,13 @@ The RPi Generator Control system is a distributed two-device architecture for au
 │  │   100.x.x.101:80     │  :8001  │    100.x.x.102       │    │                  │  │
 │  │   8GB RAM, NVMe      │         │    512MB RAM         │    │                  │  │
 │  └──────────────────────┘         └──────────────────────┘    └──────────────────┘  │
-│            │                                │                                       │
-│            │                                │                                       │
-│  ┌─────────▼─────────┐            ┌────────▼────────┐                               │
+│            ▲                                │                                       │
+│            │ GPIO 17 (input)                │ GPIO (output)                         │
+│  ┌─────────┴─────────┐            ┌────────▼────────┐                               │
 │  │  Victron Cerbo GX │            │ Generator Relay │                               │
-│  │  (Relay Output)   │            │ Physical Start) │                               │
-│  └───────────────────┘            └─────────────────┘                               │
+│  │ (sends start/stop │            │ (Physical Start)│                               │
+│  │  request signal)  │            └─────────────────┘                               │
+│  └───────────────────┘                                                              │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -85,8 +86,8 @@ The RPi Generator Control system is a distributed two-device architecture for au
 │  ┌──────────────────────────────────────────────────────────────────────────────┐   │
 │  │                              Host System                                     │   │
 │  ├──────────────────────────────────────────────────────────────────────────────┤   │
-│  │  GPIO 17 ◄────── Victron Cerbo GX Relay Output (Generator Request Signal)    │   │
-│  │                  (Read via gpiozero + lgpio)                                 │   │
+│  │  Victron Cerbo GX Relay ──────► GPIO 17 (Input - Generator Request Signal)   │   │
+│  │                                 (Read via gpiozero + lgpio)                  │   │
 │  └──────────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -244,7 +245,7 @@ The StateMachine class (`state_machine.py`) is the central controller for genera
 │  │   VICTRON   │             │   MANUAL    │             │  SCHEDULED  │            │
 │  │   TRIGGER   │             │   START     │             │    START    │            │
 │  │             │             │             │             │             │            │
-│  │ GPIO 17 HIGH│             │ API request │             │ Cron trigger│            │
+│  │ GPIO 17 HIGH│             │ API request │             │ APScheduler │            │
 │  └──────┬──────┘             └──────┬──────┘             └──────┬──────┘            │
 │         │                           │                           │                   │
 │         └───────────────────────────┼───────────────────────────┘                   │
@@ -445,7 +446,7 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  ├───────────────────────────────────────────────────────────────────────────────┤  │
 │  │  id                         SERIAL PRIMARY KEY                                │  │
 │  │  name                       VARCHAR(100)                                      │  │
-│  │  cron_expression            VARCHAR(100)                                      │  │
+│  │  cron_expression            VARCHAR(100)  -- APScheduler cron syntax          │  │
 │  │  duration_minutes           INTEGER                                           │  │
 │  │  enabled                    BOOLEAN DEFAULT true                              │  │
 │  │  last_run                   INTEGER (unix timestamp)                          │  │
