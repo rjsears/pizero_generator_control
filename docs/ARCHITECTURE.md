@@ -86,8 +86,8 @@ The RPi Generator Control system is a distributed two-device architecture for au
 │  ┌──────────────────────────────────────────────────────────────────────────────┐   │
 │  │                              Host System                                     │   │
 │  ├──────────────────────────────────────────────────────────────────────────────┤   │
-│  │  GPIO 17 ◄────── Victron Cerbo GX Relay Output (Generator Request Signal)    │   │
-│  │                  (Read via gpiozero + lgpio)                                 │   │
+│  │  Victron Cerbo GX Relay ──────► GPIO 17 (Input - Generator Request Signal)   │   │
+│  │                                 (Read via gpiozero + lgpio)                  │   │
 │  └──────────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
