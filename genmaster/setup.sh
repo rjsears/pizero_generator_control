@@ -2173,9 +2173,9 @@ main() {
             print_success "GenSlave URL updated to: $new_url"
             echo ""
 
-            # Offer to validate
+            # Offer to run health checks
             GENSLAVE_API_URL="$new_url"
-            if confirm_prompt "Validate the new GenSlave connection now?"; then
+            if confirm_prompt "Run GenSlave health checks now?" "y"; then
                 validate_genslave
             fi
 
