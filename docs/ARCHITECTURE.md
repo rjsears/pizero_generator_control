@@ -266,7 +266,7 @@ The StateMachine class (`state_machine.py`) is the central controller for genera
 │                         ▼                 ▼                                         │
 │              ┌─────────────────┐  ┌─────────────────┐                               │
 │              │    STARTING     │  │     ERROR       │                               │
-│              │                 │  │  Raise ValueError│                              │
+│              │                 │  │ Raise ValueError│                               │
 │              │ 1. Create Run   │  └─────────────────┘                               │
 │              │ 2. Update State │                                                    │
 │              │ 3. Send command │                                                    │
@@ -278,7 +278,7 @@ The StateMachine class (`state_machine.py`) is the central controller for genera
 │                       ▼                                                             │
 │              ┌─────────────────┐                                                    │
 │              │     RUNNING     │                                                    │
-│              │ generator_running│                                                   │
+│              │generator_running│                                                    │
 │              │   = true        │                                                    │
 │              │ run_trigger =   │                                                    │
 │              │   victron/manual│                                                    │
@@ -498,15 +498,15 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │         │                                                                           │
 │         ▼                                                                           │
 │  ┌─────────────────────────────────────────────────────────────────────────┐        │
-│  │                          install.sh                                      │       │
-│  │  1. Check root permissions                                               │       │
-│  │  2. Detect OS (Debian/Ubuntu/Raspbian)                                   │       │
-│  │  3. Check architecture (arm64/armhf/x86_64)                              │       │
-│  │  4. Verify internet connectivity                                         │       │
-│  │  5. Install git, curl, wget, ca-certificates                             │       │
-│  │  6. Clone repository to /tmp/genmaster-install                           │       │
-│  │  7. Execute setup.sh                                                     │       │
-│  │  8. Cleanup temp files                                                   │       │
+│  │                          install.sh                                     │        │
+│  │  1. Check root permissions                                              │        │
+│  │  2. Detect OS (Debian/Ubuntu/Raspbian)                                  │        │
+│  │  3. Check architecture (arm64/armhf/x86_64)                             │        │
+│  │  4. Verify internet connectivity                                        │        │
+│  │  5. Install git, curl, wget, ca-certificates                            │        │
+│  │  6. Clone repository to /tmp/genmaster-install                          │        │
+│  │  7. Execute setup.sh                                                    │        │
+│  │  8. Cleanup temp files                                                  │        │
 │  └─────────────────────────────────────────────────────────────────────────┘        │
 │                                                                                     │
 │         │                                                                           │
@@ -589,14 +589,14 @@ PostgreSQL 16 with asyncpg driver for async operations.
 
 ## Port Reference
 
-| Service | Internal Port | External Access | Notes |
-|---------|---------------|-----------------|-------|
-| Nginx | 80/443 | Yes | Main entry point |
-| FastAPI | 8000 | No (internal only) | Backend API |
-| PostgreSQL | 5432 | No (internal only) | Database |
-| Redis | 6379 | No (internal only) | Cache |
-| Portainer | 9000 | /portainer/ path | Optional profile |
-| GenSlave API | 8001 | Tailscale only | On Pi Zero 2W |
+| Service      | Internal Port | External Access    | Notes            |
+|--------------|---------------|--------------------|------------------|
+| Nginx        | 80/443        | Yes                | Main entry point |
+| FastAPI      | 8000          | No (internal only) | Backend API      |
+| PostgreSQL   | 5432          | No (internal only) | Database         |
+| Redis        | 6379          | No (internal only) | Cache            |
+| Portainer    | 9000          | /portainer/ path   | Optional profile |
+| GenSlave API | 8001          | Tailscale only     | On Pi Zero 2W    |
 
 ---
 
