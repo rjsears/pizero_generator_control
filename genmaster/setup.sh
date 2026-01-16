@@ -2056,12 +2056,14 @@ show_help() {
     echo "  --help              Show this help"
     echo "  --config <file>     Use pre-configuration file"
     echo "  --genslave          Validate GenSlave connection (run after GenSlave is set up)"
+    echo "  --genslaveip        Update GenSlave URL/IP address"
     echo "  --version           Show version"
     echo ""
     echo "Examples:"
     echo "  ./setup.sh                    Interactive setup"
     echo "  ./setup.sh --config my.conf   Use pre-configuration file"
     echo "  ./setup.sh --genslave         Test GenSlave connection"
+    echo "  ./setup.sh --genslaveip       Update GenSlave URL"
     echo ""
 }
 
@@ -2113,6 +2115,83 @@ main() {
             fi
 
             validate_genslave
+            echo ""
+            exit 0
+            ;;
+        --genslaveip)
+            # Update GenSlave URL/IP
+            echo ""
+            print_section "Update GenSlave URL"
+
+            # Check if .env file exists
+            if [ ! -f "${SCRIPT_DIR}/.env" ]; then
+                print_error "No .env file found. Run ./setup.sh first to configure GenMaster."
+                exit 1
+            fi
+
+            # Show current URL
+            local current_url=$(grep "^SLAVE_API_URL=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d'=' -f2-)
+            if [ -n "$current_url" ]; then
+                print_info "Current GenSlave URL: $current_url"
+            else
+                print_warning "GenSlave URL not currently configured"
+            fi
+            echo ""
+
+            # Get new URL
+            while true; do
+                echo -ne "${WHITE}  New GenSlave API URL (e.g., http://genslave.local:8000)${NC}: "
+                read new_url
+                if [ -n "$new_url" ]; then
+                    # Validate URL format
+                    if [[ ! "$new_url" =~ ^https?:// ]]; then
+                        print_warning "URL should start with http:// or https://"
+                        if ! confirm_prompt "Continue with this URL anyway?"; then
+                            continue
+                        fi
+                    fi
+                    break
+                fi
+                print_error "URL is required"
+            done
+
+            # Update .env file
+            if grep -q "^SLAVE_API_URL=" "${SCRIPT_DIR}/.env" 2>/dev/null; then
+                # Update existing line
+                sed -i "s|^SLAVE_API_URL=.*|SLAVE_API_URL=${new_url}|" "${SCRIPT_DIR}/.env"
+            else
+                # Add new line
+                echo "SLAVE_API_URL=${new_url}" >> "${SCRIPT_DIR}/.env"
+            fi
+
+            # Also update GENSLAVE_ENABLED if it was disabled
+            if grep -q "^GENSLAVE_ENABLED=false" "${SCRIPT_DIR}/.env" 2>/dev/null; then
+                sed -i "s|^GENSLAVE_ENABLED=false|GENSLAVE_ENABLED=true|" "${SCRIPT_DIR}/.env"
+                print_info "GenSlave communication enabled"
+            fi
+
+            print_success "GenSlave URL updated to: $new_url"
+            echo ""
+
+            # Offer to validate
+            GENSLAVE_API_URL="$new_url"
+            if confirm_prompt "Validate the new GenSlave connection now?"; then
+                validate_genslave
+            fi
+
+            # Offer to restart containers
+            echo ""
+            if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "genmaster"; then
+                if confirm_prompt "Restart GenMaster container to apply changes?"; then
+                    print_info "Restarting GenMaster..."
+                    cd "${SCRIPT_DIR}" && docker compose restart genmaster 2>/dev/null || docker-compose restart genmaster 2>/dev/null
+                    print_success "GenMaster restarted"
+                else
+                    print_info "Remember to restart GenMaster for changes to take effect:"
+                    echo -e "    ${CYAN}docker compose restart genmaster${NC}"
+                fi
+            fi
+
             echo ""
             exit 0
             ;;
