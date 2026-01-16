@@ -34,12 +34,13 @@ The RPi Generator Control system is a distributed two-device architecture for au
 │  │   100.x.x.101:80     │  :8001  │    100.x.x.102       │    │                  │  │
 │  │   8GB RAM, NVMe      │         │    512MB RAM         │    │                  │  │
 │  └──────────────────────┘         └──────────────────────┘    └──────────────────┘  │
-│            │                                │                                       │
-│            │                                │                                       │
-│  ┌─────────▼─────────┐            ┌────────▼────────┐                               │
+│            ▲                                │                                       │
+│            │ GPIO 17 (input)                │ GPIO (output)                         │
+│  ┌─────────┴─────────┐            ┌────────▼────────┐                               │
 │  │  Victron Cerbo GX │            │ Generator Relay │                               │
-│  │  (Relay Output)   │            │ Physical Start) │                               │
-│  └───────────────────┘            └─────────────────┘                               │
+│  │ (sends start/stop │            │ (Physical Start)│                               │
+│  │  request signal)  │            └─────────────────┘                               │
+│  └───────────────────┘                                                              │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
