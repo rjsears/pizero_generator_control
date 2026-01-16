@@ -280,6 +280,93 @@ load_state() {
 }
 
 # =============================================================================
+# Hardware Interface Check (I2C/SPI)
+# =============================================================================
+
+check_hardware_interfaces() {
+    local i2c_enabled=false
+    local spi_enabled=false
+    local needs_reboot=false
+
+    # Check if I2C is enabled
+    if grep -q "^dtparam=i2c_arm=on" /boot/config.txt 2>/dev/null || \
+       grep -q "^dtparam=i2c_arm=on" /boot/firmware/config.txt 2>/dev/null; then
+        i2c_enabled=true
+    fi
+
+    # Check if SPI is enabled
+    if grep -q "^dtparam=spi=on" /boot/config.txt 2>/dev/null || \
+       grep -q "^dtparam=spi=on" /boot/firmware/config.txt 2>/dev/null; then
+        spi_enabled=true
+    fi
+
+    # Check if devices exist (indicates reboot has happened after enabling)
+    local i2c_device_exists=false
+    local spi_device_exists=false
+    [ -e /dev/i2c-1 ] && i2c_device_exists=true
+    [ -e /dev/spidev0.0 ] && spi_device_exists=true
+
+    # Determine if there's a problem
+    if [ "$i2c_enabled" = false ] || [ "$spi_enabled" = false ]; then
+        needs_reboot=true
+    elif [ "$i2c_device_exists" = false ] || [ "$spi_device_exists" = false ]; then
+        needs_reboot=true
+    fi
+
+    if [ "$needs_reboot" = true ]; then
+        echo ""
+        echo -e "${RED}╔═══════════════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║${NC}                    ${WHITE}${BOLD}⚠  HARDWARE CONFIGURATION REQUIRED  ⚠${NC}                   ${RED}║${NC}"
+        echo -e "${RED}╠═══════════════════════════════════════════════════════════════════════════════╣${NC}"
+        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
+        echo -e "${RED}║${NC}  ${WHITE}The Automation Hat Mini requires I2C and SPI interfaces to be enabled.${NC}      ${RED}║${NC}"
+        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
+        echo -e "${RED}║${NC}  ${YELLOW}Current Status:${NC}                                                              ${RED}║${NC}"
+        if [ "$i2c_enabled" = true ]; then
+            echo -e "${RED}║${NC}    I2C: ${GREEN}Enabled in config${NC}                                                    ${RED}║${NC}"
+        else
+            echo -e "${RED}║${NC}    I2C: ${RED}NOT ENABLED${NC}                                                          ${RED}║${NC}"
+        fi
+        if [ "$spi_enabled" = true ]; then
+            echo -e "${RED}║${NC}    SPI: ${GREEN}Enabled in config${NC}                                                    ${RED}║${NC}"
+        else
+            echo -e "${RED}║${NC}    SPI: ${RED}NOT ENABLED${NC}                                                          ${RED}║${NC}"
+        fi
+        if [ "$i2c_device_exists" = true ]; then
+            echo -e "${RED}║${NC}    I2C Device (/dev/i2c-1): ${GREEN}Available${NC}                                       ${RED}║${NC}"
+        else
+            echo -e "${RED}║${NC}    I2C Device (/dev/i2c-1): ${RED}NOT AVAILABLE${NC}                                    ${RED}║${NC}"
+        fi
+        if [ "$spi_device_exists" = true ]; then
+            echo -e "${RED}║${NC}    SPI Device (/dev/spidev0.0): ${GREEN}Available${NC}                                   ${RED}║${NC}"
+        else
+            echo -e "${RED}║${NC}    SPI Device (/dev/spidev0.0): ${RED}NOT AVAILABLE${NC}                                ${RED}║${NC}"
+        fi
+        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
+        echo -e "${RED}║${NC}  ${WHITE}To enable I2C and SPI:${NC}                                                       ${RED}║${NC}"
+        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
+        echo -e "${RED}║${NC}    1. Run: ${CYAN}sudo raspi-config${NC}                                                   ${RED}║${NC}"
+        echo -e "${RED}║${NC}    2. Go to: ${CYAN}Interface Options${NC}                                                  ${RED}║${NC}"
+        echo -e "${RED}║${NC}    3. Enable ${CYAN}I2C${NC} and ${CYAN}SPI${NC}                                                        ${RED}║${NC}"
+        echo -e "${RED}║${NC}    4. ${YELLOW}Reboot the system${NC}                                                         ${RED}║${NC}"
+        echo -e "${RED}║${NC}    5. Run this setup script again                                             ${RED}║${NC}"
+        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
+        echo -e "${RED}╚═══════════════════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+
+        if ! confirm "Continue anyway? (Hardware detection will fail)"; then
+            echo ""
+            print_info "Run 'sudo raspi-config' to enable I2C and SPI, then reboot."
+            exit 0
+        fi
+        echo ""
+        print_warning "Continuing without proper hardware interfaces..."
+        print_warning "Automation Hat Mini detection will fail!"
+        echo ""
+    fi
+}
+
+# =============================================================================
 # System Preparation
 # =============================================================================
 
@@ -324,6 +411,8 @@ prepare_system() {
         python3-pip \
         python3-venv \
         python3-dev \
+        python3-smbus \
+        python3-rpi.gpio \
         libgpiod2 \
         i2c-tools \
         curl \
@@ -375,9 +464,11 @@ install_python_environment() {
     "$INSTALL_DIR/venv/bin/pip" install --upgrade pip setuptools wheel > /dev/null 2>&1
     print_success "Pip upgraded"
 
-    print_step "3" "Creating requirements.txt..."
-    cat > "$INSTALL_DIR/requirements.txt" << 'EOF'
-# GenSlave Requirements
+    print_step "3" "Creating requirements files..."
+
+    # Core requirements (work on any system)
+    cat > "$INSTALL_DIR/requirements-core.txt" << 'EOF'
+# GenSlave Core Requirements
 # Core Framework
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
@@ -390,15 +481,6 @@ aiosqlite>=0.19.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 
-# Hardware Control (Automation Hat Mini)
-automationhat>=0.4.0
-RPi.GPIO>=0.7.0
-spidev>=3.5
-
-# LCD Display
-Pillow>=10.0.0
-ST7735>=0.0.4
-
 # HTTP Client (for webhooks)
 httpx>=0.26.0
 
@@ -407,12 +489,48 @@ psutil>=5.9.0
 
 # Configuration
 python-dotenv>=1.0.0
-EOF
-    print_success "Requirements file created"
 
-    print_step "4" "Installing Python dependencies..."
-    "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" > /dev/null 2>&1
-    print_success "Python dependencies installed"
+# LCD Display
+Pillow>=10.0.0
+EOF
+
+    # Hardware requirements (Raspberry Pi only)
+    cat > "$INSTALL_DIR/requirements-hardware.txt" << 'EOF'
+# GenSlave Hardware Requirements (Raspberry Pi only)
+# Automation Hat Mini
+automationhat>=0.4.0
+RPi.GPIO>=0.7.0
+spidev>=3.5
+
+# LCD Display Hardware
+ST7735>=0.0.4
+EOF
+    print_success "Requirements files created"
+
+    print_step "4" "Installing core Python dependencies..."
+    if "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements-core.txt" > /dev/null 2>&1; then
+        print_success "Core dependencies installed"
+    else
+        print_error "Failed to install core dependencies"
+        return 1
+    fi
+
+    print_step "5" "Installing hardware dependencies..."
+    local pip_output
+    pip_output=$("$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements-hardware.txt" 2>&1)
+    local pip_exit_code=$?
+
+    if [ $pip_exit_code -eq 0 ]; then
+        print_success "Hardware dependencies installed"
+    else
+        print_warning "Hardware dependencies failed to install"
+        echo -e "  ${GRAY}Error details:${NC}"
+        echo "$pip_output" | grep -i "error" | head -5 | while read line; do
+            echo -e "    ${DIM}$line${NC}"
+        done
+        print_info "If on Raspberry Pi, ensure I2C and SPI are enabled and reboot"
+        print_info "On non-Pi systems, GenSlave will run in mock/development mode"
+    fi
 
     STATE_PYTHON_INSTALLED=true
     save_state
@@ -451,10 +569,11 @@ validate_hardware() {
     hat_result=$("$INSTALL_DIR/venv/bin/python3" << 'PYEOF' 2>&1
 try:
     import automationhat
-    if automationhat.is_automation_hat() or automationhat.is_automation_hat_mini():
-        print("SUCCESS:Automation Hat Mini detected")
+    # is_automation_hat() works for both Automation Hat and Automation Hat Mini
+    if automationhat.is_automation_hat():
+        print("SUCCESS:Automation Hat detected and ready")
     else:
-        print("WARNING:Automation Hat library loaded but no hat detected")
+        print("WARNING:Automation Hat library loaded but no hat detected on I2C bus")
 except ImportError as e:
     print(f"ERROR:Module not found - {e}")
 except Exception as e:
@@ -872,6 +991,9 @@ main() {
 
     check_root
     print_header
+
+    # Check hardware interfaces before proceeding
+    check_hardware_interfaces
 
     # Load previous state if exists
     if load_state; then
