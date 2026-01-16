@@ -1262,30 +1262,163 @@ configure_genslave() {
 
     echo ""
     echo -e "  ${GRAY}GenSlave controls the generator relay on a Pi Zero 2W.${NC}"
+    echo -e "  ${GRAY}It runs on a separate device and communicates with GenMaster via API.${NC}"
     echo ""
 
     if confirm_prompt "Enable GenSlave communication?" "y"; then
         GENSLAVE_ENABLED=true
 
+        # Get GenSlave URL
         while true; do
-            echo -ne "${WHITE}  GenSlave API URL (e.g., http://genslave.local:8001)${NC}: "
+            echo -ne "${WHITE}  GenSlave API URL (e.g., http://genslave.local:8000)${NC}: "
             read GENSLAVE_API_URL
 
             if [ -n "$GENSLAVE_API_URL" ]; then
+                # Validate URL format
+                if [[ ! "$GENSLAVE_API_URL" =~ ^https?:// ]]; then
+                    print_warning "URL should start with http:// or https://"
+                    if ! confirm_prompt "Continue with this URL anyway?"; then
+                        continue
+                    fi
+                fi
                 break
             fi
             print_error "URL is required"
         done
 
+        # Generate API secret
         if [ -z "$GENSLAVE_API_SECRET" ]; then
             GENSLAVE_API_SECRET=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)
             AUTOGEN_SLAVE_SECRET=true
+        fi
+
+        # Ask if GenSlave is already configured and running
+        echo ""
+        echo -e "  ${YELLOW}NOTE:${NC} GenSlave must be installed and running on the Pi Zero 2W"
+        echo -e "  ${YELLOW}      with the same API secret for communication to work.${NC}"
+        echo ""
+
+        if confirm_prompt "Is GenSlave already installed and running?" "n"; then
+            validate_genslave
+        else
+            echo ""
+            print_info "GenSlave URL saved. You can validate the connection later with:"
+            echo -e "    ${CYAN}./setup.sh --genslave${NC}"
+            echo ""
+            print_warning "Remember to configure GenSlave with this API secret:"
+            echo -e "    ${CYAN}SLAVE_API_SECRET=${GENSLAVE_API_SECRET}${NC}"
         fi
 
         print_success "GenSlave configured"
     else
         GENSLAVE_ENABLED=false
         print_info "GenSlave disabled (UI-only mode)"
+    fi
+}
+
+validate_genslave() {
+    print_subsection
+    echo -e "${WHITE}  Validating GenSlave connection...${NC}"
+    echo ""
+
+    local validation_passed=true
+
+    # Extract host from URL for connectivity test
+    local genslave_host=$(echo "$GENSLAVE_API_URL" | sed -E 's|https?://||' | cut -d':' -f1 | cut -d'/' -f1)
+    local genslave_port=$(echo "$GENSLAVE_API_URL" | sed -E 's|https?://[^:]+:?||' | cut -d'/' -f1)
+    genslave_port="${genslave_port:-8000}"
+
+    print_info "GenSlave host: $genslave_host"
+    print_info "GenSlave port: $genslave_port"
+    echo ""
+
+    # Test DNS resolution / hostname
+    print_info "Resolving $genslave_host..."
+    local genslave_ip=""
+    if command_exists dig; then
+        genslave_ip=$(dig +short "$genslave_host" 2>/dev/null | head -1)
+    elif command_exists getent; then
+        genslave_ip=$(getent hosts "$genslave_host" 2>/dev/null | awk '{print $1}' | head -1)
+    elif command_exists host; then
+        genslave_ip=$(host "$genslave_host" 2>/dev/null | grep "has address" | awk '{print $4}' | head -1)
+    fi
+
+    # If no DNS resolution, maybe it's already an IP
+    if [ -z "$genslave_ip" ]; then
+        if [[ "$genslave_host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            genslave_ip="$genslave_host"
+            print_success "Using IP address directly: $genslave_ip"
+        else
+            print_warning "Could not resolve $genslave_host"
+            validation_passed=false
+        fi
+    else
+        print_success "Resolved to: $genslave_ip"
+    fi
+
+    # Test ping connectivity
+    if [ -n "$genslave_ip" ]; then
+        print_info "Testing connectivity to $genslave_ip..."
+        if ping -c 1 -W 5 "$genslave_ip" >/dev/null 2>&1; then
+            print_success "Host $genslave_ip is reachable"
+        else
+            print_warning "Cannot ping $genslave_ip (may be blocked by firewall)"
+        fi
+    fi
+
+    # Test TCP port connectivity
+    print_info "Testing port $genslave_port..."
+    if command_exists nc; then
+        if nc -z -w 5 "$genslave_host" "$genslave_port" 2>/dev/null; then
+            print_success "Port $genslave_port is open"
+        else
+            print_warning "Port $genslave_port is not responding"
+            validation_passed=false
+        fi
+    elif command_exists timeout; then
+        if timeout 5 bash -c "echo >/dev/tcp/$genslave_host/$genslave_port" 2>/dev/null; then
+            print_success "Port $genslave_port is open"
+        else
+            print_warning "Port $genslave_port is not responding"
+            validation_passed=false
+        fi
+    fi
+
+    # Test API health endpoint
+    print_info "Testing GenSlave API health..."
+    local health_url="${GENSLAVE_API_URL}/api/health"
+    local health_response=$(curl -s --connect-timeout 10 --max-time 15 "$health_url" 2>/dev/null)
+
+    if [ -n "$health_response" ]; then
+        if echo "$health_response" | grep -qi "healthy\|ok\|status"; then
+            print_success "GenSlave API is responding"
+            echo -e "    ${GRAY}Response: ${health_response:0:100}${NC}"
+        else
+            print_warning "GenSlave API responded but status unclear"
+            echo -e "    ${GRAY}Response: ${health_response:0:100}${NC}"
+        fi
+    else
+        print_warning "GenSlave API is not responding at $health_url"
+        validation_passed=false
+    fi
+
+    echo ""
+
+    if [ "$validation_passed" = false ]; then
+        print_warning "GenSlave validation had issues"
+        echo ""
+        echo -e "  ${YELLOW}Possible causes:${NC}"
+        echo -e "    - GenSlave is not running yet"
+        echo -e "    - Firewall blocking the connection"
+        echo -e "    - Incorrect URL or port"
+        echo -e "    - Network connectivity issues"
+        echo ""
+        if ! confirm_prompt "Continue with this GenSlave configuration anyway?"; then
+            configure_genslave
+            return
+        fi
+    else
+        print_success "GenSlave validation passed!"
     fi
 }
 
@@ -1922,7 +2055,13 @@ show_help() {
     echo "Options:"
     echo "  --help              Show this help"
     echo "  --config <file>     Use pre-configuration file"
+    echo "  --genslave          Validate GenSlave connection (run after GenSlave is set up)"
     echo "  --version           Show version"
+    echo ""
+    echo "Examples:"
+    echo "  ./setup.sh                    Interactive setup"
+    echo "  ./setup.sh --config my.conf   Use pre-configuration file"
+    echo "  ./setup.sh --genslave         Test GenSlave connection"
     echo ""
 }
 
@@ -1940,6 +2079,42 @@ main() {
         --config)
             [ -z "${2:-}" ] && { print_error "Usage: ./setup.sh --config <file>"; exit 1; }
             load_preconfig "$2"
+            ;;
+        --genslave)
+            # Run GenSlave validation only
+            echo ""
+            print_section "GenSlave Connection Validation"
+
+            # Load existing config if available
+            if [ -f "$CONFIG_FILE" ]; then
+                source "$CONFIG_FILE" 2>/dev/null
+            fi
+            if [ -f "${SCRIPT_DIR}/.env" ]; then
+                # Extract GenSlave URL from .env file
+                GENSLAVE_API_URL=$(grep "^SLAVE_API_URL=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d'=' -f2-)
+                GENSLAVE_API_SECRET=$(grep "^SLAVE_API_SECRET=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d'=' -f2-)
+            fi
+
+            if [ -z "$GENSLAVE_API_URL" ]; then
+                print_error "GenSlave URL not configured"
+                echo ""
+                echo -e "  ${GRAY}Run ./setup.sh to configure GenSlave first, or enter the URL now:${NC}"
+                echo ""
+                while true; do
+                    echo -ne "${WHITE}  GenSlave API URL (e.g., http://genslave.local:8000)${NC}: "
+                    read GENSLAVE_API_URL
+                    if [ -n "$GENSLAVE_API_URL" ]; then
+                        break
+                    fi
+                    print_error "URL is required"
+                done
+            else
+                print_info "GenSlave URL: $GENSLAVE_API_URL"
+            fi
+
+            validate_genslave
+            echo ""
+            exit 0
             ;;
     esac
 
