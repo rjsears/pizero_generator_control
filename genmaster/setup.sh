@@ -244,6 +244,13 @@ is_lxc_container() {
     return 1
 }
 
+# Get all local IP addresses
+get_local_ips() {
+    hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || \
+    ip addr show 2>/dev/null | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $2}' | cut -d'/' -f1 || \
+    ifconfig 2>/dev/null | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $2}'
+}
+
 # Detect hardware and set mock GPIO mode if not on Raspberry Pi
 detect_hardware_mode() {
     print_section "Hardware Detection"
@@ -344,6 +351,12 @@ detect_os() {
             PKG_UPDATE="pacman -Sy"
             PKG_INSTALL="pacman -S --noconfirm"
             ;;
+        opensuse*|sles)
+            DISTRO_FAMILY="suse"
+            PKG_MANAGER="zypper"
+            PKG_UPDATE="zypper refresh"
+            PKG_INSTALL="zypper install -y"
+            ;;
         alpine)
             DISTRO_FAMILY="alpine"
             PKG_MANAGER="apk"
@@ -405,6 +418,10 @@ update_system() {
             run_privileged apk update -q
             run_privileged apk upgrade -q
             ;;
+        suse)
+            run_privileged zypper refresh -q
+            run_privileged zypper update -y -q
+            ;;
         *)
             print_warning "System update not supported for this distribution"
             return 1
@@ -427,6 +444,7 @@ install_required_utilities() {
     command_exists git || missing_utils="$missing_utils git"
     command_exists openssl || missing_utils="$missing_utils openssl"
     command_exists jq || missing_utils="$missing_utils jq"
+    command_exists tmux || missing_utils="$missing_utils tmux"
 
     if [ -z "$missing_utils" ]; then
         print_success "All required utilities are installed"
@@ -435,9 +453,29 @@ install_required_utilities() {
 
     print_info "Installing:$missing_utils"
     run_privileged $PKG_UPDATE
-    run_privileged $PKG_INSTALL $missing_utils
 
-    print_success "Required utilities installed"
+    # Alpine uses different package handling
+    if [ "$DISTRO_FAMILY" = "alpine" ]; then
+        run_privileged apk add $missing_utils
+    else
+        run_privileged $PKG_INSTALL $missing_utils
+    fi
+
+    # Verify installation
+    local failed_utils=""
+    for util in $missing_utils; do
+        if ! command_exists "$util"; then
+            failed_utils="$failed_utils $util"
+        fi
+    done
+
+    if [ -n "$failed_utils" ]; then
+        print_warning "Failed to install:$failed_utils"
+        print_info "You may need to install these manually"
+    else
+        print_success "Required utilities installed"
+    fi
+
     return 0
 }
 
@@ -715,6 +753,16 @@ backup_existing_config() {
 check_and_install_docker() {
     print_section "Docker Check"
 
+    # Detect platform
+    local CURRENT_PLATFORM=""
+    if [ "$(uname)" = "Darwin" ]; then
+        CURRENT_PLATFORM="macos"
+    elif grep -qiE "(microsoft|wsl)" /proc/version 2>/dev/null; then
+        CURRENT_PLATFORM="wsl"
+    else
+        CURRENT_PLATFORM="linux"
+    fi
+
     if command_exists docker; then
         local docker_version=$(docker --version 2>/dev/null | cut -d' ' -f3 | tr -d ',')
         print_success "Docker installed (version $docker_version)"
@@ -723,9 +771,19 @@ check_and_install_docker() {
             print_success "Docker daemon running"
         else
             print_warning "Docker daemon not running"
+
+            if [ "$CURRENT_PLATFORM" = "macos" ]; then
+                print_error "Please start Docker Desktop on macOS"
+                exit 1
+            elif [ "$CURRENT_PLATFORM" = "wsl" ]; then
+                print_error "Please start Docker Desktop on Windows"
+                exit 1
+            fi
+
             if confirm_prompt "Start Docker daemon?"; then
                 run_privileged systemctl start docker
-                print_success "Docker daemon started"
+                run_privileged systemctl enable docker
+                print_success "Docker daemon started and enabled"
             else
                 print_error "Docker daemon required"
                 exit 1
@@ -733,6 +791,15 @@ check_and_install_docker() {
         fi
     else
         print_warning "Docker not installed"
+
+        if [ "$CURRENT_PLATFORM" = "macos" ]; then
+            print_error "Please install Docker Desktop for macOS: https://docs.docker.com/desktop/install/mac-install/"
+            exit 1
+        elif [ "$CURRENT_PLATFORM" = "wsl" ]; then
+            print_error "Please install Docker Desktop for Windows: https://docs.docker.com/desktop/install/windows-install/"
+            exit 1
+        fi
+
         if confirm_prompt "Install Docker now?"; then
             install_docker_linux
         else
@@ -747,7 +814,8 @@ check_and_install_docker() {
         print_success "Docker Compose plugin ($compose_version)"
         USE_STANDALONE_COMPOSE=false
     elif command_exists docker-compose; then
-        print_success "Docker Compose standalone"
+        local compose_version=$(docker-compose version 2>/dev/null | grep -oP 'v\d+\.\d+\.\d+' | head -1)
+        print_success "Docker Compose standalone ($compose_version)"
         USE_STANDALONE_COMPOSE=true
     else
         print_error "Docker Compose not installed"
@@ -811,34 +879,119 @@ install_docker_linux() {
 perform_system_checks() {
     print_section "System Requirements Check"
 
-    # Memory
-    local mem_total=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print int($2/1024)}')
-    if [ -n "$mem_total" ]; then
-        if [ "$mem_total" -ge 512 ]; then
-            print_success "Memory: ${mem_total}MB"
+    local checks_failed=false
+
+    # Detect platform for platform-specific checks
+    local CHECK_PLATFORM=""
+    if [ "$(uname)" = "Darwin" ]; then
+        CHECK_PLATFORM="macos"
+    else
+        CHECK_PLATFORM="linux"
+    fi
+
+    # Memory check (in GB)
+    local total_memory=""
+    if [ "$CHECK_PLATFORM" = "macos" ]; then
+        total_memory=$(sysctl -n hw.memsize 2>/dev/null | awk '{printf "%.0f", $1/1024/1024/1024}')
+    else
+        total_memory=$(free -g 2>/dev/null | awk '/^Mem:/{print $2}')
+    fi
+    if [ -n "$total_memory" ] && [ "$total_memory" -gt 0 ]; then
+        if [ "$total_memory" -ge 1 ]; then
+            print_success "Memory: ${total_memory}GB"
         else
-            print_warning "Memory: ${mem_total}MB (512MB+ recommended)"
+            print_warning "Memory: ${total_memory}GB (1GB+ recommended)"
+            checks_failed=true
+        fi
+    else
+        # Fallback to MB for systems with less than 1GB
+        local mem_total_mb=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print int($2/1024)}')
+        if [ -n "$mem_total_mb" ]; then
+            if [ "$mem_total_mb" -ge 512 ]; then
+                print_success "Memory: ${mem_total_mb}MB"
+            else
+                print_warning "Memory: ${mem_total_mb}MB (512MB+ recommended)"
+                checks_failed=true
+            fi
         fi
     fi
 
-    # Disk
-    local disk_avail=$(df -m "${SCRIPT_DIR}" 2>/dev/null | tail -1 | awk '{print $4}')
+    # Disk check (in GB)
+    local disk_avail=""
+    if [ "$CHECK_PLATFORM" = "macos" ]; then
+        disk_avail=$(df -g "${SCRIPT_DIR}" 2>/dev/null | tail -1 | awk '{print $4}')
+    else
+        disk_avail=$(df -BG "${SCRIPT_DIR}" 2>/dev/null | tail -1 | awk '{print $4}' | tr -d 'G')
+    fi
     if [ -n "$disk_avail" ]; then
-        if [ "$disk_avail" -ge 5000 ]; then
-            print_success "Disk: ${disk_avail}MB available"
+        if [ "$disk_avail" -ge 5 ]; then
+            print_success "Disk: ${disk_avail}GB available"
         else
-            print_warning "Disk: ${disk_avail}MB (5GB+ recommended)"
+            print_warning "Disk: ${disk_avail}GB available (5GB+ recommended)"
+            checks_failed=true
         fi
     fi
 
-    # Network
+    # Port 443 availability check
+    local port_in_use=false
+    if command_exists ss; then
+        if ss -tulpn 2>/dev/null | grep -q ':443 '; then
+            port_in_use=true
+        fi
+    elif command_exists netstat; then
+        if netstat -tulpn 2>/dev/null | grep -q ':443 '; then
+            port_in_use=true
+        fi
+    fi
+    if [ "$port_in_use" = true ]; then
+        print_warning "Port 443: Already in use (may conflict with nginx)"
+        checks_failed=true
+    else
+        print_success "Port 443: Available"
+    fi
+
+    # OpenSSL check
+    if command_exists openssl; then
+        print_success "OpenSSL: Available"
+    else
+        print_warning "OpenSSL: Not found (required for SSL certificates)"
+        checks_failed=true
+    fi
+
+    # Curl check
+    if command_exists curl; then
+        print_success "Curl: Available"
+    else
+        print_warning "Curl: Not found (required for downloads)"
+        checks_failed=true
+    fi
+
+    # Network connectivity
     if ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1; then
         print_success "Network: OK"
     else
         print_warning "Network: Cannot reach external servers"
+        checks_failed=true
+    fi
+
+    # Docker Hub connectivity
+    if curl -s --connect-timeout 5 https://hub.docker.com >/dev/null 2>&1; then
+        print_success "Docker Hub: Reachable"
+    else
+        print_warning "Docker Hub: Cannot reach (may affect image pulls)"
+        checks_failed=true
     fi
 
     echo ""
+
+    # Ask to continue if checks failed
+    if [ "$checks_failed" = true ]; then
+        print_warning "Some system checks failed"
+        if ! confirm_prompt "Continue anyway?"; then
+            print_error "Setup cancelled"
+            exit 1
+        fi
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -848,32 +1001,118 @@ perform_system_checks() {
 configure_domain() {
     print_section "Domain Configuration"
 
-    if [ "$PRECONFIG_MODE" = "true" ]; then
-        print_info "Using: $DOMAIN"
+    # In preconfig mode, domain is already set by load_preconfig
+    if [ "$PRECONFIG_MODE" = "true" ] && [ -n "$DOMAIN" ]; then
+        print_info "Using pre-configured domain: $DOMAIN"
         return
     fi
 
+    echo -e "  ${GRAY}Enter the domain name where GenMaster will be accessible.${NC}"
+    echo -e "  ${GRAY}Example: genmaster.yourdomain.com${NC}"
     echo ""
-    echo -e "  ${GRAY}Enter the domain for accessing GenMaster.${NC}"
-    echo -e "  ${GRAY}Example: genmaster.example.com${NC}"
+
+    prompt_with_default "Enter your GenMaster domain" "genmaster.example.com" "DOMAIN"
+
+    # Validate domain format
+    if [[ ! "$DOMAIN" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]; then
+        print_warning "Domain format may be invalid: $DOMAIN"
+        if ! confirm_prompt "Continue anyway?"; then
+            configure_domain
+            return
+        fi
+    fi
+
+    validate_domain
+}
+
+validate_domain() {
+    print_subsection
+    echo -e "${WHITE}  Validating domain configuration...${NC}"
     echo ""
 
-    while true; do
-        echo -ne "${WHITE}  Domain${NC}: "
-        read DOMAIN
+    # Get local IP addresses
+    local local_ips=$(get_local_ips)
+    local domain_ip=""
+    local validation_passed=true
 
-        if [ -z "$DOMAIN" ]; then
-            print_error "Domain is required"
-            continue
-        fi
-
-        if echo "$DOMAIN" | grep -qE '^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$'; then
-            print_success "Domain: $DOMAIN"
-            break
-        else
-            print_error "Invalid domain format"
-        fi
+    # Show local IPs
+    echo -e "  ${WHITE}This server's IP addresses:${NC}"
+    for local_ip in $local_ips; do
+        echo -e "    ${CYAN}${local_ip}${NC}"
     done
+    echo ""
+
+    # Try to resolve the domain
+    print_info "Resolving $DOMAIN..."
+
+    if command_exists dig; then
+        domain_ip=$(dig +short "$DOMAIN" 2>/dev/null | head -1)
+    elif command_exists nslookup; then
+        domain_ip=$(nslookup "$DOMAIN" 2>/dev/null | grep -A1 "Name:" | grep "Address:" | awk '{print $2}' | head -1)
+    elif command_exists host; then
+        domain_ip=$(host "$DOMAIN" 2>/dev/null | grep "has address" | awk '{print $4}' | head -1)
+    elif command_exists getent; then
+        domain_ip=$(getent hosts "$DOMAIN" 2>/dev/null | awk '{print $1}' | head -1)
+    fi
+
+    if [ -z "$domain_ip" ]; then
+        print_warning "Could not resolve $DOMAIN to an IP address"
+        echo ""
+        echo -e "  ${YELLOW}This could mean:${NC}"
+        echo -e "    - The DNS record hasn't been created yet"
+        echo -e "    - The DNS hasn't propagated yet"
+        echo -e "    - The domain name is incorrect"
+        echo ""
+        validation_passed=false
+    else
+        print_success "Domain resolves to: $domain_ip"
+
+        # Test connectivity to resolved IP
+        print_info "Testing connectivity to $domain_ip..."
+        if ping -c 1 -W 5 "$domain_ip" >/dev/null 2>&1; then
+            print_success "Host $domain_ip is reachable"
+        else
+            print_warning "Cannot ping $domain_ip (may be blocked by firewall)"
+        fi
+
+        # Check if the resolved IP matches any local IP
+        local ip_matches=false
+        local matched_local_ip=""
+        for local_ip in $local_ips; do
+            if [ "$local_ip" = "$domain_ip" ]; then
+                ip_matches=true
+                matched_local_ip="$local_ip"
+                break
+            fi
+        done
+
+        if [ "$ip_matches" = true ]; then
+            print_success "Domain IP matches this server ($matched_local_ip)"
+        else
+            print_warning "Domain IP ($domain_ip) does not match any local IP"
+            echo ""
+            echo -e "  ${YELLOW}IMPORTANT:${NC}"
+            echo -e "  ${YELLOW}The domain $DOMAIN points to $domain_ip${NC}"
+            echo -e "  ${YELLOW}but this server's IPs are different.${NC}"
+            echo ""
+            echo -e "  ${YELLOW}This may cause issues unless you are using:${NC}"
+            echo -e "    - Cloudflare Tunnel (routes traffic through Cloudflare)"
+            echo -e "    - Tailscale (uses Tailscale's private network)"
+            echo -e "    - A reverse proxy or load balancer"
+            echo ""
+            validation_passed=false
+        fi
+    fi
+
+    if [ "$validation_passed" = false ]; then
+        echo ""
+        if ! confirm_prompt "Continue with this domain configuration anyway?"; then
+            configure_domain
+            return
+        fi
+    fi
+
+    print_success "Domain configuration complete: $DOMAIN"
 }
 
 configure_database() {
@@ -924,23 +1163,76 @@ configure_containers() {
 }
 
 configure_timezone() {
-    print_section "Timezone"
+    print_section "Timezone Configuration"
 
-    if [ "$PRECONFIG_MODE" = "true" ]; then
-        print_info "Using: $TIMEZONE"
+    # In preconfig mode, timezone is already set by load_preconfig
+    if [ "$PRECONFIG_MODE" = "true" ] && [ -n "$TIMEZONE" ]; then
+        print_info "Using pre-configured timezone: $TIMEZONE"
         return
     fi
 
-    local detected_tz=""
-    if [ -f /etc/timezone ]; then
-        detected_tz=$(cat /etc/timezone)
-    elif [ -L /etc/localtime ]; then
-        detected_tz=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
-    fi
-    detected_tz="${detected_tz:-America/Phoenix}"
+    local default_tz="America/Phoenix"
+    local system_tz=""
 
-    prompt_with_default "Timezone" "$detected_tz" "TIMEZONE"
-    print_success "Timezone: $TIMEZONE"
+    # Detect system timezone for reference
+    if [ -f /etc/timezone ]; then
+        system_tz=$(cat /etc/timezone)
+    elif command_exists timedatectl; then
+        system_tz=$(timedatectl show -p Timezone --value 2>/dev/null)
+    fi
+
+    if [ -n "$system_tz" ] && [ "$system_tz" != "$default_tz" ]; then
+        echo -e "  ${WHITE}System timezone detected: ${CYAN}$system_tz${NC}"
+        echo ""
+    fi
+
+    if confirm_prompt "Use $default_tz as the timezone?" "y"; then
+        TIMEZONE="$default_tz"
+    else
+        local tz_suggestion="${system_tz:-$default_tz}"
+        prompt_with_default "Timezone" "$tz_suggestion" "TIMEZONE"
+    fi
+
+    print_success "Timezone set to: $TIMEZONE"
+
+    # Set the docker host's timezone to match
+    if confirm_prompt "Set docker host timezone to match ($TIMEZONE)?" "y"; then
+        set_host_timezone "$TIMEZONE"
+    fi
+}
+
+set_host_timezone() {
+    local timezone="$1"
+    local tz_file="/usr/share/zoneinfo/$timezone"
+
+    # Check if timezone file exists
+    if [ ! -f "$tz_file" ]; then
+        print_warning "Timezone file not found: $tz_file"
+        print_warning "Host timezone will remain unchanged"
+        return 1
+    fi
+
+    print_info "Setting host timezone to: $timezone"
+
+    # Set timezone using timedatectl if available (preferred method)
+    if command_exists timedatectl; then
+        if run_privileged timedatectl set-timezone "$timezone" 2>/dev/null; then
+            print_success "Host timezone updated using timedatectl"
+            return 0
+        else
+            print_warning "timedatectl failed, trying alternative method..."
+        fi
+    fi
+
+    # Fallback: symlink method
+    if run_privileged ln -sf "$tz_file" /etc/localtime 2>/dev/null; then
+        echo "$timezone" | run_privileged tee /etc/timezone > /dev/null 2>&1
+        print_success "Host timezone updated via symlink"
+        return 0
+    fi
+
+    print_warning "Could not set host timezone"
+    return 1
 }
 
 generate_secret_key() {
