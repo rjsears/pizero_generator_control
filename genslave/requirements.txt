@@ -1,0 +1,24 @@
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# GenSlave Python Requirements
+#
+# Part of the "RPi Generator Control" suite
+# Version 1.0.0 - January 16th, 2026
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+
+# HTTP Client (for webhook notifications)
+httpx>=0.26.0
+
+# System monitoring
+psutil>=5.9.0
+
+# Automation Hat Mini (installed separately via apt)
+# automationhat  # Installed via: pip install automationhat

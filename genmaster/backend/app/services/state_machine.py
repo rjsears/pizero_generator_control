@@ -107,6 +107,8 @@ class StateMachine:
 
             # Validate state transition
             if not state.can_start_generator():
+                if not state.automation_armed:
+                    raise ValueError("Cannot start - automation is not armed")
                 if state.generator_running:
                     raise ValueError("Generator is already running")
                 if state.override_enabled and state.override_type == "force_stop":
@@ -235,6 +237,14 @@ class StateMachine:
             state.victron_last_change = int(time.time())
             await db.commit()
 
+            # Check if automation is armed
+            if not state.automation_armed:
+                logger.info(
+                    f"Victron signal changed to {signal_active}, "
+                    f"but automation is not armed - ignoring"
+                )
+                return
+
             # Check if override blocks action
             if state.override_enabled:
                 logger.info(
@@ -310,6 +320,157 @@ class StateMachine:
             await self._send_webhook("override.disabled", {"previous_type": previous_type})
 
             return previous_type
+
+    # =========================================================================
+    # Automation Arming Operations
+    # =========================================================================
+
+    async def arm_automation(self, source: str = "api") -> dict:
+        """
+        Arm the automation system, enabling all automated actions.
+
+        Args:
+            source: What initiated the arm request ('api', 'ui', 'startup')
+
+        Returns:
+            Dict with armed status, warnings, and any messages
+        """
+        warnings = []
+
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+
+            # Check if already armed
+            if state.automation_armed:
+                return {
+                    "success": True,
+                    "armed": True,
+                    "message": "Automation already armed",
+                    "armed_at": state.automation_armed_at,
+                    "warnings": [],
+                }
+
+            # Check GenSlave connection status
+            if state.slave_connection_status == "disconnected":
+                warnings.append(
+                    "GenSlave is disconnected - automation may not function correctly"
+                )
+            elif state.slave_connection_status == "unknown":
+                warnings.append(
+                    "GenSlave connection status unknown - recommend verifying connection first"
+                )
+
+            # Arm the system
+            now = int(time.time())
+            state.automation_armed = True
+            state.automation_armed_at = now
+            state.automation_armed_by = source
+            await db.commit()
+
+            logger.info(f"Automation armed by {source}")
+
+            await self.log_event(
+                "AUTOMATION_ARMED",
+                {
+                    "source": source,
+                    "slave_status": state.slave_connection_status,
+                    "warnings": warnings,
+                },
+            )
+            await self._send_webhook(
+                "automation.armed",
+                {"source": source, "armed_at": now},
+            )
+
+            return {
+                "success": True,
+                "armed": True,
+                "message": "Automation armed successfully",
+                "armed_at": now,
+                "warnings": warnings,
+            }
+
+    async def disarm_automation(self, source: str = "api") -> dict:
+        """
+        Disarm the automation system, blocking all automated actions.
+
+        If the generator is running, it will NOT be stopped automatically.
+        The operator should manually stop it if needed.
+
+        Args:
+            source: What initiated the disarm request
+
+        Returns:
+            Dict with armed status and any messages
+        """
+        warnings = []
+
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+
+            # Check if already disarmed
+            if not state.automation_armed:
+                return {
+                    "success": True,
+                    "armed": False,
+                    "message": "Automation already disarmed",
+                    "armed_at": None,
+                    "warnings": [],
+                }
+
+            # Warn if generator is running
+            if state.generator_running:
+                warnings.append(
+                    "Generator is currently running - it will NOT be stopped automatically. "
+                    "Use manual stop if needed."
+                )
+
+            # Disarm the system
+            state.automation_armed = False
+            previous_armed_at = state.automation_armed_at
+            state.automation_armed_at = None
+            state.automation_armed_by = None
+            await db.commit()
+
+            logger.info(f"Automation disarmed by {source}")
+
+            await self.log_event(
+                "AUTOMATION_DISARMED",
+                {
+                    "source": source,
+                    "generator_was_running": state.generator_running,
+                    "was_armed_since": previous_armed_at,
+                },
+            )
+            await self._send_webhook(
+                "automation.disarmed",
+                {"source": source, "generator_running": state.generator_running},
+            )
+
+            return {
+                "success": True,
+                "armed": False,
+                "message": "Automation disarmed",
+                "armed_at": None,
+                "warnings": warnings,
+            }
+
+    async def get_arm_status(self) -> dict:
+        """Get current automation arm status."""
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            return {
+                "armed": state.automation_armed,
+                "armed_at": state.automation_armed_at,
+                "armed_by": state.automation_armed_by,
+                "slave_connection": state.slave_connection_status,
+            }
+
+    async def is_armed(self) -> bool:
+        """Check if automation is armed."""
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            return state.automation_armed
 
     # =========================================================================
     # Heartbeat/Communication Operations
@@ -440,6 +601,7 @@ class StateMachine:
             slave_health=await self.get_slave_health(),
             override=await self.get_override_status(),
             system_health=system_health,
+            automation_armed=await self.is_armed(),
             timestamp=int(time.time()),
         )
 

@@ -96,6 +96,7 @@ The RPi Generator Control system automates generator management for off-grid sol
 ### Reliability & Safety
 | Feature | Description |
 |---------|-------------|
+| **Automation Arming** | Explicit arm/disarm prevents accidental operations during startup or maintenance |
 | **Heartbeat System** | Continuous health monitoring between GenMaster and GenSlave |
 | **Independent Failsafe** | GenSlave automatically stops generator if communication lost for 30s |
 | **State Persistence** | PostgreSQL database survives reboots and power failures |
@@ -419,6 +420,88 @@ GET /api/system/health
 
 # GenSlave status
 GET /api/system/slave
+```
+
+### Automation Arming
+
+```bash
+# Get arm status
+GET /api/system/arm
+
+# Arm automation (enables all automated actions)
+POST /api/system/arm
+Content-Type: application/json
+{"source": "api"}
+
+# Disarm automation (blocks all automated actions)
+POST /api/system/disarm
+Content-Type: application/json
+{"source": "api"}
+```
+
+---
+
+## 🛡️ Automation Arming System
+
+The arming system prevents accidental generator operations during startup, maintenance, or testing. **Automation is disarmed by default** and must be explicitly armed before any automated actions can occur.
+
+### Why Arming?
+
+- **Startup Safety**: Prevents race conditions when GenMaster/GenSlave boot at different times
+- **Maintenance Mode**: Disarm before working on the generator or electrical systems
+- **Testing**: Safely test configurations without triggering the generator
+- **Recovery**: After power loss, operator must consciously arm the system
+
+### Arming Behavior
+
+| State | Victron Signals | Scheduled Runs | Manual Start |
+|-------|-----------------|----------------|--------------|
+| **Disarmed** | Logged but ignored | Skipped (logged) | Blocked |
+| **Armed** | Trigger start/stop | Execute normally | Allowed |
+
+### Arming Workflow
+
+```
+1. Boot GenMaster and GenSlave
+2. Verify GenSlave connection (should show "connected")
+3. Review system status in web UI
+4. Click "Arm Automation" in dashboard
+5. System now responds to Victron signals and schedules
+```
+
+### Disarming Notes
+
+- **Running Generator**: Disarming does NOT stop a running generator
+- **Manual Stop**: Use manual stop to halt generator before disarming
+- **Maintenance**: Always disarm before physical work on generator
+
+### API Examples
+
+```bash
+# Check arm status
+curl https://genmaster.example.com/api/system/arm
+
+# Response
+{
+  "armed": false,
+  "armed_at": null,
+  "armed_by": null,
+  "slave_connection": "connected"
+}
+
+# Arm the system
+curl -X POST https://genmaster.example.com/api/system/arm \
+     -H "Content-Type: application/json" \
+     -d '{"source": "api"}'
+
+# Response
+{
+  "success": true,
+  "armed": true,
+  "message": "Automation armed successfully",
+  "armed_at": 1736985600,
+  "warnings": []
+}
 ```
 
 ---

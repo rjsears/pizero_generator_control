@@ -47,6 +47,9 @@ from app.schemas.schedule import (
     ScheduleUpdateRequest,
 )
 from app.schemas.system import (
+    ArmRequest,
+    ArmResponse,
+    AutomationArmStatus,
     CombinedSystemHealth,
     FullSystemStatus,
     SystemHealth,
@@ -95,6 +98,9 @@ __all__ = [
     "CombinedSystemHealth",
     "VictronStatus",
     "FullSystemStatus",
+    "AutomationArmStatus",
+    "ArmRequest",
+    "ArmResponse",
     # Webhook
     "WebhookPayload",
     "WebhookEvent",
