@@ -31,7 +31,7 @@ The RPi Generator Control system is a distributed two-device architecture for au
 │  ┌──────────────────────┐         ┌──────────────────────┐    ┌──────────────────┐  │
 │  │      GenMaster       │◄───────►│       GenSlave       │    │    Your Phone    │  │
 │  │   Raspberry Pi 5     │  HTTP   │    Pi Zero 2W        │    │   100.x.x.20     │  │
-│  │   100.x.x.101:80     │  :8001  │    100.x.x.102       │    │                  │  │
+│  │   100.x.x.101:443    │  :8001  │    100.x.x.102       │    │                  │  │
 │  │   8GB RAM, NVMe      │         │    512MB RAM         │    │                  │  │
 │  └──────────────────────┘         └──────────────────────┘    └──────────────────┘  │
 │            ▲                                │                                       │
@@ -61,7 +61,7 @@ The RPi Generator Control system is a distributed two-device architecture for au
 │  │                                                                             │    │
 │  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌─────────────┐   │    │
 │  │  │    Nginx     │   │   FastAPI    │   │  PostgreSQL  │   │    Redis    │   │    │
-│  │  │   :80/:443   │──►│    :8000     │──►│    :5432     │   │    :6379    │   │    │
+│  │  │     :443     │──►│    :8000     │──►│    :5432     │   │    :6379    │   │    │
 │  │  │              │   │  (internal)  │   │              │   │             │   │    │
 │  │  │ Reverse Proxy│   │  + Vue.js    │   │   pg 16      │   │  Caching    │   │    │
 │  │  │ SSL/Security │   │  Static      │   │   asyncpg    │   │  Sessions   │   │    │
@@ -108,7 +108,7 @@ The RPi Generator Control system is a distributed two-device architecture for au
                                          │
                                          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                                    Nginx (:80)                                      │
+│                                    Nginx (:443)                                     │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                     │
 │   Request Classification (geo module):                                              │
@@ -589,14 +589,14 @@ PostgreSQL 16 with asyncpg driver for async operations.
 
 ## Port Reference
 
-| Service      | Internal Port | External Access    | Notes            |
-|--------------|---------------|--------------------|------------------|
-| Nginx        | 80/443        | Yes                | Main entry point |
-| FastAPI      | 8000          | No (internal only) | Backend API      |
-| PostgreSQL   | 5432          | No (internal only) | Database         |
-| Redis        | 6379          | No (internal only) | Cache            |
-| Portainer    | 9000          | /portainer/ path   | Optional profile |
-| GenSlave API | 8001          | Tailscale only     | On Pi Zero 2W    |
+| Service      | Internal Port | External Access    | Notes              |
+|--------------|---------------|--------------------|--------------------|
+| Nginx        | 443           | Yes (HTTPS only)   | Main entry point   |
+| FastAPI      | 8000          | No (internal only) | Backend API        |
+| PostgreSQL   | 5432          | No (internal only) | Database           |
+| Redis        | 6379          | No (internal only) | Cache              |
+| Portainer    | 9000          | /portainer/ path   | Optional profile   |
+| GenSlave API | 8001          | Tailscale only     | On Pi Zero 2W      |
 
 ---
 
@@ -624,9 +624,59 @@ PostgreSQL 16 with asyncpg driver for async operations.
 
 ---
 
+## Development/Testing Mode (LXC Containers)
+
+GenMaster can run in LXC containers for testing without real GPIO hardware.
+
+### Auto-Detection
+
+- GenMaster automatically detects when NOT running on a Raspberry Pi
+- Falls back to mock GPIO mode (checks `/proc/cpuinfo` for "Raspberry Pi")
+- Development API becomes available at `/api/dev/*`
+- Set `GENSLAVE_ENABLED=false` in `.env` for UI-only testing (disables heartbeat)
+
+### Development API Endpoints
+
+When in mock mode, these endpoints simulate Victron GPIO signals:
+
+```
+GET  /api/dev/status           - Development mode status
+GET  /api/dev/gpio/state       - Current mock GPIO state
+POST /api/dev/gpio/victron-signal  - Simulate Victron signal {"active": true/false}
+POST /api/dev/gpio/toggle      - Toggle signal state
+POST /api/dev/gpio/reset       - Reset to inactive
+POST /api/dev/webhook/test     - Test webhook delivery
+```
+
+### Testing a Generator Cycle
+
+```bash
+# Start GenMaster (auto-detects LXC/dev environment)
+docker compose up -d
+
+# Simulate Victron requesting generator
+curl -X POST http://localhost:8000/api/dev/gpio/victron-signal \
+     -H "Content-Type: application/json" \
+     -d '{"active": true}'
+
+# Watch state transition: IDLE → STARTING → RUNNING
+
+# Simulate Victron releasing generator
+curl -X POST http://localhost:8000/api/dev/gpio/victron-signal \
+     -H "Content-Type: application/json" \
+     -d '{"active": false}'
+
+# Watch state transition: RUNNING → STOPPING → IDLE
+```
+
+See [LXC-TESTING.md](./LXC-TESTING.md) for complete setup instructions.
+
+---
+
 ## Related Documentation
 
 - [01-project-overview.md](./agents/01-project-overview.md) - High-level project overview
+- [LXC-TESTING.md](./LXC-TESTING.md) - LXC container testing guide
 - [03-genmaster-backend.md](./agents/03-genmaster-backend.md) - Backend implementation details
 - [05-genslave-backend.md](./agents/05-genslave-backend.md) - GenSlave implementation
 - [06-docker-infrastructure.md](./agents/06-docker-infrastructure.md) - Docker configuration
