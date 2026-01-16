@@ -447,15 +447,29 @@ validate_hardware() {
     fi
 
     print_step "4" "Testing Automation Hat Mini..."
-    "$INSTALL_DIR/venv/bin/python3" << 'PYEOF' 2>/dev/null
+    local hat_result
+    hat_result=$("$INSTALL_DIR/venv/bin/python3" << 'PYEOF' 2>&1
 try:
     import automationhat
-    print("Automation Hat Mini detected")
+    if automationhat.is_automation_hat() or automationhat.is_automation_hat_mini():
+        print("SUCCESS:Automation Hat Mini detected")
+    else:
+        print("WARNING:Automation Hat library loaded but no hat detected")
+except ImportError as e:
+    print(f"ERROR:Module not found - {e}")
 except Exception as e:
-    print(f"Warning: {e}")
+    print(f"ERROR:{e}")
 PYEOF
+)
 
-    print_success "Hardware validation complete"
+    if [[ "$hat_result" == SUCCESS:* ]]; then
+        print_success "${hat_result#SUCCESS:}"
+    elif [[ "$hat_result" == WARNING:* ]]; then
+        print_warning "${hat_result#WARNING:}"
+    else
+        print_error "${hat_result#ERROR:}"
+        print_warning "GenSlave may not function correctly without Automation Hat Mini"
+    fi
 
     STATE_HARDWARE_VALIDATED=true
     save_state
