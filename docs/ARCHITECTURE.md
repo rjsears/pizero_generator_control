@@ -359,10 +359,13 @@ The webhook system sends notifications to external services (like n8n) for vario
 ├─────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                     │
 │  ┌────────────────────┐      POST Request       ┌────────────────────┐              │
-│  │    StateMachine    │ ───────────────────────►│     n8n Webhook    │              │
-│  │ await _send_webhook│                         │  http://n8n:5678/  │              │
-│  │    (event, data)   │                         │  webhook/generator │              │
+│  │    StateMachine    │ ───────────────────────►│  External Webhook  │              │
+│  │ await _send_webhook│                         │  (Remote URL)      │              │
+│  │    (event, data)   │                         │                    │              │
 │  └────────────────────┘                         └────────────────────┘              │
+│                                                                                     │
+│  Example webhook URL (configured in Settings):                                      │
+│  https://example.com/webhook/abc123-def456-ghi789                                   │
 │                                                                                     │
 │  Payload Structure:                                                                 │
 │  {                                                                                  │
