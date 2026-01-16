@@ -27,6 +27,7 @@ set -o pipefail
 # =============================================================================
 SCRIPT_VERSION="1.0.0"
 SCRIPT_NAME="GenSlave Setup"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="/opt/genslave"
 CONFIG_FILE="${INSTALL_DIR}/.env"
 STATE_FILE="${INSTALL_DIR}/.setup_state"
@@ -56,6 +57,7 @@ DEBUG_MODE=false
 
 # Installation state
 STATE_SYSTEM_PREPARED=false
+STATE_APP_DEPLOYED=false
 STATE_PYTHON_INSTALLED=false
 STATE_HARDWARE_VALIDATED=false
 STATE_TAILSCALE_CONFIGURED=false
@@ -259,6 +261,7 @@ save_state() {
     cat > "$STATE_FILE" << EOF
 # GenSlave Setup State - DO NOT EDIT MANUALLY
 STATE_SYSTEM_PREPARED=${STATE_SYSTEM_PREPARED}
+STATE_APP_DEPLOYED=${STATE_APP_DEPLOYED}
 STATE_PYTHON_INSTALLED=${STATE_PYTHON_INSTALLED}
 STATE_HARDWARE_VALIDATED=${STATE_HARDWARE_VALIDATED}
 STATE_TAILSCALE_CONFIGURED=${STATE_TAILSCALE_CONFIGURED}
@@ -447,6 +450,65 @@ prepare_system() {
     STATE_SYSTEM_PREPARED=true
     save_state
     print_success "System preparation complete"
+}
+
+# =============================================================================
+# Application Deployment
+# =============================================================================
+
+deploy_application() {
+    print_section "Application Deployment"
+
+    # Check if app directory exists in source
+    if [ ! -d "$SCRIPT_DIR/app" ]; then
+        print_error "Application source not found at $SCRIPT_DIR/app"
+        print_info "Please ensure you're running setup.sh from the genslave directory"
+        exit 1
+    fi
+
+    print_step "1" "Copying application files..."
+
+    # Remove old app files if they exist
+    if [ -d "$INSTALL_DIR/app" ] && [ "$(ls -A $INSTALL_DIR/app 2>/dev/null)" ]; then
+        rm -rf "$INSTALL_DIR/app"/*
+    fi
+
+    # Copy app directory
+    cp -r "$SCRIPT_DIR/app/"* "$INSTALL_DIR/app/"
+    print_success "Application files copied"
+
+    print_step "2" "Copying requirements file..."
+    if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
+        cp "$SCRIPT_DIR/requirements.txt" "$INSTALL_DIR/requirements.txt"
+        print_success "Requirements file copied"
+    else
+        print_warning "No requirements.txt found in source directory"
+    fi
+
+    print_step "3" "Setting permissions..."
+    chown -R pi:pi "$INSTALL_DIR/app"
+    chmod -R 755 "$INSTALL_DIR/app"
+    print_success "Permissions set"
+
+    # Verify deployment
+    print_step "4" "Verifying deployment..."
+    if [ -f "$INSTALL_DIR/app/main.py" ]; then
+        print_success "main.py found"
+    else
+        print_error "main.py not found - deployment may be incomplete"
+        exit 1
+    fi
+
+    if [ -d "$INSTALL_DIR/app/routers" ] && [ -d "$INSTALL_DIR/app/services" ]; then
+        print_success "Application structure verified"
+    else
+        print_error "Application structure incomplete"
+        exit 1
+    fi
+
+    STATE_APP_DEPLOYED=true
+    save_state
+    print_success "Application deployment complete"
 }
 
 # =============================================================================
@@ -759,7 +821,7 @@ User=pi
 Group=pi
 WorkingDirectory=${INSTALL_DIR}
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=${INSTALL_DIR}/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+ExecStart=${INSTALL_DIR}/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001
 Restart=always
 RestartSec=5
 
@@ -815,10 +877,6 @@ EOF
 
     STATE_SERVICE_INSTALLED=true
     save_state
-
-    echo ""
-    print_warning "The GenSlave application code must be deployed to ${INSTALL_DIR}/app/"
-    print_warning "before the service can be started."
 }
 
 # =============================================================================
@@ -934,9 +992,10 @@ print_summary() {
     fi
 
     echo -e "  ${BOLD}${YELLOW}Next Steps:${NC}"
-    echo "  1. Deploy the GenSlave application code to $INSTALL_DIR/app/"
+    echo "  1. Reboot the system (if I2C/SPI were enabled): sudo reboot"
     echo "  2. Start the service: sudo systemctl start genslave"
-    echo "  3. Verify GenMaster can communicate with GenSlave"
+    echo "  3. Check status: sudo systemctl status genslave"
+    echo "  4. Verify GenMaster can communicate with GenSlave"
     echo ""
 
     if grep -q "reboot" /var/run/reboot-required 2>/dev/null || [ -f /var/run/reboot-required ]; then
@@ -1001,6 +1060,7 @@ main() {
         if ! confirm "Would you like to resume the previous installation?"; then
             rm -f "$STATE_FILE"
             STATE_SYSTEM_PREPARED=false
+            STATE_APP_DEPLOYED=false
             STATE_PYTHON_INSTALLED=false
             STATE_HARDWARE_VALIDATED=false
             STATE_TAILSCALE_CONFIGURED=false
@@ -1011,6 +1071,7 @@ main() {
 
     # Run installation steps
     [ "$STATE_SYSTEM_PREPARED" != true ] && prepare_system || print_info "System already prepared"
+    [ "$STATE_APP_DEPLOYED" != true ] && deploy_application || print_info "Application already deployed"
     [ "$STATE_PYTHON_INSTALLED" != true ] && install_python_environment || print_info "Python already installed"
     [ "$STATE_HARDWARE_VALIDATED" != true ] && validate_hardware || print_info "Hardware already validated"
     [ "$STATE_TAILSCALE_CONFIGURED" != true ] && configure_tailscale || print_info "Tailscale already configured"
