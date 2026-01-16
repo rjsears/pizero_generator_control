@@ -45,7 +45,7 @@ The networking stack provides:
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
 │  │  GenMaster  │◄──►│  GenSlave   │    │    n8n      │    │ Your Phone  │  │
 │  │ 100.x.x.101 │    │ 100.x.x.102 │    │ 100.x.x.50  │    │ 100.x.x.20  │  │
-│  │  :80 (web)  │    │ :8000 (api) │    │ :5678       │    │             │  │
+│  │  :80 (web)  │    │ :8001 (api) │    │ :5678       │    │             │  │
 │  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -137,7 +137,7 @@ Configure GenMaster to use hostname:
 
 ```bash
 # In genmaster/.env
-SLAVE_API_URL=http://genslave:8000
+SLAVE_API_URL=http://genslave:8001
 ```
 
 ### Tailscale ACLs
@@ -174,7 +174,7 @@ Configure access control in Tailscale admin console:
     {
       "action": "accept",
       "src": ["tag:n8n"],
-      "dst": ["tag:generator:80", "tag:generator:8000"]
+      "dst": ["tag:generator:80", "tag:generator:8001"]
     }
   ],
   "ssh": [
@@ -456,7 +456,7 @@ docker logs genmaster-cloudflared -f
 
 ```bash
 # Test GenMaster → GenSlave connectivity
-curl -H "X-GenControl-Secret: $SECRET" http://genslave:8000/api/status
+curl -H "X-GenControl-Secret: $SECRET" http://genslave:8001/api/status
 
 # Test webhook delivery
 curl -X POST http://n8n:5678/webhook/test -d '{"test": true}'
@@ -519,7 +519,7 @@ Configure Tailscale for direct LAN connection:
 TAILSCALE_AUTHKEY=tskey-auth-xxxxx
 
 # GenSlave connection (Tailscale hostname)
-SLAVE_API_URL=http://genslave:8000
+SLAVE_API_URL=http://genslave:8001
 SLAVE_API_SECRET=strong-shared-secret
 
 # Webhooks (Tailscale hostname)
