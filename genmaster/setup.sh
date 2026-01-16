@@ -244,6 +244,13 @@ is_lxc_container() {
     return 1
 }
 
+# Get all local IP addresses
+get_local_ips() {
+    hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' || \
+    ip addr show 2>/dev/null | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $2}' | cut -d'/' -f1 || \
+    ifconfig 2>/dev/null | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $2}'
+}
+
 # Detect hardware and set mock GPIO mode if not on Raspberry Pi
 detect_hardware_mode() {
     print_section "Hardware Detection"
@@ -848,32 +855,110 @@ perform_system_checks() {
 configure_domain() {
     print_section "Domain Configuration"
 
-    if [ "$PRECONFIG_MODE" = "true" ]; then
-        print_info "Using: $DOMAIN"
+    # In preconfig mode, domain is already set by load_preconfig
+    if [ "$PRECONFIG_MODE" = "true" ] && [ -n "$DOMAIN" ]; then
+        print_info "Using pre-configured domain: $DOMAIN"
         return
     fi
 
+    echo -e "  ${GRAY}Enter the domain name where GenMaster will be accessible.${NC}"
+    echo -e "  ${GRAY}Example: genmaster.yourdomain.com${NC}"
     echo ""
-    echo -e "  ${GRAY}Enter the domain for accessing GenMaster.${NC}"
-    echo -e "  ${GRAY}Example: genmaster.example.com${NC}"
+
+    prompt_with_default "Enter your GenMaster domain" "genmaster.example.com" "DOMAIN"
+
+    # Validate domain format
+    if [[ ! "$DOMAIN" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]; then
+        print_warning "Domain format may be invalid: $DOMAIN"
+        if ! confirm_prompt "Continue anyway?"; then
+            configure_domain
+            return
+        fi
+    fi
+
+    validate_domain
+}
+
+validate_domain() {
+    print_subsection
+    echo -e "${WHITE}  Validating domain configuration...${NC}"
     echo ""
 
-    while true; do
-        echo -ne "${WHITE}  Domain${NC}: "
-        read DOMAIN
+    # Get local IP addresses
+    local local_ips=$(get_local_ips)
+    local domain_ip=""
+    local validation_passed=true
 
-        if [ -z "$DOMAIN" ]; then
-            print_error "Domain is required"
-            continue
-        fi
-
-        if echo "$DOMAIN" | grep -qE '^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$'; then
-            print_success "Domain: $DOMAIN"
-            break
-        else
-            print_error "Invalid domain format"
-        fi
+    # Show local IPs
+    echo -e "  ${WHITE}This server's IP addresses:${NC}"
+    for local_ip in $local_ips; do
+        echo -e "    ${CYAN}${local_ip}${NC}"
     done
+    echo ""
+
+    # Try to resolve the domain
+    print_info "Resolving $DOMAIN..."
+
+    if command_exists dig; then
+        domain_ip=$(dig +short "$DOMAIN" 2>/dev/null | head -1)
+    elif command_exists nslookup; then
+        domain_ip=$(nslookup "$DOMAIN" 2>/dev/null | grep -A1 "Name:" | grep "Address:" | awk '{print $2}' | head -1)
+    elif command_exists host; then
+        domain_ip=$(host "$DOMAIN" 2>/dev/null | grep "has address" | awk '{print $4}' | head -1)
+    elif command_exists getent; then
+        domain_ip=$(getent hosts "$DOMAIN" 2>/dev/null | awk '{print $1}' | head -1)
+    fi
+
+    if [ -z "$domain_ip" ]; then
+        print_warning "Could not resolve $DOMAIN to an IP address"
+        echo ""
+        echo -e "  ${YELLOW}This could mean:${NC}"
+        echo -e "    - The DNS record hasn't been created yet"
+        echo -e "    - The DNS hasn't propagated yet"
+        echo -e "    - The domain name is incorrect"
+        echo ""
+        validation_passed=false
+    else
+        print_success "Domain resolves to: $domain_ip"
+
+        # Check if the resolved IP matches any local IP
+        local ip_matches=false
+        local matched_local_ip=""
+        for local_ip in $local_ips; do
+            if [ "$local_ip" = "$domain_ip" ]; then
+                ip_matches=true
+                matched_local_ip="$local_ip"
+                break
+            fi
+        done
+
+        if [ "$ip_matches" = true ]; then
+            print_success "Domain IP matches this server ($matched_local_ip)"
+        else
+            print_warning "Domain IP ($domain_ip) does not match any local IP"
+            echo ""
+            echo -e "  ${YELLOW}IMPORTANT:${NC}"
+            echo -e "  ${YELLOW}The domain $DOMAIN points to $domain_ip${NC}"
+            echo -e "  ${YELLOW}but this server's IPs are different.${NC}"
+            echo ""
+            echo -e "  ${YELLOW}This may cause issues unless you are using:${NC}"
+            echo -e "    - Cloudflare Tunnel (routes traffic through Cloudflare)"
+            echo -e "    - Tailscale (uses Tailscale's private network)"
+            echo -e "    - A reverse proxy or load balancer"
+            echo ""
+            validation_passed=false
+        fi
+    fi
+
+    if [ "$validation_passed" = false ]; then
+        echo ""
+        if ! confirm_prompt "Continue with this domain configuration anyway?"; then
+            configure_domain
+            return
+        fi
+    fi
+
+    print_success "Domain configuration complete: $DOMAIN"
 }
 
 configure_database() {
@@ -924,23 +1009,76 @@ configure_containers() {
 }
 
 configure_timezone() {
-    print_section "Timezone"
+    print_section "Timezone Configuration"
 
-    if [ "$PRECONFIG_MODE" = "true" ]; then
-        print_info "Using: $TIMEZONE"
+    # In preconfig mode, timezone is already set by load_preconfig
+    if [ "$PRECONFIG_MODE" = "true" ] && [ -n "$TIMEZONE" ]; then
+        print_info "Using pre-configured timezone: $TIMEZONE"
         return
     fi
 
-    local detected_tz=""
-    if [ -f /etc/timezone ]; then
-        detected_tz=$(cat /etc/timezone)
-    elif [ -L /etc/localtime ]; then
-        detected_tz=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
-    fi
-    detected_tz="${detected_tz:-America/Phoenix}"
+    local default_tz="America/Phoenix"
+    local system_tz=""
 
-    prompt_with_default "Timezone" "$detected_tz" "TIMEZONE"
-    print_success "Timezone: $TIMEZONE"
+    # Detect system timezone for reference
+    if [ -f /etc/timezone ]; then
+        system_tz=$(cat /etc/timezone)
+    elif command_exists timedatectl; then
+        system_tz=$(timedatectl show -p Timezone --value 2>/dev/null)
+    fi
+
+    if [ -n "$system_tz" ] && [ "$system_tz" != "$default_tz" ]; then
+        echo -e "  ${WHITE}System timezone detected: ${CYAN}$system_tz${NC}"
+        echo ""
+    fi
+
+    if confirm_prompt "Use $default_tz as the timezone?" "y"; then
+        TIMEZONE="$default_tz"
+    else
+        local tz_suggestion="${system_tz:-$default_tz}"
+        prompt_with_default "Timezone" "$tz_suggestion" "TIMEZONE"
+    fi
+
+    print_success "Timezone set to: $TIMEZONE"
+
+    # Set the docker host's timezone to match
+    if confirm_prompt "Set docker host timezone to match ($TIMEZONE)?" "y"; then
+        set_host_timezone "$TIMEZONE"
+    fi
+}
+
+set_host_timezone() {
+    local timezone="$1"
+    local tz_file="/usr/share/zoneinfo/$timezone"
+
+    # Check if timezone file exists
+    if [ ! -f "$tz_file" ]; then
+        print_warning "Timezone file not found: $tz_file"
+        print_warning "Host timezone will remain unchanged"
+        return 1
+    fi
+
+    print_info "Setting host timezone to: $timezone"
+
+    # Set timezone using timedatectl if available (preferred method)
+    if command_exists timedatectl; then
+        if run_privileged timedatectl set-timezone "$timezone" 2>/dev/null; then
+            print_success "Host timezone updated using timedatectl"
+            return 0
+        else
+            print_warning "timedatectl failed, trying alternative method..."
+        fi
+    fi
+
+    # Fallback: symlink method
+    if run_privileged ln -sf "$tz_file" /etc/localtime 2>/dev/null; then
+        echo "$timezone" | run_privileged tee /etc/timezone > /dev/null 2>&1
+        print_success "Host timezone updated via symlink"
+        return 0
+    fi
+
+    print_warning "Could not set host timezone"
+    return 1
 }
 
 generate_secret_key() {
