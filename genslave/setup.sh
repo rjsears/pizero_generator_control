@@ -110,9 +110,14 @@ print_header() {
 print_section() {
     local title="$1"
     echo ""
-    echo -e "${BLUE}┌──────────────────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${BLUE}│${NC} ${BOLD}${title}${NC}"
-    echo -e "${BLUE}└──────────────────────────────────────────────────────────────────────┘${NC}"
+    echo -e "${BLUE}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${BLUE}│${NC} ${WHITE}${BOLD}$title${NC}"
+    echo -e "${BLUE}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+}
+
+print_subsection() {
+    echo ""
+    echo -e "${GRAY}───────────────────────────────────────────────────────────────────────────────${NC}"
     echo ""
 }
 
@@ -463,10 +468,12 @@ PYEOF
 configure_tailscale() {
     print_section "Tailscale VPN Configuration"
 
-    echo "  Tailscale provides secure communication with GenMaster."
+    echo ""
+    echo -e "  ${GRAY}Tailscale provides private access to your GenSlave instance${NC}"
+    echo -e "  ${GRAY}over a secure mesh VPN network for communication with GenMaster.${NC}"
     echo ""
 
-    if ! confirm "Would you like to configure Tailscale VPN?"; then
+    if ! confirm "Configure Tailscale for private VPN access?"; then
         ENABLE_TAILSCALE=false
         STATE_TAILSCALE_CONFIGURED=true
         save_state
@@ -475,28 +482,50 @@ configure_tailscale() {
 
     ENABLE_TAILSCALE=true
 
+    print_subsection
+    echo -e "${WHITE}  Tailscale Configuration${NC}"
+    echo ""
+    echo -e "  ${GRAY}Requirements:${NC}"
+    echo -e "    • Tailscale account"
+    echo -e "    • Auth key from: https://login.tailscale.com/admin/settings/keys${NC}"
+    echo ""
+
     print_step "1" "Installing Tailscale..."
     if ! command_exists tailscale; then
         curl -fsSL https://tailscale.com/install.sh | sh
     fi
     print_success "Tailscale installed"
 
-    print_step "2" "Gathering Tailscale configuration..."
     echo ""
-    echo "  Create an auth key at: https://login.tailscale.com/admin/settings/keys"
+    echo -ne "${WHITE}  Enter your Tailscale auth key${NC}: "
+    read_masked_token
+    TAILSCALE_AUTHKEY="$MASKED_INPUT"
+
+    if [ -z "$TAILSCALE_AUTHKEY" ]; then
+        print_warning "No auth key provided - Tailscale disabled"
+        ENABLE_TAILSCALE=false
+        STATE_TAILSCALE_CONFIGURED=true
+        save_state
+        return 0
+    fi
+
+    print_success "Auth key accepted"
+
     echo ""
+    echo -ne "${WHITE}  Tailscale hostname [genslave]${NC}: "
+    read ts_hostname
+    TAILSCALE_HOSTNAME=${ts_hostname:-genslave}
 
-    prompt_secret "Enter Tailscale Auth Key (tskey-auth-...)" TAILSCALE_AUTHKEY
-    prompt_input "Enter Tailscale hostname" "genslave" TAILSCALE_HOSTNAME
-
-    print_step "3" "Authenticating with Tailscale..."
+    print_step "2" "Authenticating with Tailscale..."
     tailscale up --authkey="$TAILSCALE_AUTHKEY" --hostname="$TAILSCALE_HOSTNAME"
     print_success "Tailscale authenticated"
 
-    print_step "4" "Verifying Tailscale connection..."
+    print_step "3" "Verifying Tailscale connection..."
     if tailscale status &> /dev/null; then
         local ts_ip=$(tailscale ip -4)
         print_success "Tailscale IP: $ts_ip"
+        echo ""
+        print_info "Your GenSlave instance will be accessible at: ${TAILSCALE_HOSTNAME}.your-tailnet.ts.net"
     else
         print_warning "Tailscale may not be fully connected yet"
     fi

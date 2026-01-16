@@ -1510,18 +1510,29 @@ configure_optional_services() {
     fi
 
     # Cloudflare Tunnel
-    print_subsection
-    echo -e "  ${WHITE}${BOLD}Cloudflare Tunnel${NC}"
-    echo -e "  ${GRAY}Secure HTTPS access without exposing ports.${NC}"
     echo ""
+    if confirm_prompt "Configure Cloudflare Tunnel for secure external access?" "n"; then
+        print_subsection
+        echo -e "${WHITE}  Cloudflare Tunnel Configuration${NC}"
+        echo ""
+        echo -e "  ${GRAY}Cloudflare Tunnel provides secure access to your GenMaster instance${NC}"
+        echo -e "  ${GRAY}without exposing any ports to the public internet.${NC}"
+        echo ""
+        echo -e "  ${GRAY}Requirements:${NC}"
+        echo -e "    • Cloudflare account with your domain"
+        echo -e "    • Cloudflare Tunnel token from Zero Trust dashboard"
+        echo ""
+        echo -e "  ${GRAY}Create a tunnel at: https://one.dash.cloudflare.com${NC}"
+        echo -e "  ${GRAY}Navigate to: Networks → Tunnels → Create a tunnel${NC}"
+        echo ""
 
-    if confirm_prompt "Enable Cloudflare Tunnel?" "n"; then
-        INSTALL_CLOUDFLARE_TUNNEL=true
-        echo -ne "${WHITE}  Tunnel token${NC}: "
+        echo -ne "${WHITE}  Enter your Cloudflare Tunnel token${NC}: "
         read_masked_token
         CLOUDFLARE_TUNNEL_TOKEN="$MASKED_INPUT"
+
         if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
-            print_success "Cloudflare Tunnel enabled"
+            INSTALL_CLOUDFLARE_TUNNEL=true
+            print_success "Cloudflare Tunnel configured"
         else
             print_warning "No token provided - Cloudflare Tunnel disabled"
             INSTALL_CLOUDFLARE_TUNNEL=false
@@ -1529,19 +1540,36 @@ configure_optional_services() {
     fi
 
     # Tailscale
-    print_subsection
-    echo -e "  ${WHITE}${BOLD}Tailscale VPN${NC}"
-    echo -e "  ${GRAY}Private mesh VPN for secure remote access.${NC}"
     echo ""
+    if confirm_prompt "Configure Tailscale for private VPN access?" "n"; then
+        print_subsection
+        echo -e "${WHITE}  Tailscale Configuration${NC}"
+        echo ""
+        echo -e "  ${GRAY}Tailscale provides private access to your GenMaster instance${NC}"
+        echo -e "  ${GRAY}over a secure mesh VPN network.${NC}"
+        echo ""
+        echo -e "  ${GRAY}Requirements:${NC}"
+        echo -e "    • Tailscale account"
+        echo -e "    • Auth key from: https://login.tailscale.com/admin/settings/keys${NC}"
+        echo ""
 
-    if confirm_prompt "Enable Tailscale?" "n"; then
-        INSTALL_TAILSCALE=true
-        echo -ne "${WHITE}  Auth key${NC}: "
+        echo -ne "${WHITE}  Enter your Tailscale auth key${NC}: "
         read_masked_token
         TAILSCALE_AUTH_KEY="$MASKED_INPUT"
+
         if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-            prompt_with_default "Hostname" "genmaster" "TAILSCALE_HOSTNAME"
-            print_success "Tailscale enabled"
+            INSTALL_TAILSCALE=true
+            print_success "Auth key accepted"
+
+            # Optional hostname
+            echo ""
+            echo -ne "${WHITE}  Tailscale hostname [genmaster]${NC}: "
+            read ts_hostname
+            TAILSCALE_HOSTNAME=${ts_hostname:-genmaster}
+
+            print_success "Tailscale configured"
+            echo ""
+            print_info "Your GenMaster instance will be accessible at: ${TAILSCALE_HOSTNAME}.your-tailnet.ts.net"
         else
             print_warning "No auth key provided - Tailscale disabled"
             INSTALL_TAILSCALE=false
@@ -1549,12 +1577,14 @@ configure_optional_services() {
     fi
 
     # Portainer
-    print_subsection
-    echo -e "  ${WHITE}${BOLD}Portainer${NC}"
-    echo -e "  ${GRAY}Web-based container management.${NC}"
     echo ""
-
-    if confirm_prompt "Enable Portainer?" "n"; then
+    if confirm_prompt "Enable Portainer for container management?" "n"; then
+        print_subsection
+        echo -e "${WHITE}  Portainer Configuration${NC}"
+        echo ""
+        echo -e "  ${GRAY}Portainer provides a web-based interface for managing${NC}"
+        echo -e "  ${GRAY}Docker containers, images, and volumes.${NC}"
+        echo ""
         INSTALL_PORTAINER=true
         print_success "Portainer enabled"
     fi
