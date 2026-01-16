@@ -333,6 +333,140 @@ check_internet() {
     return 1
 }
 
+# Check DNS resolution
+check_dns() {
+    local domain="${1:-google.com}"
+    if host "$domain" &> /dev/null || nslookup "$domain" &> /dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+# Get local IP addresses
+get_local_ips() {
+    # Try multiple methods to get local IPs
+    local ips=""
+
+    # Method 1: hostname -I
+    if command_exists hostname; then
+        ips=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$')
+    fi
+
+    # Method 2: ip addr (fallback)
+    if [ -z "$ips" ] && command_exists ip; then
+        ips=$(ip -4 addr show scope global | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+    fi
+
+    # Method 3: ifconfig (fallback)
+    if [ -z "$ips" ] && command_exists ifconfig; then
+        ips=$(ifconfig | grep -oP 'inet\s+\K\d+(\.\d+){3}' | grep -v '^127\.')
+    fi
+
+    echo "$ips"
+}
+
+# Check if IP matches CIDR range
+ip_in_cidr() {
+    local ip="$1"
+    local cidr="$2"
+
+    # Convert IP to integer
+    local ip_int=0
+    IFS='.' read -ra parts <<< "$ip"
+    for part in "${parts[@]}"; do
+        ip_int=$((ip_int * 256 + part))
+    done
+
+    # Parse CIDR
+    local network="${cidr%/*}"
+    local prefix="${cidr#*/}"
+
+    # Convert network to integer
+    local net_int=0
+    IFS='.' read -ra parts <<< "$network"
+    for part in "${parts[@]}"; do
+        net_int=$((net_int * 256 + part))
+    done
+
+    # Calculate mask
+    local mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
+
+    # Check if IP is in range
+    [ $((ip_int & mask)) -eq $((net_int & mask)) ]
+}
+
+# Check if running in a container (LXC/Docker)
+is_container() {
+    # Check systemd-detect-virt
+    if command_exists systemd-detect-virt; then
+        local virt=$(systemd-detect-virt --container 2>/dev/null)
+        if [ -n "$virt" ] && [ "$virt" != "none" ]; then
+            echo "$virt"
+            return 0
+        fi
+    fi
+
+    # Check /proc/1/environ for container indicators
+    if [ -f /proc/1/environ ]; then
+        if grep -qa 'container=lxc' /proc/1/environ 2>/dev/null; then
+            echo "lxc"
+            return 0
+        fi
+        if grep -qa 'container=docker' /proc/1/environ 2>/dev/null; then
+            echo "docker"
+            return 0
+        fi
+    fi
+
+    # Check /.dockerenv
+    if [ -f /.dockerenv ]; then
+        echo "docker"
+        return 0
+    fi
+
+    # Check /run/host/container-manager
+    if [ -f /run/host/container-manager ]; then
+        cat /run/host/container-manager
+        return 0
+    fi
+
+    return 1
+}
+
+# Check if port is available
+check_port_available() {
+    local port="$1"
+
+    if command_exists ss; then
+        ! ss -tlnp | grep -q ":$port "
+    elif command_exists netstat; then
+        ! netstat -tlnp | grep -q ":$port "
+    else
+        return 0  # Can't check, assume available
+    fi
+}
+
+# Check memory availability
+check_memory() {
+    local required_mb="${1:-1024}"
+    local available_mb=0
+
+    if [ -f /proc/meminfo ]; then
+        available_mb=$(grep MemAvailable /proc/meminfo | awk '{print int($2/1024)}')
+        if [ -z "$available_mb" ] || [ "$available_mb" -eq 0 ]; then
+            available_mb=$(grep MemFree /proc/meminfo | awk '{print int($2/1024)}')
+        fi
+    fi
+
+    if [ "$available_mb" -ge "$required_mb" ]; then
+        echo "$available_mb"
+        return 0
+    else
+        echo "$available_mb"
+        return 1
+    fi
+}
+
 # =============================================================================
 # State Management
 # =============================================================================
@@ -535,13 +669,73 @@ prepare_system() {
         exit 1
     fi
 
+    # Check DNS resolution
+    print_step "5" "Checking DNS resolution..."
+    if check_dns "google.com"; then
+        print_success "DNS resolution working"
+    else
+        print_warning "DNS resolution may have issues"
+    fi
+
+    # Network diagnostics
+    print_step "6" "Running network diagnostics..."
+
+    # Get local IPs
+    local local_ips=$(get_local_ips)
+    if [ -n "$local_ips" ]; then
+        print_success "Local IP addresses:"
+        echo "$local_ips" | while read -r ip; do
+            echo "             $ip"
+        done
+    else
+        print_warning "Could not determine local IP address"
+    fi
+
+    # Check for container environment
+    local container_type=$(is_container)
+    if [ -n "$container_type" ]; then
+        print_warning "Running inside container: $container_type"
+        print_info "Some features may require host network mode"
+    fi
+
+    # Check port 80 availability
+    if check_port_available 80; then
+        print_success "Port 80 is available"
+    else
+        print_warning "Port 80 is in use - nginx may fail to start"
+    fi
+
+    # Check port 443 availability (for SSL)
+    if check_port_available 443; then
+        print_success "Port 443 is available"
+    else
+        print_warning "Port 443 is in use"
+    fi
+
+    # Check available memory
+    local available_mem=$(check_memory 1024)
+    if [ $? -eq 0 ]; then
+        print_success "Available memory: ${available_mem}MB"
+    else
+        print_warning "Low memory: ${available_mem}MB (1024MB recommended)"
+    fi
+
+    # Check Docker Hub connectivity
+    print_step "7" "Checking Docker Hub connectivity..."
+    if curl -sf --max-time 10 https://registry-1.docker.io/v2/ &>/dev/null || \
+       curl -sf --max-time 10 https://hub.docker.com &>/dev/null; then
+        print_success "Docker Hub is reachable"
+    else
+        print_warning "Docker Hub may be slow or unreachable"
+    fi
+
     # Update package lists
-    print_step "5" "Updating package lists..."
+    print_step "8" "Updating package lists..."
     apt-get update -qq
     print_success "Package lists updated"
 
     # Install required packages
-    print_step "6" "Installing required packages..."
+    print_step "9" "Installing required packages..."
     local packages=(
         curl
         wget
@@ -552,19 +746,21 @@ prepare_system() {
         apt-transport-https
         jq
         openssl
+        dnsutils
+        net-tools
     )
 
     apt-get install -y -qq "${packages[@]}" > /dev/null 2>&1
     print_success "Required packages installed"
 
     # Check for Raspberry Pi 5 and install GPIO software
-    print_step "7" "Checking for Raspberry Pi hardware..."
+    print_step "10" "Checking for Raspberry Pi hardware..."
     if [ -f /proc/device-tree/model ]; then
         local pi_model=$(cat /proc/device-tree/model | tr -d '\0')
         print_success "Detected: $pi_model"
 
         if echo "$pi_model" | grep -q "Raspberry Pi 5"; then
-            print_step "8" "Installing Raspberry Pi 5 GPIO software..."
+            print_step "11" "Installing Raspberry Pi 5 GPIO software..."
 
             # Pi 5 uses gpiozero with lgpio backend (not RPi.GPIO)
             apt-get install -y -qq \
@@ -592,7 +788,7 @@ prepare_system() {
             print_success "Raspberry Pi 5 GPIO software installed (gpiozero + lgpio)"
 
         elif echo "$pi_model" | grep -q "Raspberry Pi"; then
-            print_step "8" "Installing standard Raspberry Pi GPIO software..."
+            print_step "11" "Installing standard Raspberry Pi GPIO software..."
 
             # Older Pi models use gpiozero with RPi.GPIO backend
             apt-get install -y -qq \
@@ -607,7 +803,7 @@ prepare_system() {
     fi
 
     # Create installation directory
-    print_step "9" "Creating installation directory..."
+    print_step "12" "Creating installation directory..."
     mkdir -p "$INSTALL_DIR"/{nginx/conf.d,nginx/ssl,logs,data,backups}
     print_success "Created $INSTALL_DIR"
 
