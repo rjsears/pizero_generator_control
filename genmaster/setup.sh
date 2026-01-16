@@ -255,7 +255,7 @@ detect_hardware_mode() {
         MOCK_GPIO_MODE=false
     else
         if is_lxc_container; then
-            print_info "LXC container detected"
+            print_info "LXC container environment"
         else
             print_info "Non-Raspberry Pi system detected"
         fi
@@ -264,6 +264,32 @@ detect_hardware_mode() {
         MOCK_GPIO_MODE=true
     fi
     echo ""
+}
+
+# Show LXC container warning with Proxmox configuration instructions
+show_lxc_warning() {
+    echo ""
+    echo -e "  ${RED}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "  ${RED}║${NC}                          ${WHITE}${BOLD}LXC CONTAINER DETECTED${NC}                           ${RED}║${NC}"
+    echo -e "  ${RED}╠═══════════════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "  ${RED}║${NC}                                                                           ${RED}║${NC}"
+    echo -e "  ${RED}║${NC}  ${YELLOW}IMPORTANT:${NC} Docker inside LXC requires special Proxmox configuration.     ${RED}║${NC}"
+    echo -e "  ${RED}║${NC}                                                                           ${RED}║${NC}"
+    echo -e "  ${RED}║${NC}  On your ${WHITE}Proxmox host${NC}, add this line to the container config:             ${RED}║${NC}"
+    echo -e "  ${RED}║${NC}                                                                           ${RED}║${NC}"
+    echo -e "  ${RED}║${NC}      ${CYAN}/etc/pve/lxc/<CTID>.conf${NC}                                             ${RED}║${NC}"
+    echo -e "  ${RED}║${NC}                                                                           ${RED}║${NC}"
+    echo -e "  ${RED}║${NC}      ${WHITE}lxc.apparmor.profile: unconfined${NC}                                     ${RED}║${NC}"
+    echo -e "  ${RED}║${NC}                                                                           ${RED}║${NC}"
+    echo -e "  ${RED}║${NC}  Then restart this container from Proxmox before continuing.              ${RED}║${NC}"
+    echo -e "  ${RED}║${NC}                                                                           ${RED}║${NC}"
+    echo -e "  ${RED}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    if ! confirm_prompt "Have you added this configuration and restarted the container?"; then
+        echo ""
+        print_info "Please configure Proxmox and restart the container, then run this script again."
+        exit 0
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1674,13 +1700,18 @@ main() {
 
     # Skip checks for reconfigure
     if [ "$INSTALL_MODE" != "reconfigure" ]; then
-        # Hardware detection (sets MOCK_GPIO_MODE)
-        detect_hardware_mode
+        # Check if running in LXC container and show warning
+        if is_lxc_container; then
+            show_lxc_warning
+        fi
 
         # Resume check
         if check_resume; then
-            print_info "Resuming..."
+            print_info "Resuming from saved state..."
         fi
+
+        # Hardware detection (sets MOCK_GPIO_MODE)
+        detect_hardware_mode
 
         # System prep
         print_section "System Preparation"
