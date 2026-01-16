@@ -232,13 +232,39 @@ cd pizero_generator_control/genmaster
 ```
 
 The setup wizard will:
-1. Detect your system configuration
-2. Install Docker if needed
-3. Configure Tailscale VPN (optional)
-4. Configure Cloudflare Tunnel (optional)
-5. Set up Portainer (optional)
-6. Generate secure credentials
-7. Start all services
+1. **Detect environment** - Raspberry Pi, LXC container, or standard Linux
+2. **LXC Warning** - Show Proxmox configuration requirements if running in LXC
+3. **Hardware detection** - Enable mock GPIO mode if not on Raspberry Pi
+4. **System checks** - Verify memory, disk, ports, network connectivity
+5. **Install Docker** if needed (with platform-specific guidance for macOS/WSL)
+6. **Domain validation** - DNS resolution, IP matching, connectivity tests
+7. **Configure GenSlave** - URL, API secret, connection validation
+8. **Configure timezone** - Default America/Phoenix with host sync option
+9. **Optional services** - Tailscale VPN, Cloudflare Tunnel, Portainer
+10. **Generate configs** - .env, docker-compose.yml, nginx.conf
+11. **Deploy stack** - Start all containers
+
+### Setup Command Line Options
+
+```bash
+# Interactive setup
+./setup.sh
+
+# Show help
+./setup.sh --help
+
+# Use pre-configuration file
+./setup.sh --config myconfig.conf
+
+# Validate GenSlave connection (run after GenSlave is set up)
+./setup.sh --genslave
+
+# Update GenSlave IP/URL address
+./setup.sh --genslaveip
+
+# Show version
+./setup.sh --version
+```
 
 ### Verify Installation
 
@@ -461,11 +487,29 @@ This disables heartbeat service and suppresses slave offline warnings.
 
 | Issue | Solution |
 |-------|----------|
-| **GenSlave shows offline** | Check network connectivity, verify `SLAVE_API_URL` in `.env` |
+| **GenSlave shows offline** | Run `./setup.sh --genslave` to validate connection |
+| **GenSlave IP changed** | Run `./setup.sh --genslaveip` to update the URL |
 | **Generator won't start** | Verify GenSlave is online, check for active override |
 | **Victron signal not detected** | Check GPIO17 wiring, verify signal in `/api/dev/gpio/state` |
 | **Container won't start** | Run `docker compose logs <container>` for details |
 | **Database connection failed** | Check `DATABASE_PASSWORD` matches in both services |
+| **LXC Docker issues** | Ensure `lxc.apparmor.profile: unconfined` is set in Proxmox |
+
+### GenSlave Connection Management
+
+```bash
+# Validate GenSlave connection (tests DNS, ping, port, API health)
+./setup.sh --genslave
+
+# Update GenSlave URL/IP (with optional health checks and restart)
+./setup.sh --genslaveip
+```
+
+The `--genslave` option performs comprehensive validation:
+- DNS resolution of hostname
+- Ping connectivity test
+- TCP port availability check
+- API health endpoint test (`/api/health`)
 
 ### Useful Commands
 
@@ -479,8 +523,8 @@ docker compose restart genmaster
 # Check database
 docker compose exec db psql -U genmaster -d genmaster -c "SELECT * FROM system_state;"
 
-# Test GenSlave connection
-curl -X GET http://genslave.local:8001/api/health
+# Test GenSlave connection manually
+curl -X GET http://genslave.local:8000/api/health
 
 # Check GPIO state (mock mode)
 curl http://localhost:8000/api/dev/gpio/state

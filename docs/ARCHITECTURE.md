@@ -514,44 +514,65 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  ┌─────────────────────────────────────────────────────────────────────────┐        │
 │  │                          setup.sh                                       │        │
 │  │                                                                         │        │
-│  │  Phase 1: System Preparation                                            │        │
-│  │  ├── Detect if running in container (LXC/Docker)                        │        │
-│  │  ├── Install base packages (docker.io, docker-compose, etc.)            │        │
-│  │  ├── Check memory (minimum 4GB for Pi 5)                                │        │
-│  │  └── Verify all required ports available                                │        │
+│  │  Command Line Options:                                                  │        │
+│  │  ├── ./setup.sh              - Interactive setup                        │        │
+│  │  ├── ./setup.sh --config     - Use pre-configuration file               │        │
+│  │  ├── ./setup.sh --genslave   - Validate GenSlave connection             │        │
+│  │  ├── ./setup.sh --genslaveip - Update GenSlave URL/IP                   │        │
+│  │  └── ./setup.sh --help       - Show help                                │        │
 │  │                                                                         │        │
-│  │  Phase 2: Network Diagnostics                                           │        │
-│  │  ├── check_dns() - Verify DNS resolution                                │        │
-│  │  ├── get_local_ips() - Enumerate network interfaces                     │        │
-│  │  ├── Test connectivity to required endpoints                            │        │
-│  │  └── Detect Tailscale IP range (100.64.0.0/10)                          │        │
+│  │  Phase 1: Environment Detection                                         │        │
+│  │  ├── LXC Warning - Show Proxmox apparmor config if LXC detected         │        │
+│  │  ├── Hardware Detection (Raspberry Pi vs LXC/x86)                       │        │
+│  │  ├── Auto-set MOCK_GPIO_MODE=true if not on Pi                          │        │
+│  │  └── Check for resume from previous incomplete install                  │        │
 │  │                                                                         │        │
-│  │  Phase 3: Interactive Configuration                                     │        │
-│  │  ├── ask_tailscale() - Configure Tailscale (Y/n)                        │        │
-│  │  ├── ask_cloudflare() - Configure Cloudflare Tunnel (y/N)               │        │
-│  │  ├── ask_letsencrypt() - Configure Let's Encrypt (y/N)                  │        │
-│  │  ├── ask_portainer() - Configure Portainer (Y/n)                        │        │
-│  │  ├── Configure GenSlave connection URL                                  │        │
-│  │  └── Configure webhook settings                                         │        │
+│  │  Phase 2: System Preparation                                            │        │
+│  │  ├── Detect OS (Debian/Ubuntu/RHEL/Arch/Alpine/SUSE)                    │        │
+│  │  ├── Install utilities (curl, git, openssl, jq, tmux)                   │        │
+│  │  ├── Install Docker with platform detection (macOS/WSL/Linux)           │        │
+│  │  └── Enable and start Docker daemon                                     │        │
 │  │                                                                         │        │
-│  │  Phase 4: File Generation                                               │        │
-│  │  ├── Generate .env from template                                        │        │
-│  │  ├── Generate docker-compose.override.yml if needed                     │        │
-│  │  └── Copy application to /opt/genmaster                                 │        │
+│  │  Phase 3: System Requirements Check                                     │        │
+│  │  ├── Memory check (GB format with fallback to MB)                       │        │
+│  │  ├── Disk space check (GB format)                                       │        │
+│  │  ├── Port 443 availability                                              │        │
+│  │  ├── OpenSSL and Curl availability                                      │        │
+│  │  ├── Network connectivity (ping 8.8.8.8)                                │        │
+│  │  └── Docker Hub connectivity test                                       │        │
 │  │                                                                         │        │
-│  │  Phase 5: Docker Setup                                                  │        │
-│  │  ├── Pull required images                                               │        │
-│  │  ├── Build genmaster image                                              │        │
+│  │  Phase 4: Interactive Configuration                                     │        │
+│  │  ├── Domain Configuration                                               │        │
+│  │  │   ├── DNS resolution test                                            │        │
+│  │  │   ├── IP matching validation                                         │        │
+│  │  │   └── Ping connectivity test                                         │        │
+│  │  ├── Database Configuration (auto-generate secure password)             │        │
+│  │  ├── Timezone Configuration (default: America/Phoenix)                  │        │
+│  │  │   └── Option to sync host timezone                                   │        │
+│  │  ├── GenSlave Configuration                                             │        │
+│  │  │   ├── URL format validation                                          │        │
+│  │  │   ├── API secret generation                                          │        │
+│  │  │   └── Optional connection validation (DNS/ping/port/health)          │        │
+│  │  ├── Webhook Configuration                                              │        │
+│  │  └── Optional Services (Tailscale/Cloudflare/Portainer)                 │        │
+│  │                                                                         │        │
+│  │  Phase 5: File Generation                                               │        │
+│  │  ├── Generate .env with all configuration                               │        │
+│  │  ├── Generate docker-compose.yml                                        │        │
+│  │  ├── Generate nginx.conf with SSL                                       │        │
+│  │  └── Generate self-signed SSL certificates                              │        │
+│  │                                                                         │        │
+│  │  Phase 6: Deployment                                                    │        │
+│  │  ├── Pull Docker images                                                 │        │
 │  │  ├── Start containers with selected profiles                            │        │
-│  │  │   docker compose --profile tailscale --profile portainer up -d       │        │
-│  │  └── Wait for health checks                                             │        │
-│  │                                                                         │        │
-│  │  Phase 6: Post-Install                                                  │        │
-│  │  ├── Run database migrations                                            │        │
-│  │  ├── Create admin user if needed                                        │        │
-│  │  ├── Display access URLs                                                │        │
-│  │  └── Show next steps                                                    │        │
+│  │  ├── Wait for health checks                                             │        │
+│  │  ├── Display configuration summary                                      │        │
+│  │  └── Show auto-generated credentials                                    │        │
 │  └─────────────────────────────────────────────────────────────────────────┘        │
+│                                                                                     │
+│  Post-Install Commands:                                                             │
+│  ├── ./setup.sh --genslave     - Validate GenSlave after it's set up               │
+│  └── ./setup.sh --genslaveip   - Update GenSlave IP if it changes                  │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
