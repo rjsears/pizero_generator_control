@@ -70,6 +70,7 @@ STATE_DOCKER_INSTALLED=false
 STATE_SSL_CONFIGURED=false
 STATE_TAILSCALE_CONFIGURED=false
 STATE_CLOUDFLARE_CONFIGURED=false
+STATE_PORTAINER_CONFIGURED=false
 STATE_ENV_CONFIGURED=false
 STATE_SERVICES_STARTED=false
 
@@ -85,6 +86,8 @@ TAILSCALE_AUTHKEY=""
 TAILSCALE_HOSTNAME="genmaster"
 ENABLE_CLOUDFLARE_TUNNEL=false
 CLOUDFLARE_TUNNEL_TOKEN=""
+ENABLE_PORTAINER=false
+PORTAINER_ADMIN_PASSWORD=""
 DB_PASSWORD=""
 APP_SECRET_KEY=""
 SLAVE_API_SECRET=""
@@ -343,6 +346,7 @@ STATE_DOCKER_INSTALLED=${STATE_DOCKER_INSTALLED}
 STATE_SSL_CONFIGURED=${STATE_SSL_CONFIGURED}
 STATE_TAILSCALE_CONFIGURED=${STATE_TAILSCALE_CONFIGURED}
 STATE_CLOUDFLARE_CONFIGURED=${STATE_CLOUDFLARE_CONFIGURED}
+STATE_PORTAINER_CONFIGURED=${STATE_PORTAINER_CONFIGURED}
 STATE_ENV_CONFIGURED=${STATE_ENV_CONFIGURED}
 STATE_SERVICES_STARTED=${STATE_SERVICES_STARTED}
 DOMAIN_NAME="${DOMAIN_NAME}"
@@ -351,6 +355,7 @@ SSL_PROVIDER="${SSL_PROVIDER}"
 ENABLE_TAILSCALE=${ENABLE_TAILSCALE}
 TAILSCALE_HOSTNAME="${TAILSCALE_HOSTNAME}"
 ENABLE_CLOUDFLARE_TUNNEL=${ENABLE_CLOUDFLARE_TUNNEL}
+ENABLE_PORTAINER=${ENABLE_PORTAINER}
 SLAVE_API_URL="${SLAVE_API_URL}"
 EOF
     chmod 600 "$STATE_FILE"
@@ -971,6 +976,53 @@ configure_cloudflare_tunnel() {
 }
 
 # =============================================================================
+# Portainer Configuration
+# =============================================================================
+
+configure_portainer() {
+    print_section "Portainer Container Management (Optional)"
+
+    echo "  Portainer provides a web-based Docker container management interface."
+    echo "  Access it at: https://your-domain/portainer/"
+    echo ""
+    echo "  Features:"
+    echo "  - View and manage all containers"
+    echo "  - View container logs"
+    echo "  - Restart/stop/start containers"
+    echo "  - Monitor resource usage"
+    echo ""
+
+    if ! confirm "Would you like to install Portainer?"; then
+        ENABLE_PORTAINER=false
+        STATE_PORTAINER_CONFIGURED=true
+        save_state
+        return 0
+    fi
+
+    ENABLE_PORTAINER=true
+
+    print_step "1" "Configuring Portainer admin password..."
+
+    echo ""
+    echo "  Enter a password for the Portainer admin user."
+    echo "  If left blank, you'll set the password on first access."
+    echo ""
+
+    prompt_secret "Portainer admin password (or Enter to set later)" PORTAINER_ADMIN_PASSWORD true
+
+    if [ -n "$PORTAINER_ADMIN_PASSWORD" ]; then
+        print_success "Portainer admin password configured"
+    else
+        print_info "You will set the admin password on first access to Portainer"
+    fi
+
+    print_success "Portainer configuration saved"
+
+    STATE_PORTAINER_CONFIGURED=true
+    save_state
+}
+
+# =============================================================================
 # Environment Configuration
 # =============================================================================
 
@@ -1147,6 +1199,23 @@ EOF
 EOF
     fi
 
+    cat >> "$CONFIG_FILE" << EOF
+
+# =============================================================================
+# Portainer (Container Management)
+# =============================================================================
+EOF
+
+    if [ "$ENABLE_PORTAINER" = true ]; then
+        cat >> "$CONFIG_FILE" << EOF
+PORTAINER_ADMIN_PASSWORD=${PORTAINER_ADMIN_PASSWORD}
+EOF
+    else
+        cat >> "$CONFIG_FILE" << EOF
+# PORTAINER_ADMIN_PASSWORD=
+EOF
+    fi
+
     chmod 600 "$CONFIG_FILE"
     print_success "Environment configuration created: $CONFIG_FILE"
 
@@ -1190,6 +1259,9 @@ start_services() {
     fi
     if [ "$ENABLE_CLOUDFLARE_TUNNEL" = true ]; then
         profiles="$profiles --profile cloudflare"
+    fi
+    if [ "$ENABLE_PORTAINER" = true ]; then
+        profiles="$profiles --profile portainer"
     fi
 
     print_step "1" "Pulling Docker images..."
@@ -1241,6 +1313,15 @@ print_summary() {
         echo -e "  Web Dashboard:    ${GREEN}http://$(hostname -I | awk '{print $1}')${NC}"
     fi
     echo -e "  API Health:       ${GREEN}http://localhost/api/health${NC}"
+    if [ "$ENABLE_PORTAINER" = true ]; then
+        if [ "$ENABLE_CLOUDFLARE_TUNNEL" = true ] && [ -n "$DOMAIN_NAME" ]; then
+            echo -e "  Portainer:        ${GREEN}https://${DOMAIN_NAME}/portainer/${NC}"
+        elif [ "$SSL_PROVIDER" != "none" ] && [ -n "$DOMAIN_NAME" ]; then
+            echo -e "  Portainer:        ${GREEN}https://${DOMAIN_NAME}/portainer/${NC}"
+        else
+            echo -e "  Portainer:        ${GREEN}http://$(hostname -I | awk '{print $1}')/portainer/${NC}"
+        fi
+    fi
     echo ""
 
     echo -e "  ${BOLD}Admin Credentials:${NC}"
@@ -1347,6 +1428,7 @@ main() {
             STATE_SSL_CONFIGURED=false
             STATE_TAILSCALE_CONFIGURED=false
             STATE_CLOUDFLARE_CONFIGURED=false
+            STATE_PORTAINER_CONFIGURED=false
             STATE_ENV_CONFIGURED=false
             STATE_SERVICES_STARTED=false
         fi
@@ -1381,6 +1463,12 @@ main() {
         configure_cloudflare_tunnel
     else
         print_info "Cloudflare Tunnel already configured, skipping..."
+    fi
+
+    if [ "$STATE_PORTAINER_CONFIGURED" != true ]; then
+        configure_portainer
+    else
+        print_info "Portainer already configured, skipping..."
     fi
 
     if [ "$STATE_ENV_CONFIGURED" != true ]; then
