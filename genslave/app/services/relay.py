@@ -20,21 +20,29 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # Try to import automationhat, fall back to mock if not available
-try:
-    if settings.MOCK_HAT_MODE:
-        raise ImportError("Mock mode enabled")
-    import automationhat
+automationhat = None
+HAT_AVAILABLE = False
 
-    HAT_AVAILABLE = True
-    if automationhat.is_automation_hat():
-        logger.info("Automation Hat Mini detected and initialized")
-    else:
-        logger.warning("automationhat library loaded but no hat detected")
-        HAT_AVAILABLE = False
-except ImportError as e:
-    logger.warning(f"Automation Hat not available, using mock mode: {e}")
-    automationhat = None
-    HAT_AVAILABLE = False
+if settings.MOCK_HAT_MODE:
+    logger.info("Mock HAT mode enabled via configuration")
+else:
+    try:
+        import automationhat as _automationhat
+
+        # The library auto-initializes on import
+        # Test by actually trying to read/set the relay
+        # This is more reliable than is_automation_hat() which may not work for Mini
+        try:
+            # Try to read relay state - this will fail if no hat
+            _automationhat.relay.one.off()  # Ensure relay starts OFF
+            automationhat = _automationhat
+            HAT_AVAILABLE = True
+            logger.info("Automation Hat Mini detected and initialized (relay test passed)")
+        except Exception as e:
+            logger.warning(f"automationhat library loaded but hardware test failed: {e}")
+
+    except ImportError as e:
+        logger.warning(f"automationhat library not available: {e}")
 
 
 class RelayService:
@@ -154,8 +162,7 @@ class RelayService:
         try:
             if HAT_AVAILABLE:
                 automationhat.relay.one.on()
-            else:
-                self._mock_state = True
+            self._mock_state = True  # Track state internally
 
             self._last_change = int(time.time())
             self._change_count += 1
@@ -183,8 +190,7 @@ class RelayService:
         try:
             if HAT_AVAILABLE:
                 automationhat.relay.one.off()
-            else:
-                self._mock_state = False
+            self._mock_state = False  # Track state internally
 
             self._last_change = int(time.time())
             self._change_count += 1
@@ -201,17 +207,11 @@ class RelayService:
 
         Returns:
             True if relay is ON, False if OFF
-        """
-        try:
-            if HAT_AVAILABLE:
-                # automationhat relay state is readable
-                return bool(automationhat.relay.one.is_on())
-            else:
-                return self._mock_state
 
-        except Exception as e:
-            logger.error(f"Failed to read relay state: {e}")
-            return self._mock_state
+        Note: The Automation Hat Mini relay doesn't have state readback,
+        so we track state internally based on our commands.
+        """
+        return self._mock_state  # We use _mock_state to track actual state too
 
     def get_status(self) -> dict:
         """Get full relay status."""
