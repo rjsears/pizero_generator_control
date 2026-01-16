@@ -1,51 +1,89 @@
 #!/bin/bash
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-# GenMaster Setup Script
-# Version 1.0.0 - January 15th, 2026
+# /setup.sh
 #
-# Generator Control System - Master Controller Installation
-#
-# This script provides a complete guided installation for GenMaster including:
-# - System preparation and dependency installation
-# - Docker and Docker Compose setup
-# - PostgreSQL database configuration
-# - SSL certificate acquisition (Let's Encrypt via DNS-01) or Cloudflare Tunnel
-# - Tailscale VPN configuration
-# - Cloudflare Tunnel setup (recommended for HTTPS)
-# - Environment configuration
-#
-# Usage:
-#   Interactive:  ./setup.sh
-#   Preconfig:    ./setup.sh --preconfig /path/to/preconfig.conf
-#   Unattended:   ./setup.sh --unattended
+# Part of the "RPi Generator Control" suite
+# Version 1.0.0 - January 2026
 #
 # Richard J. Sears
 # richardjsears@protonmail.com
 # https://github.com/rjsears
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-set -o pipefail
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║                                                                           ║
+# ║     GenMaster Interactive Setup Script                                    ║
+# ║                                                                           ║
+# ║     Automated deployment for GenMaster generator control system           ║
+# ║     with PostgreSQL, Nginx reverse proxy, and optional services           ║
+# ║                                                                           ║
+# ║     Version 1.0.0                                                         ║
+# ║     Richard J. Sears                                                      ║
+# ║     richardjsears@protonmail.com                                          ║
+# ║     January 2026                                                          ║
+# ║                                                                           ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
 
-# =============================================================================
-# Script Configuration
-# =============================================================================
+set -e
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONFIGURATION & CONSTANTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
 SCRIPT_VERSION="1.0.0"
-SCRIPT_NAME="GenMaster Setup"
-INSTALL_DIR="/opt/genmaster"
-CONFIG_FILE="${INSTALL_DIR}/.env"
-STATE_FILE="${INSTALL_DIR}/.setup_state"
-LOG_FILE="/var/log/genmaster-setup.log"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${SCRIPT_DIR}/.genmaster_setup_config"
+STATE_FILE="${SCRIPT_DIR}/.genmaster_setup_state"
 
-# Docker image
-DOCKER_IMAGE="rjsears/genmaster"
-DOCKER_TAG="latest"
+# Detect the real user (handles both direct execution and sudo ./setup.sh)
+if [ -n "$SUDO_USER" ]; then
+    REAL_USER="$SUDO_USER"
+elif [ -n "$USER" ]; then
+    REAL_USER="$USER"
+else
+    REAL_USER=$(whoami)
+fi
 
-# Required disk space (in MB)
-REQUIRED_DISK_SPACE=2000
+# Default container names
+DEFAULT_POSTGRES_CONTAINER="genmaster_db"
+DEFAULT_GENMASTER_CONTAINER="genmaster"
+DEFAULT_NGINX_CONTAINER="genmaster_nginx"
+DEFAULT_REDIS_CONTAINER="genmaster_redis"
 
-# =============================================================================
-# Color Definitions
-# =============================================================================
+# Default database settings
+DEFAULT_DB_NAME="genmaster"
+DEFAULT_DB_USER="genmaster"
+
+# Default ports
+DEFAULT_HTTPS_PORT="443"
+DEFAULT_PORTAINER_PORT="9000"
+
+# Optional service flags (set during configuration)
+INSTALL_CLOUDFLARE_TUNNEL=false
+INSTALL_TAILSCALE=false
+INSTALL_PORTAINER=false
+
+# GenSlave configuration
+GENSLAVE_ENABLED=true
+GENSLAVE_API_URL=""
+GENSLAVE_API_SECRET=""
+
+# Mock GPIO mode (auto-detected based on hardware)
+MOCK_GPIO_MODE=false
+
+# Auto-generated credential tracking (for display at end of setup)
+AUTOGEN_DB_PASSWORD=false
+AUTOGEN_SECRET_KEY=false
+AUTOGEN_SLAVE_SECRET=false
+
+# Internal IP ranges that get full access (space-separated CIDR blocks)
+DEFAULT_INTERNAL_IP_RANGES="127.0.0.1/32 100.64.0.0/10 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16"
+INTERNAL_IP_RANGES="${INTERNAL_IP_RANGES:-$DEFAULT_INTERNAL_IP_RANGES}"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# COLORS & STYLING
+# ═══════════════════════════════════════════════════════════════════════════════
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -53,1640 +91,1697 @@ BLUE='\033[0;34m'
 MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
+GRAY='\033[0;37m'
+NC='\033[0m'
 BOLD='\033[1m'
-NC='\033[0m' # No Color
+DIM='\033[2m'
 
-# =============================================================================
-# Global Variables
-# =============================================================================
-PRECONFIG_FILE=""
-UNATTENDED_MODE=false
-DEBUG_MODE=false
-SKIP_CONFIRMATION=false
-
-# Installation state
-STATE_SYSTEM_PREPARED=false
-STATE_DOCKER_INSTALLED=false
-STATE_SSL_CONFIGURED=false
-STATE_TAILSCALE_CONFIGURED=false
-STATE_CLOUDFLARE_CONFIGURED=false
-STATE_PORTAINER_CONFIGURED=false
-STATE_ENV_CONFIGURED=false
-STATE_SERVICES_STARTED=false
-
-# Configuration values (populated during setup)
-DOMAIN_NAME=""
-EMAIL_ADDRESS=""
-SSL_PROVIDER=""  # cloudflare, route53, manual, none
-CLOUDFLARE_API_TOKEN=""
-AWS_ACCESS_KEY=""
-AWS_SECRET_KEY=""
-ENABLE_TAILSCALE=false
-TAILSCALE_AUTHKEY=""
-TAILSCALE_HOSTNAME="genmaster"
-ENABLE_CLOUDFLARE_TUNNEL=false
-CLOUDFLARE_TUNNEL_TOKEN=""
-ENABLE_PORTAINER=false
-PORTAINER_ADMIN_PASSWORD=""
-DB_PASSWORD=""
-APP_SECRET_KEY=""
-SLAVE_API_SECRET=""
-SLAVE_API_URL=""
-ADMIN_USERNAME="admin"
-ADMIN_PASSWORD=""
-TIMEZONE="America/Los_Angeles"
-
-# =============================================================================
-# Utility Functions
-# =============================================================================
-
-log() {
-    local level="$1"
-    shift
-    local message="$*"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[${timestamp}] [${level}] ${message}" >> "$LOG_FILE"
-}
-
-log_info() {
-    log "INFO" "$*"
-}
-
-log_warn() {
-    log "WARN" "$*"
-}
-
-log_error() {
-    log "ERROR" "$*"
-}
-
-log_debug() {
-    if [ "$DEBUG_MODE" = true ]; then
-        log "DEBUG" "$*"
-    fi
-}
+# ═══════════════════════════════════════════════════════════════════════════════
+# HELPER FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 print_header() {
-    clear
-    echo -e "${CYAN}"
-    echo "╔════════════════════════════════════════════════════════════════════╗"
-    echo "║                                                                    ║"
-    echo "║   ██████╗ ███████╗███╗   ██╗███╗   ███╗ █████╗ ███████╗████████╗  ║"
-    echo "║  ██╔════╝ ██╔════╝████╗  ██║████╗ ████║██╔══██╗██╔════╝╚══██╔══╝  ║"
-    echo "║  ██║  ███╗█████╗  ██╔██╗ ██║██╔████╔██║███████║███████╗   ██║     ║"
-    echo "║  ██║   ██║██╔══╝  ██║╚██╗██║██║╚██╔╝██║██╔══██║╚════██║   ██║     ║"
-    echo "║  ╚██████╔╝███████╗██║ ╚████║██║ ╚═╝ ██║██║  ██║███████║   ██║     ║"
-    echo "║   ╚═════╝ ╚══════╝╚═╝  ╚═══╝╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝     ║"
-    echo "║                                                                    ║"
-    echo "║              Generator Control System - Master Setup               ║"
-    echo "║                        Version ${SCRIPT_VERSION}                            ║"
-    echo "║                                                                    ║"
-    echo "╚════════════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
+    local title="$1"
+    local width=75
+    local padding=$(( (width - ${#title} - 2) / 2 ))
+
+    echo ""
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+    printf "${CYAN}║${NC}%*s${WHITE}${BOLD} %s ${NC}%*s${CYAN}║${NC}\n" $padding "" "$title" $((padding + (width - ${#title} - 2) % 2)) ""
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
 
 print_section() {
     local title="$1"
     echo ""
-    echo -e "${BLUE}┌──────────────────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${BLUE}│${NC} ${BOLD}${title}${NC}"
-    echo -e "${BLUE}└──────────────────────────────────────────────────────────────────────┘${NC}"
+    echo -e "${BLUE}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${BLUE}│${NC} ${WHITE}${BOLD}$title${NC}"
+    echo -e "${BLUE}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+}
+
+print_subsection() {
     echo ""
+    echo -e "${GRAY}───────────────────────────────────────────────────────────────────────────────${NC}"
+    echo ""
+}
+
+print_success() {
+    echo -e "${GREEN}  ✓${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}  ✗${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}  ⚠${NC} $1"
+}
+
+print_info() {
+    echo -e "${CYAN}  ℹ${NC} $1"
 }
 
 print_step() {
     local step_num="$1"
-    local step_desc="$2"
-    echo -e "  ${CYAN}[${step_num}]${NC} ${step_desc}"
+    local total_steps="$2"
+    local description="$3"
+    echo ""
+    echo -e "${MAGENTA}  [$step_num/$total_steps]${NC} ${WHITE}${BOLD}$description${NC}"
+    echo ""
 }
 
-print_success() {
-    echo -e "  ${GREEN}✓${NC} $1"
-}
-
-print_warning() {
-    echo -e "  ${YELLOW}⚠${NC} $1"
-}
-
-print_error() {
-    echo -e "  ${RED}✗${NC} $1"
-}
-
-print_info() {
-    echo -e "  ${BLUE}ℹ${NC} $1"
-}
-
-# Prompt for yes/no
-confirm() {
-    local prompt="$1"
-    local default="${2:-n}"
-
-    if [ "$UNATTENDED_MODE" = true ] || [ "$SKIP_CONFIRMATION" = true ]; then
-        [ "$default" = "y" ] && return 0 || return 1
-    fi
-
-    local yn_prompt
-    if [ "$default" = "y" ]; then
-        yn_prompt="[Y/n]"
-    else
-        yn_prompt="[y/N]"
-    fi
-
-    while true; do
-        echo -en "  ${MAGENTA}?${NC} ${prompt} ${yn_prompt}: "
-        read -r response
-        response=${response:-$default}
-        case "${response,,}" in
-            y|yes) return 0 ;;
-            n|no) return 1 ;;
-            *) echo -e "  ${RED}Please answer yes or no.${NC}" ;;
-        esac
-    done
-}
-
-# Prompt for input
-prompt_input() {
+prompt_with_default() {
     local prompt="$1"
     local default="$2"
     local var_name="$3"
-    local validation="$4"
 
-    while true; do
-        local display_default=""
-        if [ -n "$default" ]; then
-            display_default=" [${default}]"
-        fi
+    local current_value="${!var_name}"
+    if [ -n "$current_value" ]; then
+        default="$current_value"
+    fi
 
-        echo -en "  ${MAGENTA}?${NC} ${prompt}${display_default}: "
-        read -r input
-        input=${input:-$default}
+    if [ "$PRECONFIG_AUTO_CONFIRM" = "true" ]; then
+        print_info "Using: $prompt = $default"
+        eval "$var_name='$default'"
+        return
+    fi
 
-        # Validate if function provided
-        if [ -n "$validation" ] && ! $validation "$input"; then
-            continue
-        fi
+    echo -ne "${WHITE}  $prompt [$default]${NC}: "
+    read value
 
-        eval "$var_name=\"$input\""
-        return 0
-    done
+    if [ -z "$value" ]; then
+        eval "$var_name='$default'"
+    else
+        eval "$var_name='$value'"
+    fi
 }
 
-# Prompt for password/secret (masked input)
-prompt_secret() {
+confirm_prompt() {
     local prompt="$1"
-    local var_name="$2"
-    local allow_empty="${3:-false}"
+    local default="${2:-y}"
 
-    while true; do
-        echo -en "  ${MAGENTA}?${NC} ${prompt}: "
-        read -rs input
-        echo ""
-
-        if [ -z "$input" ] && [ "$allow_empty" = "false" ]; then
-            print_error "This field cannot be empty"
-            continue
-        fi
-
-        # Confirm password
-        if [ -n "$input" ]; then
-            echo -en "  ${MAGENTA}?${NC} Confirm: "
-            read -rs confirm_input
-            echo ""
-
-            if [ "$input" != "$confirm_input" ]; then
-                print_error "Values do not match. Please try again."
-                continue
-            fi
-        fi
-
-        eval "$var_name=\"$input\""
-        return 0
-    done
-}
-
-# Prompt for selection from options
-prompt_select() {
-    local prompt="$1"
-    local var_name="$2"
-    shift 2
-    local options=("$@")
-
-    echo -e "  ${MAGENTA}?${NC} ${prompt}"
-    local i=1
-    for option in "${options[@]}"; do
-        echo -e "     ${CYAN}${i})${NC} ${option}"
-        ((i++))
-    done
-
-    while true; do
-        echo -en "  ${MAGENTA}?${NC} Selection [1-${#options[@]}]: "
-        read -r selection
-
-        if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le "${#options[@]}" ]; then
-            eval "$var_name=\"${options[$((selection-1))]}\""
+    if [ "$PRECONFIG_AUTO_CONFIRM" = "true" ]; then
+        if [ "$default" = "y" ]; then
+            print_info "Auto-confirming: $prompt [Y]"
             return 0
+        else
+            print_info "Auto-declining: $prompt [N]"
+            return 1
         fi
-        print_error "Invalid selection. Please enter a number between 1 and ${#options[@]}"
-    done
+    fi
+
+    if [ "$default" = "y" ]; then
+        echo -ne "${WHITE}  $prompt [Y/n]${NC}: "
+    else
+        echo -ne "${WHITE}  $prompt [y/N]${NC}: "
+    fi
+
+    read response
+    response=${response:-$default}
+
+    case "$response" in
+        [yY][eE][sS]|[yY]) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
-# Generate random secret
-generate_secret() {
-    local length="${1:-32}"
-    openssl rand -hex "$length"
-}
-
-# Check if command exists
 command_exists() {
-    command -v "$1" &> /dev/null
+    command -v "$1" >/dev/null 2>&1
 }
 
-# Check if running as root
-check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        print_error "This script must be run as root"
-        echo -e "  ${YELLOW}Please run: sudo $0${NC}"
-        exit 1
+run_privileged() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    else
+        sudo "$@"
     fi
 }
 
-# Check minimum disk space
-check_disk_space() {
-    local available=$(df -m "$INSTALL_DIR" 2>/dev/null | tail -1 | awk '{print $4}')
-    if [ -z "$available" ]; then
-        available=$(df -m / | tail -1 | awk '{print $4}')
+# ═══════════════════════════════════════════════════════════════════════════════
+# HARDWARE DETECTION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Check if running on a Raspberry Pi
+is_raspberry_pi() {
+    if grep -q "Raspberry Pi" /proc/cpuinfo 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+# Check if running inside an LXC container
+is_lxc_container() {
+    if command_exists systemd-detect-virt && [ "$(systemd-detect-virt)" = "lxc" ]; then
+        return 0
+    fi
+    if grep -qa 'container=lxc' /proc/1/environ 2>/dev/null; then
+        return 0
+    fi
+    if [ -f /run/host/container-manager ]; then
+        return 0
+    fi
+    return 1
+}
+
+# Detect hardware and set mock GPIO mode if not on Raspberry Pi
+detect_hardware_mode() {
+    print_section "Hardware Detection"
+
+    if is_raspberry_pi; then
+        local pi_model=$(grep "Model" /proc/cpuinfo 2>/dev/null | cut -d':' -f2 | xargs)
+        print_success "Raspberry Pi detected: $pi_model"
+        print_success "GPIO mode: REAL (hardware GPIO enabled)"
+        MOCK_GPIO_MODE=false
+    else
+        if is_lxc_container; then
+            print_info "LXC container detected"
+        else
+            print_info "Non-Raspberry Pi system detected"
+        fi
+        print_warning "GPIO mode: MOCK (simulated GPIO for testing)"
+        print_info "Development API will be available at /api/dev/*"
+        MOCK_GPIO_MODE=true
+    fi
+    echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OS DETECTION & PACKAGE MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+detect_os() {
+    DISTRO=""
+    DISTRO_FAMILY=""
+    PKG_MANAGER=""
+    PKG_UPDATE=""
+    PKG_INSTALL=""
+
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        DISTRO=$ID
+        DISTRO_VERSION=$VERSION_ID
+    elif [ -f /etc/debian_version ]; then
+        DISTRO="debian"
+    elif [ -f /etc/redhat-release ]; then
+        DISTRO="rhel"
     fi
 
-    if [ "$available" -lt "$REQUIRED_DISK_SPACE" ]; then
-        print_error "Insufficient disk space. Required: ${REQUIRED_DISK_SPACE}MB, Available: ${available}MB"
-        return 1
-    fi
+    case $DISTRO in
+        ubuntu|debian|linuxmint|pop|raspbian)
+            DISTRO_FAMILY="debian"
+            PKG_MANAGER="apt-get"
+            PKG_UPDATE="apt-get update"
+            PKG_INSTALL="apt-get install -y"
+            ;;
+        centos|rhel|rocky|almalinux|ol)
+            DISTRO_FAMILY="rhel"
+            if command_exists dnf; then
+                PKG_MANAGER="dnf"
+                PKG_UPDATE="dnf check-update || true"
+                PKG_INSTALL="dnf install -y"
+            else
+                PKG_MANAGER="yum"
+                PKG_UPDATE="yum check-update || true"
+                PKG_INSTALL="yum install -y"
+            fi
+            ;;
+        fedora)
+            DISTRO_FAMILY="fedora"
+            PKG_MANAGER="dnf"
+            PKG_UPDATE="dnf check-update || true"
+            PKG_INSTALL="dnf install -y"
+            ;;
+        arch|manjaro)
+            DISTRO_FAMILY="arch"
+            PKG_MANAGER="pacman"
+            PKG_UPDATE="pacman -Sy"
+            PKG_INSTALL="pacman -S --noconfirm"
+            ;;
+        alpine)
+            DISTRO_FAMILY="alpine"
+            PKG_MANAGER="apk"
+            PKG_UPDATE="apk update"
+            PKG_INSTALL="apk add"
+            ;;
+        *)
+            if command_exists apt-get; then
+                DISTRO_FAMILY="debian"
+                PKG_MANAGER="apt-get"
+                PKG_UPDATE="apt-get update"
+                PKG_INSTALL="apt-get install -y"
+            elif command_exists dnf; then
+                DISTRO_FAMILY="rhel"
+                PKG_MANAGER="dnf"
+                PKG_UPDATE="dnf check-update || true"
+                PKG_INSTALL="dnf install -y"
+            elif command_exists yum; then
+                DISTRO_FAMILY="rhel"
+                PKG_MANAGER="yum"
+                PKG_UPDATE="yum check-update || true"
+                PKG_INSTALL="yum install -y"
+            else
+                print_error "Could not detect package manager"
+                return 1
+            fi
+            ;;
+    esac
+
     return 0
 }
 
-# Check internet connectivity
-check_internet() {
-    if ping -c 1 -W 5 8.8.8.8 &> /dev/null || ping -c 1 -W 5 1.1.1.1 &> /dev/null; then
-        return 0
+update_system() {
+    print_info "Updating system packages..."
+
+    if [ -z "$PKG_MANAGER" ]; then
+        detect_os || return 1
     fi
-    return 1
+
+    case $DISTRO_FAMILY in
+        debian)
+            run_privileged apt-get update -qq
+            run_privileged apt-get upgrade -y -qq
+            ;;
+        rhel)
+            if [ "$PKG_MANAGER" = "dnf" ]; then
+                run_privileged dnf update -y -q
+            else
+                run_privileged yum update -y -q
+            fi
+            ;;
+        fedora)
+            run_privileged dnf upgrade -y -q
+            ;;
+        arch)
+            run_privileged pacman -Syu --noconfirm
+            ;;
+        alpine)
+            run_privileged apk update -q
+            run_privileged apk upgrade -q
+            ;;
+        *)
+            print_warning "System update not supported for this distribution"
+            return 1
+            ;;
+    esac
+
+    print_success "System packages updated"
+    return 0
 }
 
-# Check DNS resolution
-check_dns() {
-    local domain="${1:-google.com}"
-    if host "$domain" &> /dev/null || nslookup "$domain" &> /dev/null; then
-        return 0
-    fi
-    return 1
-}
+install_required_utilities() {
+    print_info "Checking required utilities..."
 
-# Get local IP addresses
-get_local_ips() {
-    # Try multiple methods to get local IPs
-    local ips=""
-
-    # Method 1: hostname -I
-    if command_exists hostname; then
-        ips=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$')
+    if [ -z "$PKG_MANAGER" ]; then
+        detect_os || return 1
     fi
 
-    # Method 2: ip addr (fallback)
-    if [ -z "$ips" ] && command_exists ip; then
-        ips=$(ip -4 addr show scope global | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-    fi
+    local missing_utils=""
+    command_exists curl || missing_utils="$missing_utils curl"
+    command_exists git || missing_utils="$missing_utils git"
+    command_exists openssl || missing_utils="$missing_utils openssl"
+    command_exists jq || missing_utils="$missing_utils jq"
 
-    # Method 3: ifconfig (fallback)
-    if [ -z "$ips" ] && command_exists ifconfig; then
-        ips=$(ifconfig | grep -oP 'inet\s+\K\d+(\.\d+){3}' | grep -v '^127\.')
-    fi
-
-    echo "$ips"
-}
-
-# Check if IP matches CIDR range
-ip_in_cidr() {
-    local ip="$1"
-    local cidr="$2"
-
-    # Convert IP to integer
-    local ip_int=0
-    IFS='.' read -ra parts <<< "$ip"
-    for part in "${parts[@]}"; do
-        ip_int=$((ip_int * 256 + part))
-    done
-
-    # Parse CIDR
-    local network="${cidr%/*}"
-    local prefix="${cidr#*/}"
-
-    # Convert network to integer
-    local net_int=0
-    IFS='.' read -ra parts <<< "$network"
-    for part in "${parts[@]}"; do
-        net_int=$((net_int * 256 + part))
-    done
-
-    # Calculate mask
-    local mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
-
-    # Check if IP is in range
-    [ $((ip_int & mask)) -eq $((net_int & mask)) ]
-}
-
-# Check if running in a container (LXC/Docker)
-is_container() {
-    # Check systemd-detect-virt
-    if command_exists systemd-detect-virt; then
-        local virt=$(systemd-detect-virt --container 2>/dev/null)
-        if [ -n "$virt" ] && [ "$virt" != "none" ]; then
-            echo "$virt"
-            return 0
-        fi
-    fi
-
-    # Check /proc/1/environ for container indicators
-    if [ -f /proc/1/environ ]; then
-        if grep -qa 'container=lxc' /proc/1/environ 2>/dev/null; then
-            echo "lxc"
-            return 0
-        fi
-        if grep -qa 'container=docker' /proc/1/environ 2>/dev/null; then
-            echo "docker"
-            return 0
-        fi
-    fi
-
-    # Check /.dockerenv
-    if [ -f /.dockerenv ]; then
-        echo "docker"
+    if [ -z "$missing_utils" ]; then
+        print_success "All required utilities are installed"
         return 0
     fi
 
-    # Check /run/host/container-manager
-    if [ -f /run/host/container-manager ]; then
-        cat /run/host/container-manager
-        return 0
-    fi
+    print_info "Installing:$missing_utils"
+    run_privileged $PKG_UPDATE
+    run_privileged $PKG_INSTALL $missing_utils
 
-    return 1
+    print_success "Required utilities installed"
+    return 0
 }
 
-# Check if port is available
-check_port_available() {
-    local port="$1"
+# ═══════════════════════════════════════════════════════════════════════════════
+# STATE MANAGEMENT FOR RESUME CAPABILITY
+# ═══════════════════════════════════════════════════════════════════════════════
 
-    if command_exists ss; then
-        ! ss -tlnp | grep -q ":$port "
-    elif command_exists netstat; then
-        ! netstat -tlnp | grep -q ":$port "
-    else
-        return 0  # Can't check, assume available
-    fi
-}
-
-# Check memory availability
-check_memory() {
-    local required_mb="${1:-1024}"
-    local available_mb=0
-
-    if [ -f /proc/meminfo ]; then
-        available_mb=$(grep MemAvailable /proc/meminfo | awk '{print int($2/1024)}')
-        if [ -z "$available_mb" ] || [ "$available_mb" -eq 0 ]; then
-            available_mb=$(grep MemFree /proc/meminfo | awk '{print int($2/1024)}')
-        fi
-    fi
-
-    if [ "$available_mb" -ge "$required_mb" ]; then
-        echo "$available_mb"
-        return 0
-    else
-        echo "$available_mb"
-        return 1
-    fi
-}
-
-# =============================================================================
-# State Management
-# =============================================================================
+CURRENT_STEP=0
 
 save_state() {
+    local step_name=$1
+    CURRENT_STEP=$2
+
     cat > "$STATE_FILE" << EOF
-# GenMaster Setup State - DO NOT EDIT MANUALLY
-# Generated: $(date)
-STATE_SYSTEM_PREPARED=${STATE_SYSTEM_PREPARED}
-STATE_DOCKER_INSTALLED=${STATE_DOCKER_INSTALLED}
-STATE_SSL_CONFIGURED=${STATE_SSL_CONFIGURED}
-STATE_TAILSCALE_CONFIGURED=${STATE_TAILSCALE_CONFIGURED}
-STATE_CLOUDFLARE_CONFIGURED=${STATE_CLOUDFLARE_CONFIGURED}
-STATE_PORTAINER_CONFIGURED=${STATE_PORTAINER_CONFIGURED}
-STATE_ENV_CONFIGURED=${STATE_ENV_CONFIGURED}
-STATE_SERVICES_STARTED=${STATE_SERVICES_STARTED}
-DOMAIN_NAME="${DOMAIN_NAME}"
-EMAIL_ADDRESS="${EMAIL_ADDRESS}"
-SSL_PROVIDER="${SSL_PROVIDER}"
-ENABLE_TAILSCALE=${ENABLE_TAILSCALE}
-TAILSCALE_HOSTNAME="${TAILSCALE_HOSTNAME}"
-ENABLE_CLOUDFLARE_TUNNEL=${ENABLE_CLOUDFLARE_TUNNEL}
-ENABLE_PORTAINER=${ENABLE_PORTAINER}
-SLAVE_API_URL="${SLAVE_API_URL}"
+# GenMaster Setup State File - DO NOT EDIT MANUALLY
+# Generated: $(date -Iseconds)
+SAVED_STEP_NAME="$step_name"
+SAVED_STEP_NUM="$CURRENT_STEP"
+SAVED_DOMAIN="$DOMAIN"
+SAVED_DB_NAME="$DB_NAME"
+SAVED_DB_USER="$DB_USER"
+SAVED_DB_PASSWORD="$DB_PASSWORD"
+SAVED_POSTGRES_CONTAINER="$POSTGRES_CONTAINER"
+SAVED_GENMASTER_CONTAINER="$GENMASTER_CONTAINER"
+SAVED_NGINX_CONTAINER="$NGINX_CONTAINER"
+SAVED_REDIS_CONTAINER="$REDIS_CONTAINER"
+SAVED_TIMEZONE="$TIMEZONE"
+SAVED_SECRET_KEY="$SECRET_KEY"
+SAVED_GENSLAVE_ENABLED="$GENSLAVE_ENABLED"
+SAVED_GENSLAVE_API_URL="$GENSLAVE_API_URL"
+SAVED_GENSLAVE_API_SECRET="$GENSLAVE_API_SECRET"
+SAVED_WEBHOOK_URL="$WEBHOOK_URL"
+SAVED_WEBHOOK_SECRET="$WEBHOOK_SECRET"
+SAVED_INSTALL_PORTAINER="$INSTALL_PORTAINER"
+SAVED_INSTALL_CLOUDFLARE_TUNNEL="$INSTALL_CLOUDFLARE_TUNNEL"
+SAVED_CLOUDFLARE_TUNNEL_TOKEN="$CLOUDFLARE_TUNNEL_TOKEN"
+SAVED_INSTALL_TAILSCALE="$INSTALL_TAILSCALE"
+SAVED_TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
+SAVED_TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
+SAVED_MOCK_GPIO_MODE="$MOCK_GPIO_MODE"
 EOF
     chmod 600 "$STATE_FILE"
-    log_info "State saved to $STATE_FILE"
 }
 
 load_state() {
     if [ -f "$STATE_FILE" ]; then
         source "$STATE_FILE"
-        log_info "State loaded from $STATE_FILE"
+        DOMAIN="${SAVED_DOMAIN:-}"
+        DB_NAME="${SAVED_DB_NAME:-}"
+        DB_USER="${SAVED_DB_USER:-}"
+        DB_PASSWORD="${SAVED_DB_PASSWORD:-}"
+        POSTGRES_CONTAINER="${SAVED_POSTGRES_CONTAINER:-}"
+        GENMASTER_CONTAINER="${SAVED_GENMASTER_CONTAINER:-}"
+        NGINX_CONTAINER="${SAVED_NGINX_CONTAINER:-}"
+        REDIS_CONTAINER="${SAVED_REDIS_CONTAINER:-}"
+        TIMEZONE="${SAVED_TIMEZONE:-}"
+        SECRET_KEY="${SAVED_SECRET_KEY:-}"
+        GENSLAVE_ENABLED="${SAVED_GENSLAVE_ENABLED:-true}"
+        GENSLAVE_API_URL="${SAVED_GENSLAVE_API_URL:-}"
+        GENSLAVE_API_SECRET="${SAVED_GENSLAVE_API_SECRET:-}"
+        WEBHOOK_URL="${SAVED_WEBHOOK_URL:-}"
+        WEBHOOK_SECRET="${SAVED_WEBHOOK_SECRET:-}"
+        INSTALL_PORTAINER="${SAVED_INSTALL_PORTAINER:-false}"
+        INSTALL_CLOUDFLARE_TUNNEL="${SAVED_INSTALL_CLOUDFLARE_TUNNEL:-false}"
+        CLOUDFLARE_TUNNEL_TOKEN="${SAVED_CLOUDFLARE_TUNNEL_TOKEN:-}"
+        INSTALL_TAILSCALE="${SAVED_INSTALL_TAILSCALE:-false}"
+        TAILSCALE_AUTH_KEY="${SAVED_TAILSCALE_AUTH_KEY:-}"
+        TAILSCALE_HOSTNAME="${SAVED_TAILSCALE_HOSTNAME:-}"
+        MOCK_GPIO_MODE="${SAVED_MOCK_GPIO_MODE:-false}"
+        CURRENT_STEP="${SAVED_STEP_NUM:-0}"
         return 0
     fi
     return 1
 }
 
-# =============================================================================
-# Preconfig Mode
-# =============================================================================
+check_resume() {
+    if [ -f "$STATE_FILE" ] && load_state; then
+        print_warning "Previous incomplete installation detected."
+        echo ""
+        echo -e "  ${WHITE}Last completed step:${NC} ${CYAN}${SAVED_STEP_NAME}${NC}"
+        if [ -n "$DOMAIN" ]; then
+            echo -e "  ${WHITE}Domain:${NC} ${CYAN}${DOMAIN}${NC}"
+        fi
+        echo ""
+        echo -e "  ${WHITE}Options:${NC}"
+        echo -e "    ${CYAN}1)${NC} Resume from where you left off"
+        echo -e "    ${CYAN}2)${NC} Start fresh (clears saved progress)"
+        echo ""
+
+        local resume_choice=""
+        while [[ ! "$resume_choice" =~ ^[12]$ ]]; do
+            echo -ne "${WHITE}  Enter your choice [1-2]${NC}: "
+            read resume_choice
+        done
+
+        if [ "$resume_choice" = "1" ]; then
+            return 0
+        else
+            clear_state
+            return 1
+        fi
+    fi
+    return 1
+}
+
+clear_state() {
+    rm -f "$STATE_FILE"
+    CURRENT_STEP=0
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRE-CONFIGURATION FILE LOADING
+# ═══════════════════════════════════════════════════════════════════════════════
 
 load_preconfig() {
-    local preconfig_file="$1"
+    local config_file="$1"
 
-    if [ ! -f "$preconfig_file" ]; then
-        print_error "Preconfig file not found: $preconfig_file"
+    if [ ! -f "$config_file" ]; then
+        print_error "Configuration file not found: $config_file"
         exit 1
     fi
 
-    source "$preconfig_file"
-    SKIP_CONFIRMATION=true
-    log_info "Loaded preconfig from $preconfig_file"
-}
+    print_section "Loading Pre-Configuration"
+    print_info "Reading: $config_file"
 
-create_preconfig_template() {
-    local template_file="${1:-genmaster-preconfig.conf.template}"
+    source "$config_file"
 
-    cat > "$template_file" << 'EOF'
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-# GenMaster Preconfig Template
-# Version 1.0.0 - January 15th, 2026
-#
-# Fill in the values and use with:
-#   ./setup.sh --preconfig /path/to/this/file
-#
-# Required values are marked with [REQUIRED]
-#
-# Richard J. Sears
-# richardjsears@protonmail.com
-# https://github.com/rjsears
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    # Validate required fields
+    if [ -z "$DOMAIN" ]; then
+        print_error "DOMAIN is required"
+        exit 1
+    fi
+    print_success "Domain: $DOMAIN"
 
-# =============================================================================
-# Domain and Email [REQUIRED]
-# =============================================================================
-DOMAIN_NAME="genmaster.example.com"
-EMAIL_ADDRESS="admin@example.com"
+    # Defaults
+    DB_NAME="${DB_NAME:-$DEFAULT_DB_NAME}"
+    DB_USER="${DB_USER:-$DEFAULT_DB_USER}"
+    POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-$DEFAULT_POSTGRES_CONTAINER}"
+    GENMASTER_CONTAINER="${GENMASTER_CONTAINER:-$DEFAULT_GENMASTER_CONTAINER}"
+    NGINX_CONTAINER="${NGINX_CONTAINER:-$DEFAULT_NGINX_CONTAINER}"
+    REDIS_CONTAINER="${REDIS_CONTAINER:-$DEFAULT_REDIS_CONTAINER}"
+    TIMEZONE="${TIMEZONE:-America/Phoenix}"
 
-# =============================================================================
-# Timezone
-# =============================================================================
-TIMEZONE="America/Los_Angeles"
-
-# =============================================================================
-# Admin Credentials [REQUIRED]
-# =============================================================================
-ADMIN_USERNAME="admin"
-# Generate with: openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16
-ADMIN_PASSWORD=""
-
-# =============================================================================
-# SSL Configuration
-# Options: cloudflare, route53, manual, none
-# Note: If using Cloudflare Tunnel, SSL is handled by Cloudflare - use "none"
-# =============================================================================
-SSL_PROVIDER="none"
-
-# For Cloudflare DNS-01 (if SSL_PROVIDER=cloudflare)
-CLOUDFLARE_API_TOKEN=""
-
-# For Route53 DNS-01 (if SSL_PROVIDER=route53)
-AWS_ACCESS_KEY=""
-AWS_SECRET_KEY=""
-
-# =============================================================================
-# GenSlave Configuration [REQUIRED]
-# =============================================================================
-# Use Tailscale hostname if using Tailscale, otherwise use IP/hostname
-SLAVE_API_URL="http://genslave:8001"
-# Generate with: openssl rand -hex 32
-SLAVE_API_SECRET=""
-
-# =============================================================================
-# Database Password [REQUIRED]
-# Generate with: openssl rand -hex 32
-# =============================================================================
-DB_PASSWORD=""
-
-# =============================================================================
-# Application Secret [REQUIRED]
-# Generate with: openssl rand -hex 32
-# =============================================================================
-APP_SECRET_KEY=""
-
-# =============================================================================
-# Tailscale VPN (Optional but Recommended)
-# =============================================================================
-ENABLE_TAILSCALE=true
-# Get from: https://login.tailscale.com/admin/settings/keys
-TAILSCALE_AUTHKEY=""
-TAILSCALE_HOSTNAME="genmaster"
-
-# =============================================================================
-# Cloudflare Tunnel (Required for HTTPS access)
-# =============================================================================
-ENABLE_CLOUDFLARE_TUNNEL=true
-# Get from: https://one.dash.cloudflare.com/ -> Access -> Tunnels
-# Configure tunnel to point to http://localhost:80
-CLOUDFLARE_TUNNEL_TOKEN=""
-
-# =============================================================================
-# Webhooks (Optional)
-# =============================================================================
-WEBHOOK_BASE_URL=""
-WEBHOOK_SECRET=""
-EOF
-
-    echo "Preconfig template created: $template_file"
-}
-
-# =============================================================================
-# System Preparation
-# =============================================================================
-
-prepare_system() {
-    print_section "System Preparation"
-
-    # Check OS
-    print_step "1" "Checking operating system..."
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        print_success "Detected: $PRETTY_NAME"
-    else
-        print_warning "Could not detect OS version"
+    # Generate missing credentials
+    if [ -z "$DB_PASSWORD" ]; then
+        DB_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)
+        AUTOGEN_DB_PASSWORD=true
+        print_info "Auto-generated database password"
     fi
 
-    # Check architecture
-    print_step "2" "Checking system architecture..."
-    local arch=$(uname -m)
-    case "$arch" in
-        x86_64)
-            print_success "Architecture: x86_64 (amd64)"
+    if [ -z "$SECRET_KEY" ]; then
+        SECRET_KEY=$(openssl rand -base64 48 | tr -dc 'a-zA-Z0-9' | head -c 64)
+        AUTOGEN_SECRET_KEY=true
+        print_info "Auto-generated secret key"
+    fi
+
+    # GenSlave
+    GENSLAVE_ENABLED="${GENSLAVE_ENABLED:-true}"
+    if [ "$GENSLAVE_ENABLED" = "true" ] && [ -n "$GENSLAVE_API_URL" ]; then
+        if [ -z "$GENSLAVE_API_SECRET" ]; then
+            GENSLAVE_API_SECRET=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)
+            AUTOGEN_SLAVE_SECRET=true
+        fi
+        print_success "GenSlave: $GENSLAVE_API_URL"
+    fi
+
+    # Optional services
+    if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
+        INSTALL_CLOUDFLARE_TUNNEL=true
+        print_success "Cloudflare Tunnel: Enabled"
+    fi
+
+    if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+        INSTALL_TAILSCALE=true
+        TAILSCALE_HOSTNAME="${TAILSCALE_HOSTNAME:-genmaster}"
+        print_success "Tailscale: Enabled"
+    fi
+
+    INSTALL_PORTAINER="${PORTAINER_ENABLED:-false}"
+
+    if [ "$AUTO_CONFIRM" = "true" ]; then
+        PRECONFIG_AUTO_CONFIRM=true
+    else
+        PRECONFIG_AUTO_CONFIRM=false
+    fi
+
+    print_success "Configuration loaded"
+    PRECONFIG_MODE=true
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VERSION DETECTION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+detect_current_version() {
+    if [ ! -f "${CONFIG_FILE}" ]; then
+        echo "none"
+        return
+    fi
+
+    if [ -f "${SCRIPT_DIR}/docker-compose.yml" ]; then
+        if grep -q "genmaster" "${SCRIPT_DIR}/docker-compose.yml" 2>/dev/null; then
+            echo "1.0"
+        else
+            echo "unknown"
+        fi
+    else
+        echo "none"
+    fi
+}
+
+handle_version_detection() {
+    local current_version=$(detect_current_version)
+
+    case $current_version in
+        "1.0")
+            echo ""
+            echo -e "${YELLOW}╔═══════════════════════════════════════════════════════════════════════════╗${NC}"
+            echo -e "${YELLOW}║                     ${BOLD}⚡  EXISTING SETUP DETECTED  ⚡${NC}                       ${YELLOW}║${NC}"
+            echo -e "${YELLOW}║             ${WHITE}Version 1.0 installation found in this directory${NC}              ${YELLOW}║${NC}"
+            echo -e "${YELLOW}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
+            echo ""
+            echo -e "  ${WHITE}What would you like to do?${NC}"
+            echo ""
+            echo -e "    ${CYAN}1)${NC} ${GREEN}Reconfigure${NC} existing installation"
+            echo -e "    ${CYAN}2)${NC} Start ${RED}Fresh${NC} (will backup existing config)"
+            echo -e "    ${CYAN}3)${NC} Exit"
+            echo ""
+
+            local choice=""
+            while [[ ! "$choice" =~ ^[123]$ ]]; do
+                echo -ne "${WHITE}  Enter your choice [1-3]${NC}: "
+                read choice
+            done
+
+            case $choice in
+                1) INSTALL_MODE="reconfigure" ;;
+                2) backup_existing_config; INSTALL_MODE="fresh" ;;
+                3) print_info "Exiting."; exit 0 ;;
+            esac
             ;;
-        aarch64|arm64)
-            print_success "Architecture: ARM64"
+        "none")
+            print_info "Fresh installation"
+            INSTALL_MODE="fresh"
             ;;
         *)
-            print_error "Unsupported architecture: $arch"
+            print_error "Unknown installation detected"
+            if confirm_prompt "Attempt fresh installation?"; then
+                INSTALL_MODE="fresh"
+            else
+                exit 1
+            fi
+            ;;
+    esac
+}
+
+backup_existing_config() {
+    local backup_dir="${SCRIPT_DIR}/backups"
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+
+    mkdir -p "$backup_dir"
+    print_info "Backing up existing configuration..."
+
+    [ -f "${SCRIPT_DIR}/.env" ] && cp "${SCRIPT_DIR}/.env" "${backup_dir}/.env.${timestamp}"
+    [ -f "${SCRIPT_DIR}/docker-compose.yml" ] && cp "${SCRIPT_DIR}/docker-compose.yml" "${backup_dir}/docker-compose.yml.${timestamp}"
+    [ -f "${SCRIPT_DIR}/nginx/nginx.conf" ] && cp "${SCRIPT_DIR}/nginx/nginx.conf" "${backup_dir}/nginx.conf.${timestamp}"
+
+    print_success "Backup complete: ${backup_dir}"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DOCKER INSTALLATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+check_and_install_docker() {
+    print_section "Docker Check"
+
+    if command_exists docker; then
+        local docker_version=$(docker --version 2>/dev/null | cut -d' ' -f3 | tr -d ',')
+        print_success "Docker installed (version $docker_version)"
+
+        if docker info >/dev/null 2>&1; then
+            print_success "Docker daemon running"
+        else
+            print_warning "Docker daemon not running"
+            if confirm_prompt "Start Docker daemon?"; then
+                run_privileged systemctl start docker
+                print_success "Docker daemon started"
+            else
+                print_error "Docker daemon required"
+                exit 1
+            fi
+        fi
+    else
+        print_warning "Docker not installed"
+        if confirm_prompt "Install Docker now?"; then
+            install_docker_linux
+        else
+            print_error "Docker is required"
+            exit 1
+        fi
+    fi
+
+    # Check Docker Compose
+    if docker compose version >/dev/null 2>&1; then
+        local compose_version=$(docker compose version 2>/dev/null | grep -oP 'v\d+\.\d+\.\d+' | head -1)
+        print_success "Docker Compose plugin ($compose_version)"
+        USE_STANDALONE_COMPOSE=false
+    elif command_exists docker-compose; then
+        print_success "Docker Compose standalone"
+        USE_STANDALONE_COMPOSE=true
+    else
+        print_error "Docker Compose not installed"
+        exit 1
+    fi
+
+    # Check sudo requirement
+    if docker ps >/dev/null 2>&1; then
+        DOCKER_SUDO=""
+    else
+        DOCKER_SUDO="sudo"
+        print_info "Docker commands will use sudo"
+    fi
+}
+
+install_docker_linux() {
+    print_info "Installing Docker..."
+
+    local distro="${DISTRO:-}"
+    if [ -z "$distro" ]; then
+        if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            distro=$ID
+        fi
+    fi
+
+    case $distro in
+        ubuntu|debian|raspbian)
+            run_privileged apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
+            run_privileged apt-get update
+            run_privileged apt-get install -y ca-certificates curl gnupg lsb-release
+            run_privileged install -m 0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/$distro/gpg | run_privileged gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            run_privileged chmod a+r /etc/apt/keyrings/docker.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$distro $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | run_privileged tee /etc/apt/sources.list.d/docker.list > /dev/null
+            run_privileged apt-get update
+            run_privileged apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            ;;
+        *)
+            print_error "Unsupported distribution: $distro"
+            print_info "Install Docker manually: https://docs.docker.com/engine/install/"
             exit 1
             ;;
     esac
 
-    # Check disk space
-    print_step "3" "Checking disk space..."
-    if check_disk_space; then
-        local available=$(df -m "$INSTALL_DIR" 2>/dev/null | tail -1 | awk '{print $4}')
-        [ -z "$available" ] && available=$(df -m / | tail -1 | awk '{print $4}')
-        print_success "Available disk space: ${available}MB"
-    else
-        exit 1
+    run_privileged systemctl start docker
+    run_privileged systemctl enable docker
+
+    if [ -n "$REAL_USER" ] && [ "$REAL_USER" != "root" ]; then
+        run_privileged usermod -aG docker "$REAL_USER"
+        print_warning "Added $REAL_USER to docker group. Log out and back in to apply."
     fi
 
-    # Check internet
-    print_step "4" "Checking internet connectivity..."
-    if check_internet; then
-        print_success "Internet connection available"
-    else
-        print_error "No internet connection"
-        exit 1
-    fi
-
-    # Check DNS resolution
-    print_step "5" "Checking DNS resolution..."
-    if check_dns "google.com"; then
-        print_success "DNS resolution working"
-    else
-        print_warning "DNS resolution may have issues"
-    fi
-
-    # Network diagnostics
-    print_step "6" "Running network diagnostics..."
-
-    # Get local IPs
-    local local_ips=$(get_local_ips)
-    if [ -n "$local_ips" ]; then
-        print_success "Local IP addresses:"
-        echo "$local_ips" | while read -r ip; do
-            echo "             $ip"
-        done
-    else
-        print_warning "Could not determine local IP address"
-    fi
-
-    # Check for container environment
-    local container_type=$(is_container)
-    if [ -n "$container_type" ]; then
-        print_warning "Running inside container: $container_type"
-        print_info "Some features may require host network mode"
-    fi
-
-    # Check port 80 availability
-    if check_port_available 80; then
-        print_success "Port 80 is available"
-    else
-        print_warning "Port 80 is in use - nginx may fail to start"
-    fi
-
-    # Check port 443 availability (for SSL)
-    if check_port_available 443; then
-        print_success "Port 443 is available"
-    else
-        print_warning "Port 443 is in use"
-    fi
-
-    # Check available memory
-    local available_mem=$(check_memory 1024)
-    if [ $? -eq 0 ]; then
-        print_success "Available memory: ${available_mem}MB"
-    else
-        print_warning "Low memory: ${available_mem}MB (1024MB recommended)"
-    fi
-
-    # Check Docker Hub connectivity
-    print_step "7" "Checking Docker Hub connectivity..."
-    if curl -sf --max-time 10 https://registry-1.docker.io/v2/ &>/dev/null || \
-       curl -sf --max-time 10 https://hub.docker.com &>/dev/null; then
-        print_success "Docker Hub is reachable"
-    else
-        print_warning "Docker Hub may be slow or unreachable"
-    fi
-
-    # Update package lists
-    print_step "8" "Updating package lists..."
-    apt-get update -qq
-    print_success "Package lists updated"
-
-    # Install required packages
-    print_step "9" "Installing required packages..."
-    local packages=(
-        curl
-        wget
-        gnupg
-        ca-certificates
-        lsb-release
-        software-properties-common
-        apt-transport-https
-        jq
-        openssl
-        dnsutils
-        net-tools
-    )
-
-    apt-get install -y -qq "${packages[@]}" > /dev/null 2>&1
-    print_success "Required packages installed"
-
-    # Check for Raspberry Pi 5 and install GPIO software
-    print_step "10" "Checking for Raspberry Pi hardware..."
-    if [ -f /proc/device-tree/model ]; then
-        local pi_model=$(cat /proc/device-tree/model | tr -d '\0')
-        print_success "Detected: $pi_model"
-
-        if echo "$pi_model" | grep -q "Raspberry Pi 5"; then
-            print_step "11" "Installing Raspberry Pi 5 GPIO software..."
-
-            # Pi 5 uses gpiozero with lgpio backend (not RPi.GPIO)
-            apt-get install -y -qq \
-                python3-gpiozero \
-                python3-lgpio \
-                > /dev/null 2>&1
-
-            # Ensure /dev/gpiochip devices are accessible for Docker
-            if [ ! -e /dev/gpiochip0 ]; then
-                print_warning "GPIO chip device not found - may require reboot"
-            else
-                print_success "GPIO chip device available (/dev/gpiochip0)"
-            fi
-
-            # Check for gpiochip4 (legacy GPIO interface on Pi 5)
-            if [ -e /dev/gpiochip4 ]; then
-                print_success "Legacy GPIO interface available (/dev/gpiochip4)"
-            fi
-
-            # Add user to gpio group if needed
-            if getent group gpio > /dev/null 2>&1; then
-                usermod -aG gpio root 2>/dev/null || true
-            fi
-
-            print_success "Raspberry Pi 5 GPIO software installed (gpiozero + lgpio)"
-
-        elif echo "$pi_model" | grep -q "Raspberry Pi"; then
-            print_step "11" "Installing standard Raspberry Pi GPIO software..."
-
-            # Older Pi models use gpiozero with RPi.GPIO backend
-            apt-get install -y -qq \
-                python3-gpiozero \
-                python3-rpi.gpio \
-                > /dev/null 2>&1
-
-            print_success "Raspberry Pi GPIO software installed (gpiozero + RPi.GPIO)"
-        fi
-    else
-        print_info "Not running on Raspberry Pi hardware"
-    fi
-
-    # Create installation directory
-    print_step "12" "Creating installation directory..."
-    mkdir -p "$INSTALL_DIR"/{nginx/conf.d,nginx/ssl,logs,data,backups}
-    print_success "Created $INSTALL_DIR"
-
-    STATE_SYSTEM_PREPARED=true
-    save_state
-    print_success "System preparation complete"
+    print_success "Docker installed!"
 }
 
-# =============================================================================
-# Docker Installation
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
+# SYSTEM CHECKS
+# ═══════════════════════════════════════════════════════════════════════════════
 
-install_docker() {
-    print_section "Docker Installation"
+perform_system_checks() {
+    print_section "System Requirements Check"
 
-    # Check if Docker is already installed
-    if command_exists docker; then
-        local docker_version=$(docker --version | cut -d' ' -f3 | tr -d ',')
-        print_info "Docker is already installed (version $docker_version)"
-
-        if confirm "Would you like to reinstall Docker?"; then
-            print_step "1" "Removing existing Docker installation..."
-            apt-get remove -y docker docker-engine docker.io containerd runc > /dev/null 2>&1
+    # Memory
+    local mem_total=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print int($2/1024)}')
+    if [ -n "$mem_total" ]; then
+        if [ "$mem_total" -ge 512 ]; then
+            print_success "Memory: ${mem_total}MB"
         else
-            # Just ensure Docker is running
-            systemctl start docker
-            systemctl enable docker
-            STATE_DOCKER_INSTALLED=true
-            save_state
-            return 0
+            print_warning "Memory: ${mem_total}MB (512MB+ recommended)"
         fi
     fi
 
-    # Install Docker
-    print_step "1" "Adding Docker repository..."
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    chmod a+r /etc/apt/keyrings/docker.gpg
-
-    echo \
-        "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") \
-        $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-    print_success "Docker repository added"
-
-    print_step "2" "Installing Docker Engine..."
-    apt-get update -qq
-    apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin > /dev/null 2>&1
-    print_success "Docker Engine installed"
-
-    print_step "3" "Starting Docker service..."
-    systemctl start docker
-    systemctl enable docker
-    print_success "Docker service started"
-
-    print_step "4" "Verifying Docker installation..."
-    if docker run --rm hello-world &> /dev/null; then
-        print_success "Docker is working correctly"
-    else
-        print_error "Docker verification failed"
-        exit 1
-    fi
-
-    STATE_DOCKER_INSTALLED=true
-    save_state
-    print_success "Docker installation complete"
-}
-
-# =============================================================================
-# SSL Certificate Configuration
-# =============================================================================
-
-configure_ssl() {
-    print_section "SSL Certificate Configuration"
-
-    echo "  SSL certificates provide secure HTTPS connections to GenMaster."
-    echo "  You can obtain certificates automatically via Let's Encrypt"
-    echo "  using DNS-01 challenge (requires DNS API access)."
-    echo ""
-
-    # Select SSL provider
-    prompt_select "Select SSL certificate method:" SSL_PROVIDER \
-        "Cloudflare DNS-01 (Recommended)" \
-        "AWS Route53 DNS-01" \
-        "Manual (bring your own certificates)" \
-        "None (HTTP only - not recommended)"
-
-    case "$SSL_PROVIDER" in
-        "Cloudflare DNS-01 (Recommended)")
-            SSL_PROVIDER="cloudflare"
-            configure_ssl_cloudflare
-            ;;
-        "AWS Route53 DNS-01")
-            SSL_PROVIDER="route53"
-            configure_ssl_route53
-            ;;
-        "Manual (bring your own certificates)")
-            SSL_PROVIDER="manual"
-            configure_ssl_manual
-            ;;
-        "None (HTTP only - not recommended)")
-            SSL_PROVIDER="none"
-            print_warning "Running without SSL is not recommended for production"
-            ;;
-    esac
-
-    STATE_SSL_CONFIGURED=true
-    save_state
-}
-
-configure_ssl_cloudflare() {
-    print_step "1" "Configuring Cloudflare DNS-01..."
-
-    echo ""
-    echo "  To use Cloudflare DNS-01, you need an API token with the following permissions:"
-    echo "  - Zone:DNS:Edit"
-    echo "  - Zone:Zone:Read"
-    echo ""
-    echo "  Create token at: https://dash.cloudflare.com/profile/api-tokens"
-    echo ""
-
-    prompt_input "Enter your domain name" "" DOMAIN_NAME
-    prompt_input "Enter your email address" "" EMAIL_ADDRESS
-    prompt_secret "Enter Cloudflare API Token" CLOUDFLARE_API_TOKEN
-
-    print_step "2" "Installing certbot with Cloudflare plugin..."
-    apt-get install -y -qq certbot python3-certbot-dns-cloudflare > /dev/null 2>&1
-    print_success "Certbot installed"
-
-    print_step "3" "Creating Cloudflare credentials file..."
-    mkdir -p /root/.secrets
-    cat > /root/.secrets/cloudflare.ini << EOF
-dns_cloudflare_api_token = ${CLOUDFLARE_API_TOKEN}
-EOF
-    chmod 600 /root/.secrets/cloudflare.ini
-    print_success "Credentials file created"
-
-    print_step "4" "Obtaining SSL certificate..."
-    if certbot certonly \
-        --dns-cloudflare \
-        --dns-cloudflare-credentials /root/.secrets/cloudflare.ini \
-        --dns-cloudflare-propagation-seconds 60 \
-        -d "$DOMAIN_NAME" \
-        --email "$EMAIL_ADDRESS" \
-        --agree-tos \
-        --non-interactive; then
-        print_success "SSL certificate obtained"
-
-        # Copy certificates to nginx ssl directory
-        cp /etc/letsencrypt/live/"$DOMAIN_NAME"/fullchain.pem "$INSTALL_DIR/nginx/ssl/"
-        cp /etc/letsencrypt/live/"$DOMAIN_NAME"/privkey.pem "$INSTALL_DIR/nginx/ssl/"
-
-        # Update nginx configuration
-        configure_nginx_ssl
-    else
-        print_error "Failed to obtain SSL certificate"
-        print_warning "You can retry later or use manual certificate mode"
-    fi
-}
-
-configure_ssl_route53() {
-    print_step "1" "Configuring AWS Route53 DNS-01..."
-
-    prompt_input "Enter your domain name" "" DOMAIN_NAME
-    prompt_input "Enter your email address" "" EMAIL_ADDRESS
-    prompt_secret "Enter AWS Access Key" AWS_ACCESS_KEY
-    prompt_secret "Enter AWS Secret Key" AWS_SECRET_KEY
-
-    print_step "2" "Installing certbot with Route53 plugin..."
-    apt-get install -y -qq certbot python3-certbot-dns-route53 > /dev/null 2>&1
-    print_success "Certbot installed"
-
-    print_step "3" "Configuring AWS credentials..."
-    mkdir -p /root/.aws
-    cat > /root/.aws/credentials << EOF
-[default]
-aws_access_key_id = ${AWS_ACCESS_KEY}
-aws_secret_access_key = ${AWS_SECRET_KEY}
-EOF
-    chmod 600 /root/.aws/credentials
-    print_success "AWS credentials configured"
-
-    print_step "4" "Obtaining SSL certificate..."
-    if certbot certonly \
-        --dns-route53 \
-        -d "$DOMAIN_NAME" \
-        --email "$EMAIL_ADDRESS" \
-        --agree-tos \
-        --non-interactive; then
-        print_success "SSL certificate obtained"
-
-        cp /etc/letsencrypt/live/"$DOMAIN_NAME"/fullchain.pem "$INSTALL_DIR/nginx/ssl/"
-        cp /etc/letsencrypt/live/"$DOMAIN_NAME"/privkey.pem "$INSTALL_DIR/nginx/ssl/"
-        configure_nginx_ssl
-    else
-        print_error "Failed to obtain SSL certificate"
-    fi
-}
-
-configure_ssl_manual() {
-    print_step "1" "Manual SSL certificate configuration..."
-
-    prompt_input "Enter your domain name" "" DOMAIN_NAME
-
-    echo ""
-    echo "  Please place your SSL certificates in the following locations:"
-    echo "  - Certificate: $INSTALL_DIR/nginx/ssl/fullchain.pem"
-    echo "  - Private Key: $INSTALL_DIR/nginx/ssl/privkey.pem"
-    echo ""
-
-    if confirm "Have you placed your certificates in the above locations?"; then
-        if [ -f "$INSTALL_DIR/nginx/ssl/fullchain.pem" ] && [ -f "$INSTALL_DIR/nginx/ssl/privkey.pem" ]; then
-            print_success "SSL certificates found"
-            configure_nginx_ssl
+    # Disk
+    local disk_avail=$(df -m "${SCRIPT_DIR}" 2>/dev/null | tail -1 | awk '{print $4}')
+    if [ -n "$disk_avail" ]; then
+        if [ "$disk_avail" -ge 5000 ]; then
+            print_success "Disk: ${disk_avail}MB available"
         else
-            print_error "SSL certificates not found"
+            print_warning "Disk: ${disk_avail}MB (5GB+ recommended)"
         fi
     fi
-}
 
-configure_nginx_ssl() {
-    print_step "5" "Configuring nginx for SSL..."
-
-    cat > "$INSTALL_DIR/nginx/conf.d/default.conf" << EOF
-# GenMaster HTTPS Configuration
-# Auto-generated by setup.sh
-
-# Redirect HTTP to HTTPS
-server {
-    listen 80;
-    listen [::]:80;
-    server_name ${DOMAIN_NAME};
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-
-    location / {
-        return 301 https://\$host\$request_uri;
-    }
-}
-
-# HTTPS Server
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name ${DOMAIN_NAME};
-
-    ssl_certificate /etc/nginx/ssl/fullchain.pem;
-    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
-
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
-    ssl_prefer_server_ciphers off;
-    ssl_session_timeout 1d;
-    ssl_session_cache shared:SSL:50m;
-
-    location /health {
-        access_log off;
-        return 200 "healthy\n";
-        add_header Content-Type text/plain;
-    }
-
-    location /api {
-        proxy_pass http://genmaster:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-
-    location /ws {
-        proxy_pass http://genmaster:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_read_timeout 86400;
-    }
-
-    location / {
-        proxy_pass http://genmaster:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-}
-EOF
-
-    print_success "Nginx SSL configuration created"
-}
-
-# =============================================================================
-# Tailscale Configuration
-# =============================================================================
-
-configure_tailscale() {
-    print_section "Tailscale VPN Configuration"
-
-    echo "  Tailscale provides secure mesh networking between GenMaster and GenSlave."
-    echo "  This is the recommended way to connect the two devices."
-    echo ""
-
-    if ! confirm "Would you like to configure Tailscale VPN?"; then
-        ENABLE_TAILSCALE=false
-        save_state
-        return 0
-    fi
-
-    ENABLE_TAILSCALE=true
-
-    print_step "1" "Gathering Tailscale configuration..."
-
-    echo ""
-    echo "  Create an auth key at: https://login.tailscale.com/admin/settings/keys"
-    echo "  Recommended settings:"
-    echo "  - Reusable: Yes"
-    echo "  - Ephemeral: No"
-    echo "  - Pre-approved: Yes"
-    echo "  - Tags: tag:generator"
-    echo ""
-
-    prompt_secret "Enter Tailscale Auth Key (tskey-auth-...)" TAILSCALE_AUTHKEY
-    prompt_input "Enter Tailscale hostname" "genmaster" TAILSCALE_HOSTNAME
-
-    print_success "Tailscale configuration saved"
-
-    STATE_TAILSCALE_CONFIGURED=true
-    save_state
-}
-
-# =============================================================================
-# Cloudflare Tunnel Configuration
-# =============================================================================
-
-configure_cloudflare_tunnel() {
-    print_section "Cloudflare Tunnel Configuration (Optional)"
-
-    echo "  Cloudflare Tunnel allows public access to GenMaster without port forwarding."
-    echo "  This is optional - Tailscale is sufficient for most use cases."
-    echo ""
-
-    if ! confirm "Would you like to configure Cloudflare Tunnel?"; then
-        ENABLE_CLOUDFLARE_TUNNEL=false
-        save_state
-        return 0
-    fi
-
-    ENABLE_CLOUDFLARE_TUNNEL=true
-
-    print_step "1" "Gathering Cloudflare Tunnel configuration..."
-
-    echo ""
-    echo "  Create a tunnel at: https://one.dash.cloudflare.com/"
-    echo "  Navigate to: Access -> Tunnels -> Create a tunnel"
-    echo ""
-
-    prompt_secret "Enter Cloudflare Tunnel Token" CLOUDFLARE_TUNNEL_TOKEN
-
-    print_success "Cloudflare Tunnel configuration saved"
-
-    STATE_CLOUDFLARE_CONFIGURED=true
-    save_state
-}
-
-# =============================================================================
-# Portainer Configuration
-# =============================================================================
-
-configure_portainer() {
-    print_section "Portainer Container Management (Optional)"
-
-    echo "  Portainer provides a web-based Docker container management interface."
-    echo "  Access it at: https://your-domain/portainer/"
-    echo ""
-    echo "  Features:"
-    echo "  - View and manage all containers"
-    echo "  - View container logs"
-    echo "  - Restart/stop/start containers"
-    echo "  - Monitor resource usage"
-    echo ""
-
-    if ! confirm "Would you like to install Portainer?"; then
-        ENABLE_PORTAINER=false
-        STATE_PORTAINER_CONFIGURED=true
-        save_state
-        return 0
-    fi
-
-    ENABLE_PORTAINER=true
-
-    print_step "1" "Configuring Portainer admin password..."
-
-    echo ""
-    echo "  Enter a password for the Portainer admin user."
-    echo "  If left blank, you'll set the password on first access."
-    echo ""
-
-    prompt_secret "Portainer admin password (or Enter to set later)" PORTAINER_ADMIN_PASSWORD true
-
-    if [ -n "$PORTAINER_ADMIN_PASSWORD" ]; then
-        print_success "Portainer admin password configured"
+    # Network
+    if ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1; then
+        print_success "Network: OK"
     else
-        print_info "You will set the admin password on first access to Portainer"
+        print_warning "Network: Cannot reach external servers"
     fi
 
-    print_success "Portainer configuration saved"
-
-    STATE_PORTAINER_CONFIGURED=true
-    save_state
+    echo ""
 }
 
-# =============================================================================
-# Environment Configuration
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONFIGURATION FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
 
-configure_environment() {
-    print_section "Environment Configuration"
+configure_domain() {
+    print_section "Domain Configuration"
 
-    print_step "1" "Gathering application configuration..."
-
-    # Domain configuration (if not already set via SSL configuration)
-    if [ -z "$DOMAIN_NAME" ]; then
-        prompt_input "Enter your domain name" "genmaster.example.com" DOMAIN_NAME
+    if [ "$PRECONFIG_MODE" = "true" ]; then
+        print_info "Using: $DOMAIN"
+        return
     fi
 
-    # Timezone configuration
-    prompt_input "Enter timezone" "America/Los_Angeles" TIMEZONE
+    echo ""
+    echo -e "  ${GRAY}Enter the domain for accessing GenMaster.${NC}"
+    echo -e "  ${GRAY}Example: genmaster.example.com${NC}"
+    echo ""
 
-    # Admin credentials
-    print_step "2" "Configuring admin credentials..."
-    prompt_input "Admin username" "admin" ADMIN_USERNAME
+    while true; do
+        echo -ne "${WHITE}  Domain${NC}: "
+        read DOMAIN
 
-    if [ -z "$ADMIN_PASSWORD" ]; then
-        echo ""
-        echo "  Enter a password for the admin user, or press Enter to auto-generate one."
-        echo ""
-        prompt_secret "Admin password (or Enter to generate)" ADMIN_PASSWORD true
-
-        if [ -z "$ADMIN_PASSWORD" ]; then
-            ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
-            echo ""
-            print_warning "Generated admin password: ${ADMIN_PASSWORD}"
-            echo "  Please save this password securely!"
-            echo ""
+        if [ -z "$DOMAIN" ]; then
+            print_error "Domain is required"
+            continue
         fi
-    fi
 
-    # GenSlave configuration
-    print_step "3" "Configuring GenSlave connection..."
-    if [ -z "$SLAVE_API_URL" ]; then
-        if [ "$ENABLE_TAILSCALE" = true ]; then
-            prompt_input "GenSlave API URL (Tailscale hostname)" "http://genslave:8001" SLAVE_API_URL
+        if echo "$DOMAIN" | grep -qE '^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$'; then
+            print_success "Domain: $DOMAIN"
+            break
         else
-            prompt_input "GenSlave API URL" "http://genslave.local:8001" SLAVE_API_URL
+            print_error "Invalid domain format"
         fi
+    done
+}
+
+configure_database() {
+    print_section "Database Configuration"
+
+    if [ "$PRECONFIG_MODE" = "true" ]; then
+        print_info "Using database: $DB_NAME"
+        return
     fi
 
-    # Generate secrets if not provided
-    if [ -z "$APP_SECRET_KEY" ]; then
-        print_step "4" "Generating application secret key..."
-        APP_SECRET_KEY=$(generate_secret 32)
-        print_success "Secret key generated"
-    fi
+    echo ""
+    echo -e "  ${GRAY}Configure PostgreSQL settings. Press Enter for defaults.${NC}"
+    echo ""
+
+    prompt_with_default "Database name" "$DEFAULT_DB_NAME" "DB_NAME"
+    prompt_with_default "Database user" "$DEFAULT_DB_USER" "DB_USER"
 
     if [ -z "$DB_PASSWORD" ]; then
-        print_step "5" "Generating database password..."
-        DB_PASSWORD=$(generate_secret 32)
-        print_success "Database password generated"
+        if confirm_prompt "Auto-generate database password?" "y"; then
+            DB_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)
+            AUTOGEN_DB_PASSWORD=true
+            print_success "Password generated"
+        else
+            while true; do
+                echo -ne "${WHITE}  Password${NC}: "
+                read -s DB_PASSWORD
+                echo ""
+                if [ ${#DB_PASSWORD} -ge 8 ]; then
+                    break
+                fi
+                print_error "Password must be at least 8 characters"
+            done
+        fi
     fi
 
-    if [ -z "$SLAVE_API_SECRET" ]; then
-        print_step "6" "Generating GenSlave API secret..."
-        SLAVE_API_SECRET=$(generate_secret 32)
-        print_success "GenSlave API secret generated"
-        echo ""
-        print_warning "IMPORTANT: You must configure GenSlave with this same secret:"
-        echo "           API_SECRET=$SLAVE_API_SECRET"
-        echo ""
+    print_success "Database configured"
+}
+
+configure_containers() {
+    print_section "Container Names"
+
+    POSTGRES_CONTAINER="$DEFAULT_POSTGRES_CONTAINER"
+    GENMASTER_CONTAINER="$DEFAULT_GENMASTER_CONTAINER"
+    NGINX_CONTAINER="$DEFAULT_NGINX_CONTAINER"
+    REDIS_CONTAINER="$DEFAULT_REDIS_CONTAINER"
+
+    print_info "Using default container names"
+}
+
+configure_timezone() {
+    print_section "Timezone"
+
+    if [ "$PRECONFIG_MODE" = "true" ]; then
+        print_info "Using: $TIMEZONE"
+        return
     fi
 
-    # Create .env file
-    print_step "7" "Creating environment configuration file..."
+    local detected_tz=""
+    if [ -f /etc/timezone ]; then
+        detected_tz=$(cat /etc/timezone)
+    elif [ -L /etc/localtime ]; then
+        detected_tz=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
+    fi
+    detected_tz="${detected_tz:-America/Phoenix}"
 
-    cat > "$CONFIG_FILE" << EOF
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    prompt_with_default "Timezone" "$detected_tz" "TIMEZONE"
+    print_success "Timezone: $TIMEZONE"
+}
+
+generate_secret_key() {
+    print_section "Application Secret Key"
+
+    if [ -n "$SECRET_KEY" ]; then
+        print_info "Secret key already set"
+        return
+    fi
+
+    SECRET_KEY=$(openssl rand -base64 48 | tr -dc 'a-zA-Z0-9' | head -c 64)
+    AUTOGEN_SECRET_KEY=true
+    print_success "Secret key generated"
+}
+
+configure_genslave() {
+    print_section "GenSlave Configuration"
+
+    if [ "$PRECONFIG_MODE" = "true" ]; then
+        if [ "$GENSLAVE_ENABLED" = "true" ]; then
+            print_info "GenSlave: $GENSLAVE_API_URL"
+        else
+            print_info "GenSlave: Disabled"
+        fi
+        return
+    fi
+
+    echo ""
+    echo -e "  ${GRAY}GenSlave controls the generator relay on a Pi Zero 2W.${NC}"
+    echo ""
+
+    if confirm_prompt "Enable GenSlave communication?" "y"; then
+        GENSLAVE_ENABLED=true
+
+        while true; do
+            echo -ne "${WHITE}  GenSlave API URL (e.g., http://genslave.local:8001)${NC}: "
+            read GENSLAVE_API_URL
+
+            if [ -n "$GENSLAVE_API_URL" ]; then
+                break
+            fi
+            print_error "URL is required"
+        done
+
+        if [ -z "$GENSLAVE_API_SECRET" ]; then
+            GENSLAVE_API_SECRET=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)
+            AUTOGEN_SLAVE_SECRET=true
+        fi
+
+        print_success "GenSlave configured"
+    else
+        GENSLAVE_ENABLED=false
+        print_info "GenSlave disabled (UI-only mode)"
+    fi
+}
+
+configure_webhooks() {
+    print_section "Webhooks"
+
+    if [ "$PRECONFIG_MODE" = "true" ]; then
+        if [ -n "$WEBHOOK_URL" ]; then
+            print_info "Webhook: $WEBHOOK_URL"
+        else
+            print_info "Webhooks: Not configured"
+        fi
+        return
+    fi
+
+    echo ""
+    echo -e "  ${GRAY}Webhooks notify external services of generator events.${NC}"
+    echo ""
+
+    if confirm_prompt "Configure webhooks?" "n"; then
+        echo -ne "${WHITE}  Webhook URL${NC}: "
+        read WEBHOOK_URL
+
+        if [ -n "$WEBHOOK_URL" ]; then
+            WEBHOOK_SECRET=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)
+            print_success "Webhook configured"
+        fi
+    else
+        print_info "Webhooks skipped"
+    fi
+}
+
+configure_optional_services() {
+    print_section "Optional Services"
+
+    if [ "$PRECONFIG_MODE" = "true" ]; then
+        print_info "Using pre-configured services"
+        return
+    fi
+
+    # Cloudflare Tunnel
+    print_subsection
+    echo -e "  ${WHITE}${BOLD}Cloudflare Tunnel${NC}"
+    echo -e "  ${GRAY}Secure HTTPS access without exposing ports.${NC}"
+    echo ""
+
+    if confirm_prompt "Enable Cloudflare Tunnel?" "n"; then
+        INSTALL_CLOUDFLARE_TUNNEL=true
+        echo -ne "${WHITE}  Tunnel token${NC}: "
+        read CLOUDFLARE_TUNNEL_TOKEN
+        print_success "Cloudflare Tunnel enabled"
+    fi
+
+    # Tailscale
+    print_subsection
+    echo -e "  ${WHITE}${BOLD}Tailscale VPN${NC}"
+    echo -e "  ${GRAY}Private mesh VPN for secure remote access.${NC}"
+    echo ""
+
+    if confirm_prompt "Enable Tailscale?" "n"; then
+        INSTALL_TAILSCALE=true
+        echo -ne "${WHITE}  Auth key${NC}: "
+        read TAILSCALE_AUTH_KEY
+        prompt_with_default "Hostname" "genmaster" "TAILSCALE_HOSTNAME"
+        print_success "Tailscale enabled"
+    fi
+
+    # Portainer
+    print_subsection
+    echo -e "  ${WHITE}${BOLD}Portainer${NC}"
+    echo -e "  ${GRAY}Web-based container management.${NC}"
+    echo ""
+
+    if confirm_prompt "Enable Portainer?" "n"; then
+        INSTALL_PORTAINER=true
+        print_success "Portainer enabled"
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONFIGURATION SUMMARY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+show_configuration_summary() {
+    print_header "Configuration Summary"
+
+    echo -e "  ${WHITE}${BOLD}Domain & Network${NC}"
+    echo -e "    Domain: ${CYAN}$DOMAIN${NC}"
+    [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ] && echo -e "    Cloudflare Tunnel: ${GREEN}Enabled${NC}"
+    [ "$INSTALL_TAILSCALE" = true ] && echo -e "    Tailscale: ${GREEN}Enabled${NC} ($TAILSCALE_HOSTNAME)"
+    echo ""
+
+    echo -e "  ${WHITE}${BOLD}Hardware Mode${NC}"
+    if [ "$MOCK_GPIO_MODE" = true ]; then
+        echo -e "    GPIO: ${YELLOW}MOCK (Testing/Development)${NC}"
+    else
+        echo -e "    GPIO: ${GREEN}REAL (Raspberry Pi)${NC}"
+    fi
+    echo ""
+
+    echo -e "  ${WHITE}${BOLD}Database${NC}"
+    echo -e "    Name: ${CYAN}$DB_NAME${NC}"
+    echo -e "    User: ${CYAN}$DB_USER${NC}"
+    [ "$AUTOGEN_DB_PASSWORD" = true ] && echo -e "    Password: ${YELLOW}(auto-generated)${NC}"
+    echo ""
+
+    echo -e "  ${WHITE}${BOLD}GenSlave${NC}"
+    if [ "$GENSLAVE_ENABLED" = "true" ]; then
+        echo -e "    Status: ${GREEN}Enabled${NC}"
+        echo -e "    URL: ${CYAN}$GENSLAVE_API_URL${NC}"
+    else
+        echo -e "    Status: ${YELLOW}Disabled${NC}"
+    fi
+    echo ""
+
+    echo -e "  ${WHITE}${BOLD}Application${NC}"
+    echo -e "    Timezone: ${CYAN}$TIMEZONE${NC}"
+    echo ""
+
+    if confirm_prompt "Proceed with this configuration?"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FILE GENERATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+generate_env_file() {
+    print_info "Generating .env file..."
+
+    # Determine environment mode based on hardware detection
+    local app_env="production"
+    if [ "$MOCK_GPIO_MODE" = true ]; then
+        app_env="development"
+    fi
+
+    cat > "${SCRIPT_DIR}/.env" << EOF
+# =============================================================================
 # GenMaster Environment Configuration
-# Generated by setup.sh on $(date)
-#
-# Richard J. Sears
-# richardjsears@protonmail.com
-# https://github.com/rjsears
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
+# Generated: $(date -Iseconds)
 # =============================================================================
+
 # Domain Configuration
-# =============================================================================
-DOMAIN=${DOMAIN_NAME}
+DOMAIN=${DOMAIN}
 
-# =============================================================================
 # Application Settings
-# =============================================================================
-APP_ENV=production
-APP_DEBUG=false
-APP_SECRET_KEY=${APP_SECRET_KEY}
-
-# GenMaster Docker image version
-GENMASTER_VERSION=${DOCKER_TAG}
-
-# Timezone
+APP_ENV=${app_env}
+APP_DEBUG=$([ "$MOCK_GPIO_MODE" = true ] && echo "true" || echo "false")
+SECRET_KEY=${SECRET_KEY}
 TIMEZONE=${TIMEZONE}
 
-# =============================================================================
-# Database Configuration (PostgreSQL)
-# =============================================================================
-DATABASE_USER=genmaster
+# GPIO Mode (auto-detected based on hardware)
+# true = Mock GPIO (testing/development on non-Pi systems)
+# false = Real GPIO (production on Raspberry Pi)
+MOCK_GPIO_MODE=${MOCK_GPIO_MODE}
+
+# Database Configuration
+DATABASE_HOST=db
+DATABASE_PORT=5432
+DATABASE_NAME=${DB_NAME}
+DATABASE_USER=${DB_USER}
 DATABASE_PASSWORD=${DB_PASSWORD}
-DATABASE_NAME=genmaster
 
-# =============================================================================
-# Admin User
-# =============================================================================
-ADMIN_USERNAME=${ADMIN_USERNAME}
-ADMIN_PASSWORD=${ADMIN_PASSWORD}
+# Redis Configuration
+REDIS_HOST=redis
+REDIS_PORT=6379
 
-# =============================================================================
 # GenSlave Communication
-# =============================================================================
-SLAVE_API_URL=${SLAVE_API_URL}
-SLAVE_API_SECRET=${SLAVE_API_SECRET}
+GENSLAVE_ENABLED=${GENSLAVE_ENABLED}
+SLAVE_API_URL=${GENSLAVE_API_URL}
+SLAVE_API_SECRET=${GENSLAVE_API_SECRET}
 
-# =============================================================================
+# Webhook Configuration
+WEBHOOK_BASE_URL=${WEBHOOK_URL}
+WEBHOOK_SECRET=${WEBHOOK_SECRET}
+WEBHOOK_ENABLED=$([ -n "$WEBHOOK_URL" ] && echo "true" || echo "false")
+
 # Heartbeat Settings
-# =============================================================================
 HEARTBEAT_INTERVAL_SECONDS=60
 HEARTBEAT_FAILURE_THRESHOLD=3
 
-# =============================================================================
-# Webhook Notifications (Optional)
-# =============================================================================
-WEBHOOK_BASE_URL=
-WEBHOOK_SECRET=
-
-# =============================================================================
-# Logging
-# =============================================================================
-LOG_LEVEL=INFO
-
-# =============================================================================
-# Web Server Port
-# =============================================================================
-HTTP_PORT=80
-
-# =============================================================================
-# Tailscale VPN
-# =============================================================================
+# GPIO Configuration
+GPIO_PIN_VICTRON=17
 EOF
 
-    if [ "$ENABLE_TAILSCALE" = true ]; then
-        cat >> "$CONFIG_FILE" << EOF
-TAILSCALE_AUTHKEY=${TAILSCALE_AUTHKEY}
-TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME}
-TAILSCALE_EXTRA_ARGS=--advertise-tags=tag:generator
-EOF
-    else
-        cat >> "$CONFIG_FILE" << EOF
-# TAILSCALE_AUTHKEY=
-# TAILSCALE_HOSTNAME=genmaster
-# TAILSCALE_EXTRA_ARGS=--advertise-tags=tag:generator
-EOF
-    fi
+    # Add Cloudflare Tunnel if enabled
+    if [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ]; then
+        cat >> "${SCRIPT_DIR}/.env" << EOF
 
-    cat >> "$CONFIG_FILE" << EOF
-
-# =============================================================================
 # Cloudflare Tunnel
-# =============================================================================
-EOF
-
-    if [ "$ENABLE_CLOUDFLARE_TUNNEL" = true ]; then
-        cat >> "$CONFIG_FILE" << EOF
 CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
 EOF
-    else
-        cat >> "$CONFIG_FILE" << EOF
-# CLOUDFLARE_TUNNEL_TOKEN=
+    fi
+
+    # Add Tailscale if enabled
+    if [ "$INSTALL_TAILSCALE" = true ]; then
+        cat >> "${SCRIPT_DIR}/.env" << EOF
+
+# Tailscale VPN
+TAILSCALE_AUTHKEY=${TAILSCALE_AUTH_KEY}
+TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME}
 EOF
     fi
 
-    cat >> "$CONFIG_FILE" << EOF
+    chmod 600 "${SCRIPT_DIR}/.env"
+    print_success ".env generated"
 
-# =============================================================================
-# Portainer (Container Management)
-# =============================================================================
-EOF
-
-    if [ "$ENABLE_PORTAINER" = true ]; then
-        cat >> "$CONFIG_FILE" << EOF
-PORTAINER_ADMIN_PASSWORD=${PORTAINER_ADMIN_PASSWORD}
-EOF
-    else
-        cat >> "$CONFIG_FILE" << EOF
-# PORTAINER_ADMIN_PASSWORD=
-EOF
+    if [ "$MOCK_GPIO_MODE" = true ]; then
+        print_info "Mock GPIO mode enabled in .env (APP_ENV=development)"
     fi
-
-    chmod 600 "$CONFIG_FILE"
-    print_success "Environment configuration created: $CONFIG_FILE"
-
-    # Copy docker-compose and nginx files
-    print_step "8" "Copying Docker configuration files..."
-
-    # Download latest docker-compose.yml
-    if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
-        curl -fsSL "https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/genmaster/docker-compose.yml" \
-            -o "$INSTALL_DIR/docker-compose.yml" 2>/dev/null || {
-            print_warning "Could not download docker-compose.yml, using local copy"
-        }
-    fi
-
-    # Copy nginx configuration if not exists
-    if [ ! -f "$INSTALL_DIR/nginx/nginx.conf" ]; then
-        curl -fsSL "https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/genmaster/nginx/nginx.conf" \
-            -o "$INSTALL_DIR/nginx/nginx.conf" 2>/dev/null || {
-            print_warning "Could not download nginx.conf"
-        }
-    fi
-
-    STATE_ENV_CONFIGURED=true
-    save_state
-    print_success "Environment configuration complete"
 }
 
+generate_docker_compose() {
+    print_info "Generating docker-compose.yml..."
+
+    cat > "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
 # =============================================================================
-# Start Services
+# GenMaster Docker Compose Configuration
 # =============================================================================
 
-start_services() {
-    print_section "Starting Services"
+networks:
+  genmaster-internal:
+    driver: bridge
+    internal: true
+  genmaster-external:
+    driver: bridge
 
-    cd "$INSTALL_DIR" || exit 1
+volumes:
+  genmaster_db_data:
+  genmaster_redis_data:
+  genmaster_logs:
+  genmaster_data:
+  nginx_logs:
 
-    # Build profile arguments
-    local profiles=""
-    if [ "$ENABLE_TAILSCALE" = true ]; then
-        profiles="$profiles --profile tailscale"
+services:
+  # ===========================================================================
+  # PostgreSQL Database
+  # ===========================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: ${POSTGRES_CONTAINER:-genmaster_db}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-genmaster}
+      POSTGRES_USER: ${DATABASE_USER:-genmaster}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    volumes:
+      - genmaster_db_data:/var/lib/postgresql/data
+    networks:
+      - genmaster-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-genmaster}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # Redis Cache
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ${REDIS_CONTAINER:-genmaster_redis}
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - genmaster_redis_data:/data
+    networks:
+      - genmaster-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # GenMaster Application
+  # ===========================================================================
+  genmaster:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${GENMASTER_CONTAINER:-genmaster}
+    restart: unless-stopped
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - MOCK_GPIO_MODE=${MOCK_GPIO_MODE:-false}
+      - DATABASE_URL=postgresql+asyncpg://${DATABASE_USER:-genmaster}:${DATABASE_PASSWORD}@db:5432/${DATABASE_NAME:-genmaster}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - GENSLAVE_ENABLED=${GENSLAVE_ENABLED:-true}
+      - SLAVE_API_URL=${SLAVE_API_URL}
+      - SLAVE_API_SECRET=${SLAVE_API_SECRET}
+      - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - WEBHOOK_ENABLED=${WEBHOOK_ENABLED:-false}
+      - TZ=${TIMEZONE:-America/Phoenix}
+    volumes:
+      - genmaster_logs:/app/logs
+      - genmaster_data:/app/data
+    networks:
+      - genmaster-internal
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ===========================================================================
+  # Nginx Reverse Proxy
+  # ===========================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: ${NGINX_CONTAINER:-genmaster_nginx}
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - genmaster-internal
+      - genmaster-external
+    depends_on:
+      - genmaster
+EOF
+
+    # Add Cloudflare Tunnel if enabled
+    if [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ]; then
+        cat >> "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
+
+  # ===========================================================================
+  # Cloudflare Tunnel
+  # ===========================================================================
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: genmaster_cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - genmaster-external
+    profiles:
+      - cloudflare
+EOF
     fi
-    if [ "$ENABLE_CLOUDFLARE_TUNNEL" = true ]; then
-        profiles="$profiles --profile cloudflare"
+
+    # Add Tailscale if enabled
+    if [ "$INSTALL_TAILSCALE" = true ]; then
+        cat >> "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
+
+  # ===========================================================================
+  # Tailscale VPN
+  # ===========================================================================
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: genmaster_tailscale
+    restart: unless-stopped
+    hostname: ${TAILSCALE_HOSTNAME:-genmaster}
+    environment:
+      - TS_AUTHKEY=${TAILSCALE_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=true
+    volumes:
+      - tailscale_state:/var/lib/tailscale
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    networks:
+      - genmaster-external
+    profiles:
+      - tailscale
+
+volumes:
+  tailscale_state:
+EOF
     fi
-    if [ "$ENABLE_PORTAINER" = true ]; then
-        profiles="$profiles --profile portainer"
+
+    # Add Portainer if enabled
+    if [ "$INSTALL_PORTAINER" = true ]; then
+        cat >> "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
+
+  # ===========================================================================
+  # Portainer Container Management
+  # ===========================================================================
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: genmaster_portainer
+    restart: unless-stopped
+    command: --base-url /portainer
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - genmaster-internal
+    profiles:
+      - portainer
+
+volumes:
+  portainer_data:
+EOF
     fi
 
-    print_step "1" "Pulling Docker images..."
-    docker compose $profiles pull
-    print_success "Docker images pulled"
+    print_success "docker-compose.yml generated"
+}
 
-    print_step "2" "Starting containers..."
-    docker compose $profiles up -d
-    print_success "Containers started"
+generate_nginx_conf() {
+    print_info "Generating nginx configuration..."
 
-    print_step "3" "Waiting for services to be healthy..."
-    local max_wait=60
-    local waited=0
-    while [ $waited -lt $max_wait ]; do
-        if docker compose ps | grep -q "healthy"; then
-            print_success "Services are healthy"
-            break
-        fi
-        sleep 2
-        ((waited+=2))
+    mkdir -p "${SCRIPT_DIR}/nginx"
+    mkdir -p "${SCRIPT_DIR}/nginx/ssl"
+
+    # Build internal IP list
+    local internal_ips=""
+    for ip in $DEFAULT_INTERNAL_IP_RANGES; do
+        internal_ips="${internal_ips}        $ip internal;\n"
     done
 
-    if [ $waited -ge $max_wait ]; then
-        print_warning "Services may not be fully healthy yet"
-    fi
+    cat > "${SCRIPT_DIR}/nginx/nginx.conf" << EOF
+# =============================================================================
+# GenMaster Nginx Configuration
+# =============================================================================
 
-    print_step "4" "Checking service status..."
-    docker compose ps
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
 
-    STATE_SERVICES_STARTED=true
-    save_state
+events {
+    worker_connections 1024;
 }
 
-# =============================================================================
-# Final Summary
-# =============================================================================
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
 
-print_summary() {
-    print_section "Installation Complete!"
+    log_format main '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+                    '\$status \$body_bytes_sent "\$http_referer" '
+                    '"\$http_user_agent"';
 
-    echo "  GenMaster has been successfully installed and configured."
-    echo ""
-    echo -e "  ${BOLD}Access Information:${NC}"
-    if [ "$ENABLE_CLOUDFLARE_TUNNEL" = true ] && [ -n "$DOMAIN_NAME" ]; then
-        echo -e "  Web Dashboard:    ${GREEN}https://${DOMAIN_NAME}${NC}"
-    elif [ "$SSL_PROVIDER" != "none" ] && [ -n "$DOMAIN_NAME" ]; then
-        echo -e "  Web Dashboard:    ${GREEN}https://${DOMAIN_NAME}${NC}"
-    else
-        echo -e "  Web Dashboard:    ${GREEN}http://$(hostname -I | awk '{print $1}')${NC}"
+    access_log /var/log/nginx/access.log main;
+
+    sendfile on;
+    keepalive_timeout 65;
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml;
+
+    # Rate limiting
+    limit_req_zone \$binary_remote_addr zone=api:10m rate=30r/s;
+
+    # IP-based access control
+    geo \$access_level {
+        default external;
+$(echo -e "$internal_ips")
+    }
+
+    upstream genmaster {
+        server genmaster:8000;
+        keepalive 32;
+    }
+
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name ${DOMAIN};
+
+        ssl_certificate /etc/nginx/ssl/cert.pem;
+        ssl_certificate_key /etc/nginx/ssl/key.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_prefer_server_ciphers off;
+
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+
+        location /api/ {
+            limit_req zone=api burst=50 nodelay;
+            proxy_pass http://genmaster;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
+
+        location /ws/ {
+            proxy_pass http://genmaster;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_read_timeout 86400s;
+        }
+
+        location / {
+            proxy_pass http://genmaster;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+
+        location /healthz {
+            access_log off;
+            return 200 "healthy\n";
+        }
+EOF
+
+    # Add Portainer if enabled
+    if [ "$INSTALL_PORTAINER" = true ]; then
+        cat >> "${SCRIPT_DIR}/nginx/nginx.conf" << 'EOF'
+
+        location /portainer/ {
+            if ($access_level = "external") {
+                return 403;
+            }
+            proxy_pass http://genmaster_portainer:9000/;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+        }
+EOF
     fi
-    echo -e "  API Health:       ${GREEN}http://localhost/api/health${NC}"
-    if [ "$ENABLE_PORTAINER" = true ]; then
-        if [ "$ENABLE_CLOUDFLARE_TUNNEL" = true ] && [ -n "$DOMAIN_NAME" ]; then
-            echo -e "  Portainer:        ${GREEN}https://${DOMAIN_NAME}/portainer/${NC}"
-        elif [ "$SSL_PROVIDER" != "none" ] && [ -n "$DOMAIN_NAME" ]; then
-            echo -e "  Portainer:        ${GREEN}https://${DOMAIN_NAME}/portainer/${NC}"
-        else
-            echo -e "  Portainer:        ${GREEN}http://$(hostname -I | awk '{print $1}')/portainer/${NC}"
+
+    cat >> "${SCRIPT_DIR}/nginx/nginx.conf" << 'EOF'
+    }
+}
+EOF
+
+    print_success "nginx.conf generated"
+
+    # Generate self-signed SSL cert
+    if [ ! -f "${SCRIPT_DIR}/nginx/ssl/cert.pem" ]; then
+        print_info "Generating self-signed SSL certificate..."
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout "${SCRIPT_DIR}/nginx/ssl/key.pem" \
+            -out "${SCRIPT_DIR}/nginx/ssl/cert.pem" \
+            -subj "/CN=${DOMAIN}" 2>/dev/null
+        chmod 600 "${SCRIPT_DIR}/nginx/ssl/key.pem"
+        print_success "SSL certificate generated"
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEPLOYMENT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+deploy_stack() {
+    print_section "Deploying GenMaster"
+
+    local docker_compose_cmd="docker compose"
+    [ "$USE_STANDALONE_COMPOSE" = true ] && docker_compose_cmd="docker-compose"
+    [ -n "$DOCKER_SUDO" ] && docker_compose_cmd="$DOCKER_SUDO $docker_compose_cmd"
+
+    cd "$SCRIPT_DIR"
+
+    local profiles=""
+    [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ] && profiles="$profiles --profile cloudflare"
+    [ "$INSTALL_TAILSCALE" = true ] && profiles="$profiles --profile tailscale"
+    [ "$INSTALL_PORTAINER" = true ] && profiles="$profiles --profile portainer"
+
+    print_info "Building and starting containers..."
+    $docker_compose_cmd $profiles up -d --build
+
+    print_info "Waiting for services..."
+    sleep 10
+
+    # Health check
+    local attempts=0
+    while [ $attempts -lt 30 ]; do
+        if $DOCKER_SUDO docker exec $GENMASTER_CONTAINER curl -sf http://localhost:8000/api/health >/dev/null 2>&1; then
+            print_success "All services healthy!"
+            break
         fi
-    fi
+        attempts=$((attempts + 1))
+        printf "\r  ${GRAY}Waiting... (%d/30)${NC}" $attempts
+        sleep 2
+    done
     echo ""
 
-    echo -e "  ${BOLD}Admin Credentials:${NC}"
-    echo -e "  Username:         ${CYAN}${ADMIN_USERNAME}${NC}"
-    echo -e "  Password:         ${CYAN}${ADMIN_PASSWORD}${NC}"
+    show_deployment_summary
+}
+
+show_deployment_summary() {
+    print_header "Deployment Complete!"
+
+    echo -e "  ${WHITE}${BOLD}Access GenMaster:${NC}"
+    echo -e "    URL: ${CYAN}https://${DOMAIN}${NC}"
+    [ "$INSTALL_TAILSCALE" = true ] && echo -e "    Tailscale: ${CYAN}https://${TAILSCALE_HOSTNAME}${NC}"
     echo ""
 
-    echo -e "  ${BOLD}Configuration Files:${NC}"
-    echo "  Environment:      $CONFIG_FILE"
-    echo "  Docker Compose:   $INSTALL_DIR/docker-compose.yml"
-    echo "  Nginx Config:     $INSTALL_DIR/nginx/nginx.conf"
-    echo ""
-
-    echo -e "  ${BOLD}Useful Commands:${NC}"
-    echo "  View logs:        docker compose -f $INSTALL_DIR/docker-compose.yml logs -f"
-    echo "  Restart:          docker compose -f $INSTALL_DIR/docker-compose.yml restart"
-    echo "  Stop:             docker compose -f $INSTALL_DIR/docker-compose.yml down"
-    echo "  Update:           docker compose -f $INSTALL_DIR/docker-compose.yml pull && docker compose up -d"
-    echo ""
-
-    if [ -n "$SLAVE_API_SECRET" ]; then
-        echo -e "  ${BOLD}${YELLOW}IMPORTANT - GenSlave Configuration:${NC}"
-        echo "  You must configure GenSlave with the following secret:"
-        echo -e "  ${CYAN}API_SECRET=${SLAVE_API_SECRET}${NC}"
+    if [ "$AUTOGEN_DB_PASSWORD" = true ] || [ "$AUTOGEN_SLAVE_SECRET" = true ]; then
+        echo -e "  ${WHITE}${BOLD}Auto-Generated Credentials:${NC}"
+        echo -e "  ${YELLOW}⚠ Save these - they won't be shown again!${NC}"
+        echo ""
+        [ "$AUTOGEN_DB_PASSWORD" = true ] && echo -e "    Database Password: ${CYAN}$DB_PASSWORD${NC}"
+        [ "$AUTOGEN_SLAVE_SECRET" = true ] && echo -e "    GenSlave Secret: ${CYAN}$GENSLAVE_API_SECRET${NC}"
         echo ""
     fi
 
-    echo -e "  ${BOLD}Next Steps:${NC}"
-    echo "  1. Configure GenSlave with the shared secret shown above"
-    echo "  2. Verify both devices can communicate via Tailscale"
-    echo "  3. Log in to the web dashboard with your admin credentials"
+    echo -e "  ${WHITE}${BOLD}Commands:${NC}"
+    echo -e "    Logs:    ${CYAN}docker compose logs -f${NC}"
+    echo -e "    Stop:    ${CYAN}docker compose down${NC}"
+    echo -e "    Restart: ${CYAN}docker compose restart${NC}"
     echo ""
 
-    log_info "Installation completed successfully"
+    if [ "$MOCK_GPIO_MODE" = true ]; then
+        echo -e "  ${YELLOW}ℹ Mock GPIO Mode Active${NC}"
+        echo -e "    Dev API available at /api/dev/*"
+        echo -e "    Test: ${CYAN}curl -X POST http://localhost:8000/api/dev/gpio/victron-signal -H 'Content-Type: application/json' -d '{\"active\": true}'${NC}"
+    else
+        echo -e "  ${GREEN}✓ Real GPIO Mode (Raspberry Pi)${NC}"
+    fi
+    echo ""
 }
 
-# =============================================================================
-# Main Function
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
+# COMMAND LINE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+show_help() {
+    echo "GenMaster Setup Script v${SCRIPT_VERSION}"
+    echo ""
+    echo "Usage: ./setup.sh [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --help              Show this help"
+    echo "  --config <file>     Use pre-configuration file"
+    echo "  --version           Show version"
+    echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MAIN
+# ═══════════════════════════════════════════════════════════════════════════════
 
 main() {
-    # Parse command line arguments
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --preconfig)
-                PRECONFIG_FILE="$2"
-                shift 2
-                ;;
-            --unattended)
-                UNATTENDED_MODE=true
-                shift
-                ;;
-            --debug)
-                DEBUG_MODE=true
-                shift
-                ;;
-            --create-preconfig)
-                create_preconfig_template "$2"
+    PRECONFIG_MODE=false
+    PRECONFIG_AUTO_CONFIRM=false
+
+    case "${1:-}" in
+        --help|-h) show_help; exit 0 ;;
+        --version|-v) echo "v${SCRIPT_VERSION}"; exit 0 ;;
+        --config)
+            [ -z "${2:-}" ] && { print_error "Usage: ./setup.sh --config <file>"; exit 1; }
+            load_preconfig "$2"
+            ;;
+    esac
+
+    clear
+
+    # Banner
+    echo -e "${CYAN}"
+    echo "╔═══════════════════════════════════════════════════════════════════════════╗"
+    echo "║                                                                           ║"
+    echo "║   ██████╗ ███████╗███╗   ██╗███╗   ███╗ █████╗ ███████╗████████╗███████╗  ║"
+    echo "║  ██╔════╝ ██╔════╝████╗  ██║████╗ ████║██╔══██╗██╔════╝╚══██╔══╝██╔════╝  ║"
+    echo "║  ██║  ███╗█████╗  ██╔██╗ ██║██╔████╔██║███████║███████╗   ██║   █████╗    ║"
+    echo "║  ██║   ██║██╔══╝  ██║╚██╗██║██║╚██╔╝██║██╔══██║╚════██║   ██║   ██╔══╝    ║"
+    echo "║  ╚██████╔╝███████╗██║ ╚████║██║ ╚═╝ ██║██║  ██║███████║   ██║   ███████╗  ║"
+    echo "║   ╚═════╝ ╚══════╝╚═╝  ╚═══╝╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝  ║"
+    echo "║                                                                           ║"
+    echo "║                     Interactive Setup v${SCRIPT_VERSION}                          ║"
+    echo "║                                                                           ║"
+    echo "╚═══════════════════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+
+    print_header "GenMaster Setup v${SCRIPT_VERSION}"
+
+    # Auto-confirm mode
+    if [ "$PRECONFIG_MODE" = "true" ] && [ "$PRECONFIG_AUTO_CONFIRM" = "true" ]; then
+        print_info "Running in non-interactive mode"
+        INSTALL_MODE="fresh"
+    else
+        # Check existing installation
+        local detected_version=$(detect_current_version)
+        if [ "$detected_version" = "1.0" ]; then
+            handle_version_detection
+        else
+            echo -e "  ${GRAY}This script sets up GenMaster generator control with:${NC}"
+            echo -e "    • FastAPI backend + Vue.js frontend"
+            echo -e "    • PostgreSQL 16 + Redis"
+            echo -e "    • Nginx reverse proxy (HTTPS)"
+            echo ""
+            echo -e "  ${GRAY}Optional:${NC}"
+            echo -e "    • Cloudflare Tunnel, Tailscale, Portainer"
+            echo ""
+
+            if ! confirm_prompt "Ready to begin?"; then
                 exit 0
-                ;;
-            --help|-h)
-                echo "GenMaster Setup Script"
-                echo ""
-                echo "Usage: $0 [OPTIONS]"
-                echo ""
-                echo "Options:"
-                echo "  --preconfig FILE    Use preconfig file for unattended installation"
-                echo "  --unattended        Run in unattended mode (requires preconfig)"
-                echo "  --debug             Enable debug logging"
-                echo "  --create-preconfig  Create a preconfig template file"
-                echo "  --help              Show this help message"
-                exit 0
-                ;;
-            *)
-                echo "Unknown option: $1"
-                exit 1
-                ;;
+            fi
+
+            handle_version_detection
+        fi
+    fi
+
+    # Skip checks for reconfigure
+    if [ "$INSTALL_MODE" != "reconfigure" ]; then
+        # Hardware detection (sets MOCK_GPIO_MODE)
+        detect_hardware_mode
+
+        # Resume check
+        if check_resume; then
+            print_info "Resuming..."
+        fi
+
+        # System prep
+        print_section "System Preparation"
+        detect_os
+        [ -n "$DISTRO" ] && print_success "OS: $DISTRO ($DISTRO_FAMILY)"
+
+        if confirm_prompt "Update system packages?" "n"; then
+            update_system
+        fi
+
+        install_required_utilities
+        check_and_install_docker
+        perform_system_checks
+    fi
+
+    if [ "$INSTALL_MODE" = "reconfigure" ]; then
+        [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE" 2>/dev/null
+        detect_hardware_mode
+
+        print_section "Reconfigure Options"
+        echo -e "    ${CYAN}1)${NC} Domain"
+        echo -e "    ${CYAN}2)${NC} Database"
+        echo -e "    ${CYAN}3)${NC} GenSlave"
+        echo -e "    ${CYAN}4)${NC} Optional services"
+        echo -e "    ${CYAN}5)${NC} Regenerate configs"
+        echo -e "    ${CYAN}6)${NC} Full reconfiguration"
+        echo -e "    ${CYAN}0)${NC} Exit"
+        echo ""
+
+        local choice=""
+        while [[ ! "$choice" =~ ^[0-6]$ ]]; do
+            echo -ne "${WHITE}  Choice [0-6]${NC}: "
+            read choice
+        done
+
+        case $choice in
+            1) configure_domain ;;
+            2) configure_database ;;
+            3) configure_genslave ;;
+            4) configure_optional_services ;;
+            5) ;;
+            6) INSTALL_MODE="fresh" ;;
+            0) exit 0 ;;
         esac
-    done
 
-    # Initialize logging
-    mkdir -p "$(dirname "$LOG_FILE")"
-    touch "$LOG_FILE"
-    log_info "GenMaster setup started"
-
-    # Check root
-    check_root
-
-    # Print header
-    print_header
-
-    # Load preconfig if specified
-    if [ -n "$PRECONFIG_FILE" ]; then
-        load_preconfig "$PRECONFIG_FILE"
-    fi
-
-    # Load previous state if exists
-    if load_state; then
-        print_info "Found previous installation state"
-        if ! confirm "Would you like to resume the previous installation?"; then
-            rm -f "$STATE_FILE"
-            STATE_SYSTEM_PREPARED=false
-            STATE_DOCKER_INSTALLED=false
-            STATE_SSL_CONFIGURED=false
-            STATE_TAILSCALE_CONFIGURED=false
-            STATE_CLOUDFLARE_CONFIGURED=false
-            STATE_PORTAINER_CONFIGURED=false
-            STATE_ENV_CONFIGURED=false
-            STATE_SERVICES_STARTED=false
+        if [ "$INSTALL_MODE" = "reconfigure" ]; then
+            generate_env_file
+            generate_docker_compose
+            generate_nginx_conf
+            print_success "Configuration regenerated!"
+            if confirm_prompt "Redeploy now?"; then
+                deploy_stack
+            fi
+            exit 0
         fi
     fi
 
-    # Run installation steps
-    if [ "$STATE_SYSTEM_PREPARED" != true ]; then
-        prepare_system
-    else
-        print_info "System already prepared, skipping..."
-    fi
+    if [ "$INSTALL_MODE" = "fresh" ]; then
+        [ "$CURRENT_STEP" -lt 1 ] && { configure_domain; save_state "Domain" 1; }
+        [ "$CURRENT_STEP" -lt 2 ] && { configure_database; save_state "Database" 2; }
+        [ "$CURRENT_STEP" -lt 3 ] && { configure_containers; save_state "Containers" 3; }
+        [ "$CURRENT_STEP" -lt 4 ] && { configure_timezone; save_state "Timezone" 4; }
+        [ "$CURRENT_STEP" -lt 5 ] && { generate_secret_key; save_state "Secret Key" 5; }
+        [ "$CURRENT_STEP" -lt 6 ] && { configure_genslave; save_state "GenSlave" 6; }
+        [ "$CURRENT_STEP" -lt 7 ] && { configure_webhooks; save_state "Webhooks" 7; }
+        [ "$CURRENT_STEP" -lt 8 ] && { configure_optional_services; save_state "Services" 8; }
 
-    if [ "$STATE_DOCKER_INSTALLED" != true ]; then
-        install_docker
-    else
-        print_info "Docker already installed, skipping..."
-    fi
+        if ! show_configuration_summary; then
+            print_error "Cancelled"
+            exit 1
+        fi
 
-    if [ "$STATE_SSL_CONFIGURED" != true ]; then
-        configure_ssl
-    else
-        print_info "SSL already configured, skipping..."
-    fi
+        print_section "Generating Configuration"
+        generate_env_file
+        generate_docker_compose
+        generate_nginx_conf
 
-    if [ "$STATE_TAILSCALE_CONFIGURED" != true ]; then
-        configure_tailscale
-    else
-        print_info "Tailscale already configured, skipping..."
-    fi
+        # Save setup config
+        cat > "${CONFIG_FILE}" << EOF
+DOMAIN=${DOMAIN}
+DB_NAME=${DB_NAME}
+DB_USER=${DB_USER}
+TIMEZONE=${TIMEZONE}
+GENSLAVE_ENABLED=${GENSLAVE_ENABLED}
+MOCK_GPIO_MODE=${MOCK_GPIO_MODE}
+PORTAINER_ENABLED=${INSTALL_PORTAINER}
+CLOUDFLARE_ENABLED=${INSTALL_CLOUDFLARE_TUNNEL}
+TAILSCALE_ENABLED=${INSTALL_TAILSCALE}
+EOF
+        chmod 600 "${CONFIG_FILE}"
 
-    if [ "$STATE_CLOUDFLARE_CONFIGURED" != true ]; then
-        configure_cloudflare_tunnel
-    else
-        print_info "Cloudflare Tunnel already configured, skipping..."
-    fi
+        print_success "Configuration complete!"
 
-    if [ "$STATE_PORTAINER_CONFIGURED" != true ]; then
-        configure_portainer
-    else
-        print_info "Portainer already configured, skipping..."
-    fi
-
-    if [ "$STATE_ENV_CONFIGURED" != true ]; then
-        configure_environment
-    else
-        print_info "Environment already configured, skipping..."
-    fi
-
-    if [ "$STATE_SERVICES_STARTED" != true ]; then
-        start_services
-    else
-        print_info "Services already started"
-        if confirm "Would you like to restart the services?"; then
-            start_services
+        if confirm_prompt "Deploy now?"; then
+            deploy_stack
+        else
+            print_info "Run 'docker compose up -d' when ready."
         fi
     fi
 
-    # Print summary
-    print_summary
-
-    log_info "GenMaster setup completed"
+    clear_state
 }
 
-# Run main function
 main "$@"
