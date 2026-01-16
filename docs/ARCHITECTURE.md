@@ -254,6 +254,7 @@ The StateMachine class (`state_machine.py`) is the central controller for genera
 │                    ┌─────────────────────────────────┐                              │
 │                    │         VALIDATION              │                              │
 │                    │  can_start_generator() check:   │                              │
+│                    │  - automation_armed             │                              │
 │                    │  - !generator_running           │                              │
 │                    │  - !override(force_stop)        │                              │
 │                    │  - slave_connected              │                              │
@@ -322,6 +323,155 @@ The StateMachine class (`state_machine.py`) is the central controller for genera
 
 ---
 
+## Automation Arming System
+
+The arming system is a safety layer that prevents automated actions during startup, maintenance, or testing. Automation is **disarmed by default** and must be explicitly armed by an operator.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           AUTOMATION ARMING FLOW                                    │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│  │                            SYSTEM BOOT                                      │    │
+│  │                                                                             │    │
+│  │  1. GenMaster starts → automation_armed = false                             │    │
+│  │  2. GenSlave starts → waiting for arm command                               │    │
+│  │  3. Heartbeat establishes → slave_connection = "connected"                  │    │
+│  │  4. Operator reviews status in web UI                                       │    │
+│  │  5. Operator clicks "Arm Automation"                                        │    │
+│  │  6. System is now active                                                    │    │
+│  │                                                                             │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│  │                         ARMED vs DISARMED BEHAVIOR                          │    │
+│  ├─────────────────────────────────────────────────────────────────────────────┤    │
+│  │                                                                             │    │
+│  │  Event                    │ DISARMED                │ ARMED                 │    │
+│  │  ─────────────────────────┼─────────────────────────┼─────────────────────  │    │
+│  │  Victron signal HIGH      │ Logged, no action       │ Start generator       │    │
+│  │  Victron signal LOW       │ Logged, no action       │ Stop generator        │    │
+│  │  Scheduled run triggers   │ Skipped, warning logged │ Execute normally      │    │
+│  │  Manual start request     │ REJECTED with error     │ Execute if valid      │    │
+│  │  Manual stop request      │ Execute (safety)        │ Execute               │    │
+│  │  Heartbeat failures       │ Log only                │ Full failsafe logic   │    │
+│  │                                                                             │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│  │                           ARM/DISARM API                                    │    │
+│  ├─────────────────────────────────────────────────────────────────────────────┤    │
+│  │                                                                             │    │
+│  │  GET  /api/system/arm     →  Get current arm status                         │    │
+│  │                               {                                             │    │
+│  │                                 "armed": false,                             │    │
+│  │                                 "armed_at": null,                           │    │
+│  │                                 "armed_by": null,                           │    │
+│  │                                 "slave_connection": "connected"             │    │
+│  │                               }                                             │    │
+│  │                                                                             │    │
+│  │  POST /api/system/arm     →  Arm automation                                 │    │
+│  │       Body: {"source": "ui"}                                                │    │
+│  │       Response: {                                                           │    │
+│  │         "success": true,                                                    │    │
+│  │         "armed": true,                                                      │    │
+│  │         "message": "Automation armed successfully",                         │    │
+│  │         "armed_at": 1736985600,                                             │    │
+│  │         "warnings": []  // Or ["GenSlave is disconnected..."]               │    │
+│  │       }                                                                     │    │
+│  │                                                                             │    │
+│  │  POST /api/system/disarm  →  Disarm automation                              │    │
+│  │       Body: {"source": "ui"}                                                │    │
+│  │       Response: {                                                           │    │
+│  │         "success": true,                                                    │    │
+│  │         "armed": false,                                                     │    │
+│  │         "message": "Automation disarmed",                                   │    │
+│  │         "warnings": ["Generator is running - will NOT be stopped..."]       │    │
+│  │       }                                                                     │    │
+│  │                                                                             │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│  │                         ARMING STATE TRANSITIONS                            │    │
+│  ├─────────────────────────────────────────────────────────────────────────────┤    │
+│  │                                                                             │    │
+│  │                    ┌───────────────────┐                                    │    │
+│  │                    │     DISARMED      │◄──── System Boot                   │    │
+│  │                    │  (Default State)  │◄──── Power Recovery                │    │
+│  │                    └─────────┬─────────┘                                    │    │
+│  │                              │                                              │    │
+│  │                     POST /api/system/arm                                    │    │
+│  │                              │                                              │    │
+│  │                              ▼                                              │    │
+│  │                    ┌───────────────────┐                                    │    │
+│  │                    │      ARMED        │                                    │    │
+│  │                    │  (Active State)   │                                    │    │
+│  │                    │                   │                                    │    │
+│  │                    │  - Victron active │                                    │    │
+│  │                    │  - Schedules run  │                                    │    │
+│  │                    │  - Manual allowed │                                    │    │
+│  │                    └─────────┬─────────┘                                    │    │
+│  │                              │                                              │    │
+│  │                    POST /api/system/disarm                                  │    │
+│  │                              │                                              │    │
+│  │                              ▼                                              │    │
+│  │                    ┌───────────────────┐                                    │    │
+│  │                    │     DISARMED      │                                    │    │
+│  │                    │  (Safe State)     │                                    │    │
+│  │                    │                   │                                    │    │
+│  │                    │  NOTE: Generator  │                                    │    │
+│  │                    │  is NOT stopped   │                                    │    │
+│  │                    │  automatically!   │                                    │    │
+│  │                    └───────────────────┘                                    │    │
+│  │                                                                             │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│  │                         DATABASE FIELDS                                     │    │
+│  ├─────────────────────────────────────────────────────────────────────────────┤    │
+│  │                                                                             │    │
+│  │  system_state table:                                                        │    │
+│  │  ├── automation_armed       BOOLEAN DEFAULT false                           │    │
+│  │  ├── automation_armed_at    INTEGER (unix timestamp, nullable)              │    │
+│  │  └── automation_armed_by    VARCHAR(50) (nullable)                          │    │
+│  │                                                                             │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│  │                         WEBHOOK EVENTS                                      │    │
+│  ├─────────────────────────────────────────────────────────────────────────────┤    │
+│  │                                                                             │    │
+│  │  automation.armed      - Sent when system is armed                          │    │
+│  │                          {"source": "ui", "armed_at": 1736985600}           │    │
+│  │                                                                             │    │
+│  │  automation.disarmed   - Sent when system is disarmed                       │    │
+│  │                          {"source": "api", "generator_running": true}       │    │
+│  │                                                                             │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Arming Integration Points
+
+1. **Victron Signal Handler** (`handle_victron_signal_change`)
+   - Checks `automation_armed` before taking action
+   - Logs signal changes regardless of arm state
+
+2. **Start Generator** (`start_generator`)
+   - `can_start_generator()` requires `automation_armed == true`
+   - Returns clear error: "Cannot start - automation is not armed"
+
+3. **Scheduler** (`_execute_scheduled_run`)
+   - Checks `is_armed()` before executing
+   - Logs skipped runs with reason
+
+4. **Full Status** (`get_full_status`)
+   - Includes `automation_armed` in system status response
+
+---
+
 ## Webhook Event System
 
 The webhook system sends notifications to external services (like n8n) for various system events.
@@ -349,6 +499,10 @@ The webhook system sends notifications to external services (like n8n) for vario
 │  Override Events:                                                                   │
 │  ├── override.enabled             - Manual override activated                       │
 │  └── override.disabled            - Manual override deactivated                     │
+│                                                                                     │
+│  Arming Events:                                                                     │
+│  ├── automation.armed             - Automation system armed                         │
+│  └── automation.disarmed          - Automation system disarmed                      │
 │                                                                                     │
 │  System Events:                                                                     │
 │  ├── system.startup               - GenMaster started                               │
@@ -400,6 +554,9 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  │                          (Singleton - 1 row)                                  │  │
 │  ├───────────────────────────────────────────────────────────────────────────────┤  │
 │  │  id                         SERIAL PRIMARY KEY                                │  │
+│  │  automation_armed           BOOLEAN DEFAULT false                             │  │
+│  │  automation_armed_at        INTEGER (unix timestamp, nullable)                │  │
+│  │  automation_armed_by        VARCHAR(50) (nullable)                            │  │
 │  │  generator_running          BOOLEAN DEFAULT false                             │  │
 │  │  generator_start_time       INTEGER (unix timestamp)                          │  │
 │  │  current_run_id             INTEGER → generator_runs.id                       │  │

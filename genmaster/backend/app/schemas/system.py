@@ -106,4 +106,47 @@ class FullSystemStatus(BaseModel):
     slave_health: SlaveHealth = Field(description="GenSlave connection health")
     override: OverrideStatus = Field(description="Manual override status")
     system_health: SystemHealth = Field(description="GenMaster system health")
+    automation_armed: bool = Field(description="Whether automation is armed and active")
     timestamp: int = Field(description="Unix timestamp of this status")
+
+
+class AutomationArmStatus(BaseModel):
+    """Automation arming status."""
+
+    armed: bool = Field(description="Whether automation is armed")
+    armed_at: Optional[int] = Field(None, description="Unix timestamp when armed")
+    armed_by: Optional[str] = Field(None, description="Who/what armed the system")
+    slave_connection: str = Field(
+        description="GenSlave connection status ('connected', 'disconnected', 'unknown')"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "armed": True,
+                "armed_at": 1705320000,
+                "armed_by": "api",
+                "slave_connection": "connected",
+            }
+        }
+
+
+class ArmRequest(BaseModel):
+    """Request to arm the automation system."""
+
+    source: str = Field(
+        default="api",
+        description="What initiated the arm request (e.g., 'api', 'ui', 'startup')",
+    )
+
+
+class ArmResponse(BaseModel):
+    """Response from arm/disarm operations."""
+
+    success: bool = Field(description="Whether the operation succeeded")
+    armed: bool = Field(description="Current armed state")
+    message: str = Field(description="Human-readable status message")
+    armed_at: Optional[int] = Field(None, description="Unix timestamp when armed")
+    warnings: list[str] = Field(
+        default_factory=list, description="Any warnings during the operation"
+    )

@@ -51,6 +51,11 @@ class SystemState(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, default=1)
 
+    # Automation Arming (must be enabled before any automation actions)
+    automation_armed: Mapped[bool] = mapped_column(default=False)
+    automation_armed_at: Mapped[Optional[int]] = mapped_column(nullable=True)
+    automation_armed_by: Mapped[Optional[str]] = mapped_column(nullable=True)
+
     # Generator State
     generator_running: Mapped[bool] = mapped_column(default=False)
     generator_start_time: Mapped[Optional[int]] = mapped_column(nullable=True)
@@ -102,6 +107,8 @@ class SystemState(Base):
 
     def can_start_generator(self) -> bool:
         """Check if generator can be started."""
+        if not self.automation_armed:
+            return False
         if self.generator_running:
             return False
         if self.override_enabled and self.override_type == "force_stop":
@@ -109,3 +116,7 @@ class SystemState(Base):
         if self.slave_connection_status == "disconnected":
             return False
         return True
+
+    def is_armed(self) -> bool:
+        """Check if automation is armed."""
+        return self.automation_armed

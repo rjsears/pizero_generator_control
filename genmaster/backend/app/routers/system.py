@@ -19,6 +19,9 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.config import settings
 from app.schemas import (
+    ArmRequest,
+    ArmResponse,
+    AutomationArmStatus,
     CombinedSystemHealth,
     FullSystemStatus,
     SystemHealth,
@@ -185,3 +188,61 @@ async def reboot_system(
         "success": True,
         "message": "Reboot initiated, system will restart in 5 seconds",
     }
+
+
+# =========================================================================
+# Automation Arming Endpoints
+# =========================================================================
+
+
+@router.get("/arm", response_model=AutomationArmStatus)
+async def get_arm_status(
+    state_machine=Depends(get_state_machine),
+) -> AutomationArmStatus:
+    """
+    Get current automation arming status.
+
+    Returns whether automation is armed and GenSlave connection status.
+    """
+    status = await state_machine.get_arm_status()
+    return AutomationArmStatus(**status)
+
+
+@router.post("/arm", response_model=ArmResponse)
+async def arm_automation(
+    request: ArmRequest = ArmRequest(),
+    state_machine=Depends(get_state_machine),
+) -> ArmResponse:
+    """
+    Arm the automation system.
+
+    Arming enables all automated actions:
+    - Victron signal will trigger generator start/stop
+    - Scheduled runs will execute
+    - Heartbeat failures will trigger safety actions
+
+    Before arming, the system verifies GenSlave connectivity.
+    Warnings are returned if connectivity is degraded.
+    """
+    result = await state_machine.arm_automation(source=request.source)
+    return ArmResponse(**result)
+
+
+@router.post("/disarm", response_model=ArmResponse)
+async def disarm_automation(
+    request: ArmRequest = ArmRequest(),
+    state_machine=Depends(get_state_machine),
+) -> ArmResponse:
+    """
+    Disarm the automation system.
+
+    Disarming blocks all automated actions:
+    - Victron signals are logged but not acted upon
+    - Scheduled runs are skipped
+    - No automatic start/stop of generator
+
+    WARNING: If the generator is running when disarmed, it will NOT
+    be stopped automatically. Use manual stop if needed.
+    """
+    result = await state_machine.disarm_automation(source=request.source)
+    return ArmResponse(**result)
