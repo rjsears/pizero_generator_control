@@ -2,11 +2,11 @@
 
 ## 1. Executive Summary
 
-This project creates a wireless generator control system using two Raspberry Pi Zero 2W devices:
-- **GenMaster**: Monitors Victron Cerbo GX relay signal, hosts web interface, manages state
-- **GenSlave**: Controls generator relay via Automation Hat Mini, responds to GenMaster commands
+This project creates a wireless generator control system using two Raspberry Pi devices:
+- **GenMaster**: Raspberry Pi 5 (8GB RAM, 128GB NVMe) - Monitors Victron Cerbo GX relay signal, hosts web interface, manages state, runs Docker containers
+- **GenSlave**: Raspberry Pi Zero 2W - Controls generator relay via Automation Hat Mini, responds to GenMaster commands
 
-The system prioritizes reliability, state persistence, and minimal SSD wear through database-centric design.
+The system prioritizes reliability, state persistence, and modern containerized architecture.
 
 ---
 
@@ -24,15 +24,16 @@ The system prioritizes reliability, state persistence, and minimal SSD wear thro
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                               GenMaster                                     │
-│                          (Raspberry Pi Zero 2W)                             │
+│                    (Raspberry Pi 5 - 8GB RAM, 128GB NVMe)                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  • GPIO17 Input (Victron Signal Sensing)                                    │
-│  • FastAPI Backend                                                          │
-│  • Vue.js + Tailwind Frontend                                               │
-│  • MariaDB Database                                                         │
-│  • Nginx Reverse Proxy                                                      │
+│  • GPIO17 Input (Victron Signal Sensing via gpiod)                          │
+│  • FastAPI Backend (Docker container)                                       │
+│  • Vue.js + Tailwind Frontend (Gen Management)                              │
+│  • PostgreSQL 16 Database                                                   │
+│  • Nginx Reverse Proxy (with Portainer routing)                             │
 │  • APScheduler (Scheduled Runs)                                             │
 │  • State Management Engine                                                  │
+│  • Optional: Tailscale VPN, Cloudflare Tunnel, Portainer                    │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                             WiFi / Tailscale
@@ -46,9 +47,10 @@ The system prioritizes reliability, state persistence, and minimal SSD wear thro
 │  • Automation Hat Mini                                                      │
 │    - Relay 1 (GPIO16): Generator Start/Stop                                 │
 │    - 0.96" LCD Status Display                                               │
-│  • FastAPI Backend (Command Receiver)                                       │
-│  • MariaDB Database (Config + State Mirror)                                 │
+│  • FastAPI Backend (Native Python - No Docker, port 8001)                   │
+│  • SQLite Database (Config + State Mirror - conserves RAM)                  │
 │  • Heartbeat Responder                                                      │
+│  • Native Tailscale installation                                            │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                Relay Contact
@@ -64,25 +66,27 @@ The system prioritizes reliability, state persistence, and minimal SSD wear thro
 
 ## 3. Hardware Requirements
 
-### GenMaster
+### GenMaster (Upgraded from Pi Zero 2W)
 | Component | Specification |
 |-----------|---------------|
-| Computer | Raspberry Pi Zero 2W |
-| Storage | SSD (via USB adapter recommended) |
-| Power | 5V 2.5A supply |
-| GPIO | Pin 11 (GPIO17) for Victron input |
-| Network | WiFi + Tailscale |
+| Computer | Raspberry Pi 5 (8GB RAM) |
+| Storage | 128GB NVMe SSD via PCIe adapter |
+| Power | 5V 5A USB-C supply (27W recommended) |
+| GPIO | Pin 11 (GPIO17) for Victron input (via gpiod/lgpio) |
+| Network | WiFi + Tailscale (Docker container) |
+| Software | Docker + Docker Compose |
 
 ### GenSlave
 | Component | Specification |
 |-----------|---------------|
 | Computer | Raspberry Pi Zero 2W |
 | HAT | Pimoroni Automation Hat Mini |
-| Storage | SSD (via USB adapter recommended) |
+| Storage | SSD (via USB adapter) or quality SD card |
 | Power | 5V 2.5A supply |
 | Relay | 24V @ 2A max (built into HAT, GPIO16) |
 | Display | 0.96" 160x80 LCD (built into HAT) |
-| Network | WiFi + Tailscale |
+| Network | WiFi + Tailscale (native installation) |
+| Software | Native Python (no Docker to conserve ~150MB RAM) |
 
 ### Victron Connection (GenMaster)
 - 2-wire normally-open contact from Cerbo GX MK2 Relay
@@ -97,31 +101,49 @@ The system prioritizes reliability, state persistence, and minimal SSD wear thro
 | Layer | Technology | Purpose |
 |-------|------------|---------|
 | Backend | FastAPI | REST API, async operations |
-| Frontend | Vue.js 3 | Reactive UI components |
-| Styling | Tailwind CSS | Lightweight, responsive design |
-| Database | MariaDB | State persistence, logging |
-| ORM | SQLAlchemy | Database abstraction |
-| Scheduler | APScheduler | Scheduled generator runs |
-| Charts | Chart.js | Runtime graphs, statistics |
-| Web Server | Nginx | Reverse proxy, static files |
-| GPIO | gpiozero | Python GPIO library (simpler than RPi.GPIO) |
-| HAT | automationhat | Pimoroni library for Automation Hat Mini |
-| Container | Docker + Docker Compose | Application isolation |
+| Frontend | Vue.js 3 (Composition API) | Reactive UI components |
+| Styling | Tailwind CSS 3.4+ | Utility-first CSS with dark mode |
+| Database (GenMaster) | PostgreSQL 16 | Full-featured database with JSONB, async support |
+| Database (GenSlave) | SQLite | Zero-overhead file-based database |
+| ORM | SQLAlchemy 2.0 + Alembic | Database abstraction + migrations |
+| Scheduler | APScheduler 3.10+ | Scheduled generator runs |
+| Charts | Chart.js + vue-chartjs | Runtime graphs, statistics |
+| Web Server | Nginx | Reverse proxy, static files, Portainer routing |
+| GPIO (GenMaster) | gpiozero + lgpio | Pi 5 GPIO support (not RPi.GPIO) |
+| HAT (GenSlave) | automationhat | Pimoroni library for Automation Hat Mini |
+| Container | Docker + Docker Compose | Application isolation (GenMaster only) |
+| VPN | Tailscale | Secure mesh networking |
 
-### Python Libraries
+### Python Libraries (GenMaster)
 ```
 fastapi
 uvicorn[standard]
-sqlalchemy
-pymysql
+sqlalchemy[asyncio]
+asyncpg  # PostgreSQL async driver
+alembic  # Database migrations
 apscheduler
 gpiozero
-pigpio  # For remote GPIO if needed
-automationhat  # GenSlave only
+lgpio  # Pi 5 GPIO backend
 psutil  # System monitoring
 httpx  # Async HTTP client for API calls
 pydantic  # Data validation
 python-dotenv  # Configuration
+passlib[bcrypt]  # Password hashing
+python-jose[cryptography]  # JWT tokens
+docker  # Container management
+```
+
+### Python Libraries (GenSlave)
+```
+fastapi
+uvicorn[standard]
+sqlalchemy
+automationhat
+gpiozero
+psutil
+httpx
+pydantic
+python-dotenv
 ```
 
 ---
@@ -1013,22 +1035,34 @@ configure_networking() {
 
 ### 14.5 Memory Budget Analysis
 
-**Pi Zero 2W Total RAM: 512MB**
+**GenMaster - Raspberry Pi 5 Total RAM: 8GB**
 
-| Component | RAM Usage | With CF Tunnel |
-|-----------|-----------|----------------|
-| Linux OS | ~50MB | ~50MB |
-| Docker Engine | ~50MB | ~50MB |
-| MariaDB | ~80MB | ~80MB |
-| FastAPI + Uvicorn | ~40MB | ~40MB |
-| Nginx | ~10MB | ~10MB |
-| Tailscale | ~25MB | ~25MB |
-| Cloudflare Tunnel | - | ~75MB |
-| Vue.js (browser) | ~30MB | ~30MB |
-| **Total** | **~285MB** | **~360MB** |
-| **Available** | **~227MB** | **~152MB** |
+| Component | RAM Usage | Notes |
+|-----------|-----------|-------|
+| Linux OS | ~200MB | Raspberry Pi OS Lite |
+| Docker Engine | ~150MB | Container runtime |
+| PostgreSQL 16 | ~512MB | Tuned for Pi 5 with shared_buffers=512MB |
+| FastAPI + Uvicorn | ~100MB | Application backend |
+| Nginx | ~20MB | Reverse proxy |
+| Tailscale | ~50MB | Docker container |
+| Cloudflare Tunnel | ~100MB | Optional profile |
+| Portainer | ~100MB | Optional profile |
+| **Total (base)** | **~1.1GB** | Without optional services |
+| **Total (full)** | **~1.3GB** | With all optional services |
+| **Available** | **~6.7GB** | Ample headroom |
 
-**Recommendation:** Cloudflare Tunnel is viable but reduces available memory significantly. Only enable if you have a specific need for public access.
+**GenSlave - Raspberry Pi Zero 2W Total RAM: 512MB**
+
+| Component | RAM Usage | Notes |
+|-----------|-----------|-------|
+| Linux OS | ~50MB | Raspberry Pi OS Lite |
+| FastAPI + Uvicorn | ~40MB | Native Python (no Docker) |
+| SQLite | ~5MB | File-based, minimal overhead |
+| Tailscale | ~25MB | Native installation |
+| **Total** | **~120MB** | |
+| **Available** | **~392MB** | Adequate for operation |
+
+**Note:** GenSlave uses native Python deployment (no Docker) to conserve the limited 512MB RAM on Pi Zero 2W.
 
 ### 14.6 Database Schema Updates for Networking
 

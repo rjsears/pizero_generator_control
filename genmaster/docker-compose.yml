@@ -4,7 +4,8 @@
 #   Production:         docker compose up -d
 #   With Tailscale:     docker compose --profile tailscale up -d
 #   With Cloudflare:    docker compose --profile cloudflare up -d
-#   Full stack:         docker compose --profile tailscale --profile cloudflare up -d
+#   With Portainer:     docker compose --profile portainer up -d
+#   Full stack:         docker compose --profile tailscale --profile cloudflare --profile portainer up -d
 #   Development:        docker compose --profile dev up -d
 #
 # Environment:
@@ -32,7 +33,7 @@ services:
       - DATABASE_USER=${DATABASE_USER:-genmaster}
       - DATABASE_PASSWORD=${DATABASE_PASSWORD}
       - DATABASE_NAME=${DATABASE_NAME:-genmaster}
-      - SLAVE_API_URL=${SLAVE_API_URL:-http://genslave:8000}
+      - SLAVE_API_URL=${SLAVE_API_URL:-http://genslave:8001}
       - SLAVE_API_SECRET=${SLAVE_API_SECRET}
       - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
@@ -163,6 +164,27 @@ services:
     network_mode: host
 
   # ==========================================================================
+  # Portainer (Optional - use --profile portainer)
+  # Container management web interface
+  # ==========================================================================
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: genmaster-portainer
+    restart: unless-stopped
+    profiles:
+      - portainer
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    environment:
+      # Password can be pre-set via ADMIN_PASSWORD env var during setup
+      - ADMIN_PASSWORD=${PORTAINER_ADMIN_PASSWORD:-}
+    networks:
+      - genmaster-internal
+    # Portainer is accessed via nginx reverse proxy at /portainer
+    # Internal port 9000 is not exposed directly
+
+  # ==========================================================================
   # Development Mode (Optional - use --profile dev)
   # ==========================================================================
   genmaster-dev:
@@ -185,7 +207,7 @@ services:
       - DATABASE_USER=${DATABASE_USER:-genmaster}
       - DATABASE_PASSWORD=${DATABASE_PASSWORD:-genmaster}
       - DATABASE_NAME=${DATABASE_NAME:-genmaster}
-      - SLAVE_API_URL=${SLAVE_API_URL:-http://genslave:8000}
+      - SLAVE_API_URL=${SLAVE_API_URL:-http://genslave:8001}
       - SLAVE_API_SECRET=${SLAVE_API_SECRET:-dev-secret}
       - LOG_LEVEL=DEBUG
     volumes:
@@ -220,4 +242,6 @@ volumes:
   nginx_cache:
     driver: local
   tailscale_state:
+    driver: local
+  portainer_data:
     driver: local

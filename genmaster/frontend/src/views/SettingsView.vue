@@ -88,37 +88,66 @@
         </div>
       </Card>
 
-      <!-- Webhook Settings -->
+      <!-- Webhook Notifications -->
       <Card title="Webhook Notifications">
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
+        <div class="space-y-6">
+          <!-- Master Enable Toggle -->
+          <div class="flex items-center justify-between p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50">
             <div>
               <p class="font-medium text-gray-900 dark:text-white">Enable Webhooks</p>
-              <p class="text-sm text-gray-500 dark:text-gray-400">Send notifications to external services</p>
+              <p class="text-sm text-gray-500 dark:text-gray-400">Send notifications to external webhook URL</p>
             </div>
             <Toggle v-model="webhookConfig.enabled" />
           </div>
 
-          <Input
-            v-model="webhookConfig.base_url"
-            label="Webhook URL"
-            placeholder="https://n8n.example.com/webhook/generator"
-            hint="URL to send webhook notifications"
-            :disabled="!webhookConfig.enabled"
-          />
-          <Input
-            v-model="webhookConfig.secret"
-            type="password"
-            label="Webhook Secret"
-            placeholder="Enter secret for HMAC signing"
-            hint="Used for HMAC signature verification"
-            :disabled="!webhookConfig.enabled"
-          />
+          <!-- Webhook URL and Secret -->
+          <div :class="{ 'opacity-50 pointer-events-none': !webhookConfig.enabled }">
+            <Input
+              v-model="webhookConfig.base_url"
+              label="Webhook URL"
+              placeholder="https://n8n.example.com/webhook/generator"
+              hint="URL will receive POST requests with event data"
+            />
+            <div class="mt-4">
+              <Input
+                v-model="webhookConfig.secret"
+                type="password"
+                label="Webhook Secret"
+                placeholder="Enter secret for X-Webhook-Secret header"
+                hint="Sent in X-Webhook-Secret header for verification"
+              />
+            </div>
+          </div>
 
-          <div class="flex justify-between pt-4">
+          <!-- Event Types -->
+          <div :class="{ 'opacity-50 pointer-events-none': !webhookConfig.enabled }">
+            <h4 class="font-medium text-gray-900 dark:text-white mb-3">Event Types</h4>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Select which events trigger webhook notifications</p>
+            <div class="space-y-2">
+              <div
+                v-for="event in eventTypes"
+                :key="event.key"
+                class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  :id="event.key"
+                  v-model="webhookConfig.events[event.key]"
+                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label :for="event.key" class="flex-1 cursor-pointer">
+                  <p class="text-sm font-medium text-gray-900 dark:text-white">{{ event.label }}</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ event.description }}</p>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
             <Button
               variant="secondary"
-              :disabled="!webhookConfig.enabled"
+              :disabled="!webhookConfig.enabled || !webhookConfig.base_url"
               @click="testWebhook"
               :loading="testingWebhook"
             >
@@ -127,61 +156,6 @@
             <Button variant="primary" @click="saveWebhookConfig" :loading="savingWebhook">
               Save Webhook Settings
             </Button>
-          </div>
-        </div>
-      </Card>
-
-      <!-- Backup & Restore -->
-      <Card title="Backup & Restore">
-        <div class="space-y-4">
-          <p class="text-gray-600 dark:text-gray-400">
-            Create and manage database backups.
-          </p>
-
-          <div class="flex space-x-3">
-            <Button variant="primary" @click="createBackup" :loading="creatingBackup">
-              <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              Create Backup
-            </Button>
-            <Button variant="secondary" @click="loadBackups">
-              <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Refresh List
-            </Button>
-          </div>
-
-          <!-- Backups list -->
-          <div v-if="backups.length > 0" class="mt-4">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Filename</th>
-                  <th>Size</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="backup in backups" :key="backup.filename">
-                  <td class="font-mono text-sm">{{ backup.filename }}</td>
-                  <td>{{ formatBytes(backup.size_bytes) }}</td>
-                  <td>{{ formatDate(backup.created_at) }}</td>
-                  <td>
-                    <div class="flex space-x-2">
-                      <Button variant="ghost" size="sm" @click="downloadBackup(backup.filename)">
-                        Download
-                      </Button>
-                      <Button variant="ghost" size="sm" class="text-red-600" @click="confirmDeleteBackup(backup)">
-                        Delete
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
           </div>
         </div>
       </Card>
@@ -213,17 +187,6 @@
         </div>
       </Card>
     </div>
-
-    <!-- Delete Backup Confirmation -->
-    <Modal v-model="showDeleteConfirm" title="Delete Backup">
-      <p class="text-gray-600 dark:text-gray-400">
-        Are you sure you want to delete "{{ deletingBackup?.filename }}"? This action cannot be undone.
-      </p>
-      <template #footer>
-        <Button variant="secondary" @click="showDeleteConfirm = false">Cancel</Button>
-        <Button variant="danger" @click="deleteBackup" :loading="deletingBackupInProgress">Delete</Button>
-      </template>
-    </Modal>
   </MainLayout>
 </template>
 
@@ -232,16 +195,29 @@ import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
 import configService from '@/services/config'
-import backupService from '@/services/backup'
 import MainLayout from '@/components/layout/MainLayout.vue'
 import Card from '@/components/common/Card.vue'
 import Button from '@/components/common/Button.vue'
 import Input from '@/components/common/Input.vue'
 import Toggle from '@/components/common/Toggle.vue'
-import Modal from '@/components/common/Modal.vue'
 
 const authStore = useAuthStore()
 const notifications = useNotificationStore()
+
+// Webhook event types
+const eventTypes = [
+  { key: 'generator_started', label: 'Generator Started', description: 'When generator starts running' },
+  { key: 'generator_stopped', label: 'Generator Stopped', description: 'When generator stops (any reason)' },
+  { key: 'generator_failed', label: 'Generator Failed', description: 'When generator fails to start/stop' },
+  { key: 'heartbeat_lost', label: 'Heartbeat Lost', description: 'When GenSlave connection is lost' },
+  { key: 'heartbeat_restored', label: 'Heartbeat Restored', description: 'When GenSlave connection is restored' },
+  { key: 'failsafe_triggered', label: 'Failsafe Triggered', description: 'When GenSlave triggers failsafe stop' },
+  { key: 'schedule_executed', label: 'Schedule Executed', description: 'When scheduled run starts' },
+  { key: 'override_enabled', label: 'Override Enabled', description: 'When manual override is enabled' },
+  { key: 'override_disabled', label: 'Override Disabled', description: 'When manual override is disabled' },
+  { key: 'system_warning', label: 'System Warning', description: 'High temp, low disk, etc.' },
+  { key: 'system_error', label: 'System Error', description: 'Critical system errors' },
+]
 
 // Config state
 const config = ref({
@@ -259,16 +235,22 @@ const webhookConfig = ref({
   base_url: '',
   secret: '',
   enabled: false,
+  events: {
+    generator_started: true,
+    generator_stopped: true,
+    generator_failed: true,
+    heartbeat_lost: true,
+    heartbeat_restored: true,
+    failsafe_triggered: true,
+    schedule_executed: true,
+    override_enabled: true,
+    override_disabled: true,
+    system_warning: true,
+    system_error: true,
+  },
 })
 const savingWebhook = ref(false)
 const testingWebhook = ref(false)
-
-// Backup state
-const backups = ref([])
-const creatingBackup = ref(false)
-const showDeleteConfirm = ref(false)
-const deletingBackup = ref(null)
-const deletingBackupInProgress = ref(false)
 
 // Password state
 const passwordForm = ref({
@@ -282,7 +264,6 @@ onMounted(async () => {
   await Promise.all([
     loadConfig(),
     loadWebhookConfig(),
-    loadBackups(),
   ])
 })
 
@@ -310,7 +291,15 @@ async function saveConfig() {
 async function loadWebhookConfig() {
   try {
     const data = await configService.getWebhookConfig()
-    webhookConfig.value = data
+    // Merge with defaults to ensure all event types exist
+    webhookConfig.value = {
+      ...webhookConfig.value,
+      ...data,
+      events: {
+        ...webhookConfig.value.events,
+        ...(data.events || {}),
+      },
+    }
   } catch {
     // Use defaults
   }
@@ -333,7 +322,7 @@ async function testWebhook() {
   try {
     const result = await configService.testWebhook()
     if (result.success) {
-      notifications.success('Webhook test successful')
+      notifications.success(`Webhook test successful (${result.response_time_ms}ms)`)
     } else {
       notifications.error(`Webhook test failed: ${result.error}`)
     }
@@ -341,53 +330,6 @@ async function testWebhook() {
     notifications.error('Failed to test webhook')
   } finally {
     testingWebhook.value = false
-  }
-}
-
-async function loadBackups() {
-  try {
-    const data = await backupService.list()
-    backups.value = data.backups || []
-  } catch {
-    notifications.error('Failed to load backups')
-  }
-}
-
-async function createBackup() {
-  creatingBackup.value = true
-  try {
-    await backupService.create()
-    notifications.success('Backup created')
-    await loadBackups()
-  } catch {
-    notifications.error('Failed to create backup')
-  } finally {
-    creatingBackup.value = false
-  }
-}
-
-function downloadBackup(filename) {
-  window.open(backupService.getDownloadUrl(filename), '_blank')
-}
-
-function confirmDeleteBackup(backup) {
-  deletingBackup.value = backup
-  showDeleteConfirm.value = true
-}
-
-async function deleteBackup() {
-  if (!deletingBackup.value) return
-
-  deletingBackupInProgress.value = true
-  try {
-    await backupService.delete(deletingBackup.value.filename)
-    notifications.success('Backup deleted')
-    showDeleteConfirm.value = false
-    await loadBackups()
-  } catch {
-    notifications.error('Failed to delete backup')
-  } finally {
-    deletingBackupInProgress.value = false
   }
 }
 
@@ -415,17 +357,5 @@ async function changePassword() {
     notifications.error(authStore.error || 'Failed to change password')
   }
   changingPassword.value = false
-}
-
-function formatBytes(bytes) {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
-function formatDate(dateStr) {
-  return new Date(dateStr).toLocaleString()
 }
 </script>
