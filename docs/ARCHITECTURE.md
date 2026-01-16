@@ -245,7 +245,7 @@ The StateMachine class (`state_machine.py`) is the central controller for genera
 │  │   VICTRON   │             │   MANUAL    │             │  SCHEDULED  │            │
 │  │   TRIGGER   │             │   START     │             │    START    │            │
 │  │             │             │             │             │             │            │
-│  │ GPIO 17 HIGH│             │ API request │             │ Cron trigger│            │
+│  │ GPIO 17 HIGH│             │ API request │             │ APScheduler │            │
 │  └──────┬──────┘             └──────┬──────┘             └──────┬──────┘            │
 │         │                           │                           │                   │
 │         └───────────────────────────┼───────────────────────────┘                   │
@@ -446,7 +446,7 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  ├───────────────────────────────────────────────────────────────────────────────┤  │
 │  │  id                         SERIAL PRIMARY KEY                                │  │
 │  │  name                       VARCHAR(100)                                      │  │
-│  │  cron_expression            VARCHAR(100)                                      │  │
+│  │  cron_expression            VARCHAR(100)  -- APScheduler cron syntax          │  │
 │  │  duration_minutes           INTEGER                                           │  │
 │  │  enabled                    BOOLEAN DEFAULT true                              │  │
 │  │  last_run                   INTEGER (unix timestamp)                          │  │
