@@ -10,7 +10,7 @@ The RPi Generator Control system is a distributed two-device architecture for au
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                                    INTERNET                                          │
+│                                    INTERNET                                         │
 └─────────────────────────────────────────────────────────────────────────────────────┘
                     │                                              │
                     │ (Optional)                                   │
@@ -23,24 +23,24 @@ The RPi Generator Control system is a distributed two-device architecture for au
                     │                                              │
                     ▼                                              ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                           TAILSCALE MESH NETWORK                                     │
-│                        (Encrypted WireGuard Tunnels)                                 │
-│                              100.64.0.0/10                                           │
+│                           TAILSCALE MESH NETWORK                                    │
+│                        (Encrypted WireGuard Tunnels)                                │
+│                              100.64.0.0/10                                          │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│  ┌──────────────────────┐         ┌──────────────────────┐    ┌──────────────────┐ │
-│  │      GenMaster       │◄───────►│       GenSlave       │    │    Your Phone    │ │
-│  │   Raspberry Pi 5     │  HTTP   │    Pi Zero 2W        │    │   100.x.x.20     │ │
-│  │   100.x.x.101:80     │  :8001  │    100.x.x.102       │    │                  │ │
-│  │   8GB RAM, NVMe      │         │    512MB RAM         │    │                  │ │
-│  └──────────────────────┘         └──────────────────────┘    └──────────────────┘ │
-│            │                                │                                        │
-│            │                                │                                        │
-│  ┌─────────▼─────────┐            ┌────────▼────────┐                              │
-│  │  Victron Cerbo GX │            │  Generator Relay │                              │
-│  │  (Relay Output)   │            │  (Physical Start) │                              │
-│  └───────────────────┘            └──────────────────┘                              │
-│                                                                                      │
+│                                                                                     │
+│  ┌──────────────────────┐         ┌──────────────────────┐    ┌──────────────────┐  │
+│  │      GenMaster       │◄───────►│       GenSlave       │    │    Your Phone    │  │
+│  │   Raspberry Pi 5     │  HTTP   │    Pi Zero 2W        │    │   100.x.x.20     │  │
+│  │   100.x.x.101:80     │  :8001  │    100.x.x.102       │    │                  │  │
+│  │   8GB RAM, NVMe      │         │    512MB RAM         │    │                  │  │
+│  └──────────────────────┘         └──────────────────────┘    └──────────────────┘  │
+│            │                                │                                       │
+│            │                                │                                       │
+│  ┌─────────▼─────────┐            ┌────────▼────────┐                               │
+│  │  Victron Cerbo GX │            │ Generator Relay │                               │
+│  │  (Relay Output)   │            │ Physical Start) │                               │
+│  └───────────────────┘            └─────────────────┘                               │
+│                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -50,45 +50,45 @@ The RPi Generator Control system is a distributed two-device architecture for au
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                              GenMaster (Raspberry Pi 5)                              │
-│                            8GB RAM / 128GB NVMe / ARM64                              │
+│                              GenMaster (Raspberry Pi 5)                             │
+│                            8GB RAM / 128GB NVMe / ARM64                             │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│  ┌─────────────────────────────────────────────────────────────────────────────┐   │
-│  │                           Docker Compose Stack                               │   │
-│  ├─────────────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                              │   │
-│  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌─────────────┐  │   │
-│  │  │    Nginx     │   │   FastAPI    │   │  PostgreSQL  │   │    Redis    │  │   │
-│  │  │   :80/:443   │──►│    :8000     │──►│    :5432     │   │    :6379    │  │   │
-│  │  │              │   │  (internal)  │   │              │   │             │  │   │
-│  │  │ Reverse Proxy│   │  + Vue.js    │   │   pg 16      │   │  Caching    │  │   │
-│  │  │ SSL/Security │   │  Static      │   │   asyncpg    │   │  Sessions   │  │   │
-│  │  └──────────────┘   └──────────────┘   └──────────────┘   └─────────────┘  │   │
-│  │         │                  │                                                │   │
-│  │         │                  │                                                │   │
-│  │  ┌──────▼──────────────────▼─────────────────────────────────────────────┐ │   │
-│  │  │                    genmaster-internal network                         │ │   │
-│  │  └───────────────────────────────────────────────────────────────────────┘ │   │
-│  │                                                                              │   │
-│  │  ┌────────────────────────────────────────────────────────────────────────┐ │   │
-│  │  │                    Optional Profile Services                           │ │   │
-│  │  ├──────────────────┬──────────────────┬──────────────────────────────────┤ │   │
-│  │  │    Tailscale     │   Cloudflared    │         Portainer                │ │   │
-│  │  │ --profile        │ --profile        │     --profile portainer          │ │   │
-│  │  │   tailscale      │   cloudflare     │         :9000                    │ │   │
-│  │  │ (network: host)  │ (network: host)  │    /portainer/ path              │ │   │
-│  │  └──────────────────┴──────────────────┴──────────────────────────────────┘ │   │
-│  │                                                                              │   │
-│  └──────────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                      │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│  │                           Docker Compose Stack                              │    │
+│  ├─────────────────────────────────────────────────────────────────────────────┤    │
+│  │                                                                             │    │
+│  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌─────────────┐   │    │
+│  │  │    Nginx     │   │   FastAPI    │   │  PostgreSQL  │   │    Redis    │   │    │
+│  │  │   :80/:443   │──►│    :8000     │──►│    :5432     │   │    :6379    │   │    │
+│  │  │              │   │  (internal)  │   │              │   │             │   │    │
+│  │  │ Reverse Proxy│   │  + Vue.js    │   │   pg 16      │   │  Caching    │   │    │
+│  │  │ SSL/Security │   │  Static      │   │   asyncpg    │   │  Sessions   │   │    │
+│  │  └──────────────┘   └──────────────┘   └──────────────┘   └─────────────┘   │    │
+│  │         │                  │                                                │    │
+│  │         │                  │                                                │    │
+│  │  ┌──────▼──────────────────▼─────────────────────────────────────────────┐  │    │
+│  │  │                    genmaster-internal network                         │  │    │
+│  │  └───────────────────────────────────────────────────────────────────────┘  │    │
+│  │                                                                             │    │
+│  │  ┌────────────────────────────────────────────────────────────────────────┐ │    │
+│  │  │                    Optional Profile Services                           │ │    │
+│  │  ├──────────────────┬──────────────────┬──────────────────────────────────┤ │    │
+│  │  │    Tailscale     │   Cloudflared    │         Portainer                │ │    │
+│  │  │ --profile        │ --profile        │     --profile portainer          │ │    │
+│  │  │   tailscale      │   cloudflare     │         :9000                    │ │    │
+│  │  │ (network: host)  │ (network: host)  │    /portainer/ path              │ │    │
+│  │  └──────────────────┴──────────────────┴──────────────────────────────────┘ │    │
+│  │                                                                             │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                     │
 │  ┌──────────────────────────────────────────────────────────────────────────────┐   │
-│  │                              Host System                                      │   │
+│  │                              Host System                                     │   │
 │  ├──────────────────────────────────────────────────────────────────────────────┤   │
-│  │  GPIO 17 ◄────── Victron Cerbo GX Relay Output (Generator Request Signal)   │   │
-│  │                  (Read via gpiozero + lgpio)                                  │   │
+│  │  GPIO 17 ◄────── Victron Cerbo GX Relay Output (Generator Request Signal)    │   │
+│  │                  (Read via gpiozero + lgpio)                                 │   │
 │  └──────────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                      │
+│                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -101,23 +101,23 @@ The RPi Generator Control system is a distributed two-device architecture for au
                                          │
                                          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                              Cloudflare Tunnel (Optional)                            │
-│                           DDoS Protection, SSL Termination                           │
+│                              Cloudflare Tunnel (Optional)                           │
+│                           DDoS Protection, SSL Termination                          │
 └─────────────────────────────────────────────────────────────────────────────────────┘
                                          │
                                          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                                    Nginx (:80)                                       │
+│                                    Nginx (:80)                                      │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│   Request Classification (geo module):                                               │
+│                                                                                     │
+│   Request Classification (geo module):                                              │
 │   ├── 127.0.0.1/32, ::1/128          → internal                                     │
 │   ├── 10.0.0.0/8, 172.16.0.0/12      → internal (Docker)                            │
 │   ├── 192.168.0.0/16                 → internal (LAN)                               │
 │   ├── 100.64.0.0/10                  → internal (Tailscale CGNAT)                   │
-│   └── default                        → external                                      │
-│                                                                                      │
-│   Route Handling:                                                                    │
+│   └── default                        → external                                     │
+│                                                                                     │
+│   Route Handling:                                                                   │
 │   ├── /health              → 200 "healthy" (no proxy)                               │
 │   ├── /api/health          → FastAPI health check                                   │
 │   ├── /api/auth/login      → FastAPI + strict rate limit (5r/m)                     │
@@ -126,7 +126,7 @@ The RPi Generator Control system is a distributed two-device architecture for au
 │   ├── /ws                  → FastAPI WebSocket (24h timeout)                        │
 │   ├── /portainer/*         → Portainer :9000 (rewrite path)                         │
 │   └── /*                   → FastAPI (Vue.js static files)                          │
-│                                                                                      │
+│                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
                                          │
                     ┌────────────────────┼────────────────────┐
@@ -145,41 +145,41 @@ The heartbeat system ensures reliable communication between GenMaster and GenSla
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                              HEARTBEAT SYSTEM                                        │
+│                              HEARTBEAT SYSTEM                                       │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│  GenMaster                                              GenSlave                     │
-│  ─────────                                              ────────                     │
-│                                                                                      │
+│                                                                                     │
+│  GenMaster                                              GenSlave                    │
+│  ─────────                                              ────────                    │
+│                                                                                     │
 │  ┌─────────────────────┐                    ┌─────────────────────┐                 │
 │  │   HeartbeatService  │                    │   HeartbeatReceiver │                 │
 │  │   (Background Task) │                    │   (FastAPI Endpoint)│                 │
 │  └──────────┬──────────┘                    └──────────┬──────────┘                 │
-│             │                                          │                             │
-│             │  Every 5 seconds (configurable)          │                             │
-│             │                                          │                             │
-│             │   POST /api/heartbeat                    │                             │
-│             │   ┌─────────────────────────┐            │                             │
-│             │   │ {                       │            │                             │
-│             ├──►│   "timestamp": 1234567, │───────────►│                             │
-│             │   │   "generator_running":  │            │                             │
-│             │   │     true/false,         │            │                             │
-│             │   │   "command": "start"    │            │                             │
-│             │   │     /"stop"/"none"      │            │                             │
-│             │   │ }                       │            │                             │
-│             │   └─────────────────────────┘            │                             │
-│             │                                          │                             │
-│             │   Response                               │                             │
-│             │   ┌─────────────────────────┐            │                             │
-│             │   │ {                       │            │                             │
-│             │◄──│   "relay_state": true,  │◄───────────┤                             │
-│             │   │   "uptime": 3600,       │            │                             │
-│             │   │   "failsafe_active":    │            │                             │
-│             │   │     false               │            │                             │
-│             │   │ }                       │            │                             │
-│             │   └─────────────────────────┘            │                             │
-│             │                                          │                             │
-│             ▼                                          ▼                             │
+│             │                                          │                            │
+│             │  Every 5 seconds (configurable)          │                            │
+│             │                                          │                            │
+│             │   POST /api/heartbeat                    │                            │
+│             │   ┌─────────────────────────┐            │                            │
+│             │   │ {                       │            │                            │
+│             ├──►│   "timestamp": 1234567, │───────────►│                            │
+│             │   │   "generator_running":  │            │                            │
+│             │   │     true/false,         │            │                            │
+│             │   │   "command": "start"    │            │                            │
+│             │   │     /"stop"/"none"      │            │                            │
+│             │   │ }                       │            │                            │
+│             │   └─────────────────────────┘            │                            │
+│             │                                          │                            │
+│             │   Response                               │                            │
+│             │   ┌─────────────────────────┐            │                            │
+│             │   │ {                       │            │                            │
+│             │◄──│   "relay_state": true,  │◄───────────┤                            │
+│             │   │   "uptime": 3600,       │            │                            │
+│             │   │   "failsafe_active":    │            │                            │
+│             │   │     false               │            │                            │
+│             │   │ }                       │            │                            │
+│             │   └─────────────────────────┘            │                            │
+│             │                                          │                            │
+│             ▼                                          ▼                            │
 │  ┌─────────────────────┐                    ┌─────────────────────┐                 │
 │  │   StateMachine      │                    │   FailsafeMonitor   │                 │
 │  │   Updates:          │                    │   Triggers if:      │                 │
@@ -188,35 +188,35 @@ The heartbeat system ensures reliable communication between GenMaster and GenSla
 │  │   - missed_count    │                    │   - Stops generator │                 │
 │  └─────────────────────┘                    │   - Sends webhook   │                 │
 │                                             └─────────────────────┘                 │
-│                                                                                      │
+│                                                                                     │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                              FAILURE HANDLING                                        │
+│                              FAILURE HANDLING                                       │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│  GenMaster Side:                                                                     │
+│                                                                                     │
+│  GenMaster Side:                                                                    │
 │  ┌──────────────────────────────────────────────────────────────┐                   │
 │  │  missed_heartbeat_count >= heartbeat_failure_threshold (3)   │                   │
-│  │         │                                                     │                   │
-│  │         ▼                                                     │                   │
+│  │         │                                                    │                   │
+│  │         ▼                                                    │                   │
 │  │  slave_connection_status = "disconnected"                    │                   │
-│  │         │                                                     │                   │
-│  │         ▼                                                     │                   │
+│  │         │                                                    │                   │
+│  │         ▼                                                    │                   │
 │  │  - Log COMMUNICATION_LOST event                              │                   │
 │  │  - Send webhook: communication.lost                          │                   │
 │  │  - Block new generator starts                                │                   │
 │  └──────────────────────────────────────────────────────────────┘                   │
-│                                                                                      │
+│                                                                                     │
 │  GenSlave Side (Independent Failsafe):                                              │
 │  ┌──────────────────────────────────────────────────────────────┐                   │
 │  │  No heartbeat received for > failsafe_timeout (30s)          │                   │
-│  │         │                                                     │                   │
-│  │         ▼                                                     │                   │
+│  │         │                                                    │                   │
+│  │         ▼                                                    │                   │
 │  │  - Stop generator (relay OFF)                                │                   │
 │  │  - Log locally                                               │                   │
 │  │  - Attempt webhook to n8n (backup notification)              │                   │
 │  │  - Continue monitoring for heartbeat restoration             │                   │
 │  └──────────────────────────────────────────────────────────────┘                   │
-│                                                                                      │
+│                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -228,24 +228,24 @@ The StateMachine class (`state_machine.py`) is the central controller for genera
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                              STATE MACHINE DIAGRAM                                   │
+│                              STATE MACHINE DIAGRAM                                  │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
+│                                                                                     │
 │                              ┌─────────────────┐                                    │
 │                              │      IDLE       │                                    │
-│                              │ generator_running│                                    │
+│                              │generator_running│                                    │
 │                              │   = false       │                                    │
 │                              └────────┬────────┘                                    │
-│                                       │                                              │
+│                                       │                                             │
 │         ┌─────────────────────────────┼─────────────────────────────┐               │
 │         │                             │                             │               │
 │         ▼                             ▼                             ▼               │
-│  ┌─────────────┐             ┌─────────────┐             ┌─────────────┐           │
-│  │   VICTRON   │             │   MANUAL    │             │  SCHEDULED  │           │
-│  │   TRIGGER   │             │   START     │             │    START    │           │
-│  │             │             │             │             │             │           │
-│  │ GPIO 17 HIGH│             │ API request │             │ Cron trigger│           │
-│  └──────┬──────┘             └──────┬──────┘             └──────┬──────┘           │
+│  ┌─────────────┐             ┌─────────────┐             ┌─────────────┐            │
+│  │   VICTRON   │             │   MANUAL    │             │  SCHEDULED  │            │
+│  │   TRIGGER   │             │   START     │             │    START    │            │
+│  │             │             │             │             │             │            │
+│  │ GPIO 17 HIGH│             │ API request │             │ Cron trigger│            │
+│  └──────┬──────┘             └──────┬──────┘             └──────┬──────┘            │
 │         │                           │                           │                   │
 │         └───────────────────────────┼───────────────────────────┘                   │
 │                                     │                                               │
@@ -257,7 +257,7 @@ The StateMachine class (`state_machine.py`) is the central controller for genera
 │                    │  - !override(force_stop)        │                              │
 │                    │  - slave_connected              │                              │
 │                    └─────────────┬───────────────────┘                              │
-│                                  │                                                   │
+│                                  │                                                  │
 │                         ┌────────┴────────┐                                         │
 │                         │                 │                                         │
 │                    [PASS]            [FAIL]                                         │
@@ -265,7 +265,7 @@ The StateMachine class (`state_machine.py`) is the central controller for genera
 │                         ▼                 ▼                                         │
 │              ┌─────────────────┐  ┌─────────────────┐                               │
 │              │    STARTING     │  │     ERROR       │                               │
-│              │                 │  │  Raise ValueError│                               │
+│              │                 │  │  Raise ValueError│                              │
 │              │ 1. Create Run   │  └─────────────────┘                               │
 │              │ 2. Update State │                                                    │
 │              │ 3. Send command │                                                    │
@@ -273,32 +273,32 @@ The StateMachine class (`state_machine.py`) is the central controller for genera
 │              │ 4. Log event    │                                                    │
 │              │ 5. Send webhook │                                                    │
 │              └────────┬────────┘                                                    │
-│                       │                                                              │
-│                       ▼                                                              │
+│                       │                                                             │
+│                       ▼                                                             │
 │              ┌─────────────────┐                                                    │
 │              │     RUNNING     │                                                    │
-│              │ generator_running│                                                    │
+│              │ generator_running│                                                   │
 │              │   = true        │                                                    │
 │              │ run_trigger =   │                                                    │
 │              │   victron/manual│                                                    │
 │              │   /scheduled    │                                                    │
 │              └────────┬────────┘                                                    │
-│                       │                                                              │
+│                       │                                                             │
 │         ┌─────────────┼─────────────┬─────────────┬─────────────┐                   │
 │         │             │             │             │             │                   │
 │         ▼             ▼             ▼             ▼             ▼                   │
-│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐            │
-│  │  VICTRON  │ │  MANUAL   │ │ SCHEDULED │ │ COMM_LOSS │ │ OVERRIDE  │            │
-│  │   STOP    │ │   STOP    │ │    END    │ │  FAILSAFE │ │ force_stop│            │
-│  │           │ │           │ │           │ │           │ │           │            │
-│  │GPIO 17 LOW│ │API request│ │Duration   │ │Heartbeat  │ │User toggle│            │
-│  │(if victron│ │           │ │expired    │ │timeout    │ │           │            │
-│  │ triggered)│ │           │ │           │ │           │ │           │            │
-│  └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ └─────┬─────┘            │
+│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐              │
+│  │  VICTRON  │ │  MANUAL   │ │ SCHEDULED │ │ COMM_LOSS │ │ OVERRIDE  │              │
+│  │   STOP    │ │   STOP    │ │    END    │ │  FAILSAFE │ │ force_stop│              │
+│  │           │ │           │ │           │ │           │ │           │              │
+│  │GPIO 17 LOW│ │API request│ │Duration   │ │Heartbeat  │ │User toggle│              │
+│  │(if victron│ │           │ │expired    │ │timeout    │ │           │              │
+│  │ triggered)│ │           │ │           │ │           │ │           │              │
+│  └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ └─────┬─────┘              │
 │        │             │             │             │             │                    │
 │        └─────────────┴─────────────┴─────────────┴─────────────┘                    │
-│                                    │                                                 │
-│                                    ▼                                                 │
+│                                    │                                                │
+│                                    ▼                                                │
 │                       ┌─────────────────────┐                                       │
 │                       │      STOPPING       │                                       │
 │                       │                     │                                       │
@@ -309,13 +309,13 @@ The StateMachine class (`state_machine.py`) is the central controller for genera
 │                       │ 4. Log event        │                                       │
 │                       │ 5. Send webhook     │                                       │
 │                       └──────────┬──────────┘                                       │
-│                                  │                                                   │
-│                                  ▼                                                   │
+│                                  │                                                  │
+│                                  ▼                                                  │
 │                       ┌─────────────────┐                                           │
 │                       │      IDLE       │                                           │
 │                       │ (back to start) │                                           │
 │                       └─────────────────┘                                           │
-│                                                                                      │
+│                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -327,10 +327,10 @@ The webhook system sends notifications to external services (like n8n) for vario
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                              WEBHOOK EVENT TYPES                                     │
+│                              WEBHOOK EVENT TYPES                                    │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│  Generator Events:                                                                   │
+│                                                                                     │
+│  Generator Events:                                                                  │
 │  ├── generator.started.victron    - Started by Victron signal                       │
 │  ├── generator.started.manual     - Started manually via UI/API                     │
 │  ├── generator.started.scheduled  - Started by schedule                             │
@@ -340,43 +340,43 @@ The webhook system sends notifications to external services (like n8n) for vario
 │  ├── generator.stopped.override   - Stopped by force_stop override                  │
 │  ├── generator.stopped.comm_loss  - Stopped by failsafe                             │
 │  └── generator.stopped.error      - Stopped due to error                            │
-│                                                                                      │
-│  Communication Events:                                                               │
+│                                                                                     │
+│  Communication Events:                                                              │
 │  ├── communication.lost           - GenSlave connection lost                        │
 │  └── communication.restored       - GenSlave connection restored                    │
-│                                                                                      │
-│  Override Events:                                                                    │
+│                                                                                     │
+│  Override Events:                                                                   │
 │  ├── override.enabled             - Manual override activated                       │
 │  └── override.disabled            - Manual override deactivated                     │
-│                                                                                      │
-│  System Events:                                                                      │
+│                                                                                     │
+│  System Events:                                                                     │
 │  ├── system.startup               - GenMaster started                               │
 │  └── system.error                 - Critical system error                           │
-│                                                                                      │
+│                                                                                     │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                              WEBHOOK DELIVERY                                        │
+│                              WEBHOOK DELIVERY                                       │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│  ┌────────────────────┐      POST Request       ┌────────────────────┐             │
-│  │    StateMachine    │ ───────────────────────►│     n8n Webhook    │             │
-│  │  await _send_webhook│                         │  http://n8n:5678/  │             │
-│  │    (event, data)   │                         │  webhook/generator │             │
-│  └────────────────────┘                         └────────────────────┘             │
-│                                                                                      │
-│  Payload Structure:                                                                  │
-│  {                                                                                   │
+│                                                                                     │
+│  ┌────────────────────┐      POST Request       ┌────────────────────┐              │
+│  │    StateMachine    │ ───────────────────────►│     n8n Webhook    │              │
+│  │ await _send_webhook│                         │  http://n8n:5678/  │              │
+│  │    (event, data)   │                         │  webhook/generator │              │
+│  └────────────────────┘                         └────────────────────┘              │
+│                                                                                     │
+│  Payload Structure:                                                                 │
+│  {                                                                                  │
 │    "event": "generator.started.victron",                                            │
-│    "timestamp": 1736985600,                                                          │
-│    "data": {                                                                         │
-│      "run_id": 42,                                                                   │
-│      "trigger": "victron"                                                            │
-│    },                                                                                │
-│    "source": "genmaster",                                                            │
+│    "timestamp": 1736985600,                                                         │
+│    "data": {                                                                        │
+│      "run_id": 42,                                                                  │
+│      "trigger": "victron"                                                           │
+│    },                                                                               │
+│    "source": "genmaster",                                                           │
 │    "secret": "webhook-secret"  // For verification                                  │
-│  }                                                                                   │
-│                                                                                      │
+│  }                                                                                  │
+│                                                                                     │
 │  Settings UI allows toggling individual event types on/off.                         │
-│                                                                                      │
+│                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -388,12 +388,12 @@ PostgreSQL 16 with asyncpg driver for async operations.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                              DATABASE SCHEMA                                         │
+│                              DATABASE SCHEMA                                        │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
+│                                                                                     │
 │  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │                              system_state                                      │  │
-│  │                          (Singleton - 1 row)                                   │  │
+│  │                              system_state                                     │  │
+│  │                          (Singleton - 1 row)                                  │  │
 │  ├───────────────────────────────────────────────────────────────────────────────┤  │
 │  │  id                         SERIAL PRIMARY KEY                                │  │
 │  │  generator_running          BOOLEAN DEFAULT false                             │  │
@@ -410,10 +410,10 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  │  last_heartbeat_received    INTEGER (unix timestamp)                          │  │
 │  │  missed_heartbeat_count     INTEGER DEFAULT 0                                 │  │
 │  └───────────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                      │
+│                                                                                     │
 │  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │                              config                                            │  │
-│  │                          (Singleton - 1 row)                                   │  │
+│  │                              config                                           │  │
+│  │                          (Singleton - 1 row)                                  │  │
 │  ├───────────────────────────────────────────────────────────────────────────────┤  │
 │  │  id                         SERIAL PRIMARY KEY                                │  │
 │  │  heartbeat_interval_seconds INTEGER DEFAULT 5                                 │  │
@@ -426,9 +426,9 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  │  slave_api_url              VARCHAR(255) DEFAULT 'http://genslave:8001'       │  │
 │  │  slave_api_secret           VARCHAR(255)                                      │  │
 │  └───────────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                      │
+│                                                                                     │
 │  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │                              generator_runs                                    │  │
+│  │                              generator_runs                                   │  │
 │  ├───────────────────────────────────────────────────────────────────────────────┤  │
 │  │  id                         SERIAL PRIMARY KEY                                │  │
 │  │  start_time                 INTEGER NOT NULL (unix timestamp)                 │  │
@@ -439,9 +439,9 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  │  scheduled_run_id           INTEGER → scheduled_runs.id                       │  │
 │  │  notes                      TEXT                                              │  │
 │  └───────────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                      │
+│                                                                                     │
 │  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │                              scheduled_runs                                    │  │
+│  │                              scheduled_runs                                   │  │
 │  ├───────────────────────────────────────────────────────────────────────────────┤  │
 │  │  id                         SERIAL PRIMARY KEY                                │  │
 │  │  name                       VARCHAR(100)                                      │  │
@@ -451,9 +451,9 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  │  last_run                   INTEGER (unix timestamp)                          │  │
 │  │  next_run                   INTEGER (unix timestamp)                          │  │
 │  └───────────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                      │
+│                                                                                     │
 │  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │                              event_log                                         │  │
+│  │                              event_log                                        │  │
 │  ├───────────────────────────────────────────────────────────────────────────────┤  │
 │  │  id                         SERIAL PRIMARY KEY                                │  │
 │  │  timestamp                  INTEGER NOT NULL (unix timestamp)                 │  │
@@ -462,9 +462,9 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  │  data                       JSONB                                             │  │
 │  │  INDEX on (timestamp, event_type)                                             │  │
 │  └───────────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                      │
+│                                                                                     │
 │  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │                              users                                             │  │
+│  │                              users                                            │  │
 │  ├───────────────────────────────────────────────────────────────────────────────┤  │
 │  │  id                         SERIAL PRIMARY KEY                                │  │
 │  │  username                   VARCHAR(50) UNIQUE NOT NULL                       │  │
@@ -473,7 +473,7 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  │  created_at                 INTEGER (unix timestamp)                          │  │
 │  │  last_login                 INTEGER (unix timestamp)                          │  │
 │  └───────────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                      │
+│                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -483,72 +483,72 @@ PostgreSQL 16 with asyncpg driver for async operations.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                           INSTALLATION FLOW                                          │
+│                           INSTALLATION FLOW                                         │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│  Option 1: Quick Install (curl)                                                      │
-│  ─────────────────────────────                                                       │
-│                                                                                      │
+│                                                                                     │
+│  Option 1: Quick Install (curl)                                                     │
+│  ─────────────────────────────                                                      │
+│                                                                                     │
 │  curl -fsSL https://raw.githubusercontent.com/.../install.sh | sudo bash            │
-│                                                                                      │
-│         │                                                                            │
-│         ▼                                                                            │
+│                                                                                     │
+│         │                                                                           │
+│         ▼                                                                           │
 │  ┌─────────────────────────────────────────────────────────────────────────┐        │
-│  │                          install.sh                                      │        │
-│  │  1. Check root permissions                                               │        │
-│  │  2. Detect OS (Debian/Ubuntu/Raspbian)                                   │        │
-│  │  3. Check architecture (arm64/armhf/x86_64)                              │        │
-│  │  4. Verify internet connectivity                                         │        │
-│  │  5. Install git, curl, wget, ca-certificates                             │        │
-│  │  6. Clone repository to /tmp/genmaster-install                           │        │
-│  │  7. Execute setup.sh                                                     │        │
-│  │  8. Cleanup temp files                                                   │        │
+│  │                          install.sh                                      │       │
+│  │  1. Check root permissions                                               │       │
+│  │  2. Detect OS (Debian/Ubuntu/Raspbian)                                   │       │
+│  │  3. Check architecture (arm64/armhf/x86_64)                              │       │
+│  │  4. Verify internet connectivity                                         │       │
+│  │  5. Install git, curl, wget, ca-certificates                             │       │
+│  │  6. Clone repository to /tmp/genmaster-install                           │       │
+│  │  7. Execute setup.sh                                                     │       │
+│  │  8. Cleanup temp files                                                   │       │
 │  └─────────────────────────────────────────────────────────────────────────┘        │
-│                                                                                      │
-│         │                                                                            │
-│         ▼                                                                            │
+│                                                                                     │
+│         │                                                                           │
+│         ▼                                                                           │
 │  ┌─────────────────────────────────────────────────────────────────────────┐        │
-│  │                          setup.sh                                        │        │
-│  │                                                                          │        │
-│  │  Phase 1: System Preparation                                             │        │
-│  │  ├── Detect if running in container (LXC/Docker)                         │        │
-│  │  ├── Install base packages (docker.io, docker-compose, etc.)             │        │
-│  │  ├── Check memory (minimum 4GB for Pi 5)                                 │        │
-│  │  └── Verify all required ports available                                 │        │
-│  │                                                                          │        │
-│  │  Phase 2: Network Diagnostics                                            │        │
-│  │  ├── check_dns() - Verify DNS resolution                                 │        │
-│  │  ├── get_local_ips() - Enumerate network interfaces                      │        │
-│  │  ├── Test connectivity to required endpoints                             │        │
-│  │  └── Detect Tailscale IP range (100.64.0.0/10)                           │        │
-│  │                                                                          │        │
-│  │  Phase 3: Interactive Configuration                                      │        │
-│  │  ├── ask_tailscale() - Configure Tailscale (Y/n)                         │        │
-│  │  ├── ask_cloudflare() - Configure Cloudflare Tunnel (y/N)                │        │
-│  │  ├── ask_letsencrypt() - Configure Let's Encrypt (y/N)                   │        │
-│  │  ├── ask_portainer() - Configure Portainer (Y/n)                         │        │
-│  │  ├── Configure GenSlave connection URL                                   │        │
-│  │  └── Configure webhook settings                                          │        │
-│  │                                                                          │        │
-│  │  Phase 4: File Generation                                                │        │
-│  │  ├── Generate .env from template                                         │        │
-│  │  ├── Generate docker-compose.override.yml if needed                      │        │
-│  │  └── Copy application to /opt/genmaster                                  │        │
-│  │                                                                          │        │
-│  │  Phase 5: Docker Setup                                                   │        │
-│  │  ├── Pull required images                                                │        │
-│  │  ├── Build genmaster image                                               │        │
-│  │  ├── Start containers with selected profiles                             │        │
-│  │  │   docker compose --profile tailscale --profile portainer up -d        │        │
-│  │  └── Wait for health checks                                              │        │
-│  │                                                                          │        │
-│  │  Phase 6: Post-Install                                                   │        │
-│  │  ├── Run database migrations                                             │        │
-│  │  ├── Create admin user if needed                                         │        │
-│  │  ├── Display access URLs                                                 │        │
-│  │  └── Show next steps                                                     │        │
+│  │                          setup.sh                                       │        │
+│  │                                                                         │        │
+│  │  Phase 1: System Preparation                                            │        │
+│  │  ├── Detect if running in container (LXC/Docker)                        │        │
+│  │  ├── Install base packages (docker.io, docker-compose, etc.)            │        │
+│  │  ├── Check memory (minimum 4GB for Pi 5)                                │        │
+│  │  └── Verify all required ports available                                │        │
+│  │                                                                         │        │
+│  │  Phase 2: Network Diagnostics                                           │        │
+│  │  ├── check_dns() - Verify DNS resolution                                │        │
+│  │  ├── get_local_ips() - Enumerate network interfaces                     │        │
+│  │  ├── Test connectivity to required endpoints                            │        │
+│  │  └── Detect Tailscale IP range (100.64.0.0/10)                          │        │
+│  │                                                                         │        │
+│  │  Phase 3: Interactive Configuration                                     │        │
+│  │  ├── ask_tailscale() - Configure Tailscale (Y/n)                        │        │
+│  │  ├── ask_cloudflare() - Configure Cloudflare Tunnel (y/N)               │        │
+│  │  ├── ask_letsencrypt() - Configure Let's Encrypt (y/N)                  │        │
+│  │  ├── ask_portainer() - Configure Portainer (Y/n)                        │        │
+│  │  ├── Configure GenSlave connection URL                                  │        │
+│  │  └── Configure webhook settings                                         │        │
+│  │                                                                         │        │
+│  │  Phase 4: File Generation                                               │        │
+│  │  ├── Generate .env from template                                        │        │
+│  │  ├── Generate docker-compose.override.yml if needed                     │        │
+│  │  └── Copy application to /opt/genmaster                                 │        │
+│  │                                                                         │        │
+│  │  Phase 5: Docker Setup                                                  │        │
+│  │  ├── Pull required images                                               │        │
+│  │  ├── Build genmaster image                                              │        │
+│  │  ├── Start containers with selected profiles                            │        │
+│  │  │   docker compose --profile tailscale --profile portainer up -d       │        │
+│  │  └── Wait for health checks                                             │        │
+│  │                                                                         │        │
+│  │  Phase 6: Post-Install                                                  │        │
+│  │  ├── Run database migrations                                            │        │
+│  │  ├── Create admin user if needed                                        │        │
+│  │  ├── Display access URLs                                                │        │
+│  │  └── Show next steps                                                    │        │
 │  └─────────────────────────────────────────────────────────────────────────┘        │
-│                                                                                      │
+│                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -558,26 +558,26 @@ PostgreSQL 16 with asyncpg driver for async operations.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                         MEMORY ALLOCATION                                            │
+│                         MEMORY ALLOCATION                                           │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│  Component                    Memory Usage    Notes                                  │
+│                                                                                     │
+│  Component                    Memory Usage    Notes                                 │
 │  ─────────────────────────────────────────────────────────────────────────────────  │
-│  Raspberry Pi OS              ~200 MB         Base system                            │
-│  Docker Engine                ~100 MB         Container runtime                      │
-│  PostgreSQL 16                ~100-200 MB     Database (shared_buffers: 128MB)       │
-│  Redis                        ~50 MB          Caching layer                          │
-│  Nginx                        ~20 MB          Reverse proxy                          │
-│  FastAPI + Uvicorn            ~100-150 MB     Python application                     │
-│  Vue.js Static                ~10 MB          Served by FastAPI                      │
-│  Tailscale (optional)         ~50-75 MB       VPN daemon                             │
-│  Cloudflared (optional)       ~75-100 MB      Tunnel daemon                          │
-│  Portainer (optional)         ~100-150 MB     Docker management UI                   │
+│  Raspberry Pi OS              ~200 MB         Base system                           │
+│  Docker Engine                ~100 MB         Container runtime                     │
+│  PostgreSQL 16                ~100-200 MB     Database (shared_buffers: 128MB)      │
+│  Redis                        ~50 MB          Caching layer                         │
+│  Nginx                        ~20 MB          Reverse proxy                         │
+│  FastAPI + Uvicorn            ~100-150 MB     Python application                    │
+│  Vue.js Static                ~10 MB          Served by FastAPI                     │
+│  Tailscale (optional)         ~50-75 MB       VPN daemon                            │
+│  Cloudflared (optional)       ~75-100 MB      Tunnel daemon                         │
+│  Portainer (optional)         ~100-150 MB     Docker management UI                  │
 │  ─────────────────────────────────────────────────────────────────────────────────  │
-│  Base Stack Total             ~580 MB                                                │
-│  With All Options             ~900 MB                                                │
-│  Available for System         ~7.1 GB         Plenty of headroom                     │
-│                                                                                      │
+│  Base Stack Total             ~580 MB                                               │
+│  With All Options             ~900 MB                                               │
+│  Available for System         ~7.1 GB         Plenty of headroom                    │
+│                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
