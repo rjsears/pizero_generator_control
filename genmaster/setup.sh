@@ -76,6 +76,13 @@ AUTOGEN_DB_PASSWORD=false
 AUTOGEN_SECRET_KEY=false
 AUTOGEN_SLAVE_SECRET=false
 
+# DNS Provider and SSL Configuration
+DNS_PROVIDER_NAME=""
+DNS_CERTBOT_IMAGE=""
+DNS_CREDENTIALS_FILE=""
+DNS_CERTBOT_FLAGS=""
+LETSENCRYPT_EMAIL=""
+
 # Internal IP ranges that get full access (space-separated CIDR blocks)
 DEFAULT_INTERNAL_IP_RANGES="127.0.0.1/32 100.64.0.0/10 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16"
 INTERNAL_IP_RANGES="${INTERNAL_IP_RANGES:-$DEFAULT_INTERNAL_IP_RANGES}"
@@ -1501,6 +1508,223 @@ configure_webhooks() {
     fi
 }
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# DNS PROVIDER CONFIGURATION (for Let's Encrypt SSL)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+configure_dns_provider() {
+    print_section "DNS Provider Configuration"
+
+    if [ "$PRECONFIG_MODE" = "true" ]; then
+        print_info "Using pre-configured DNS provider: $DNS_PROVIDER_NAME"
+        return
+    fi
+
+    echo -e "  ${GRAY}Let's Encrypt uses DNS validation to issue SSL certificates.${NC}"
+    echo -e "  ${GRAY}This requires API access to your DNS provider.${NC}"
+    echo ""
+
+    echo -e "  ${WHITE}Select your DNS provider:${NC}"
+    echo -e "    ${CYAN}1)${NC} Cloudflare"
+    echo -e "    ${CYAN}2)${NC} AWS Route 53"
+    echo -e "    ${CYAN}3)${NC} Google Cloud DNS"
+    echo -e "    ${CYAN}4)${NC} DigitalOcean"
+    echo -e "    ${CYAN}5)${NC} Other (manual configuration)"
+    echo ""
+
+    local dns_choice=""
+    while [[ ! "$dns_choice" =~ ^[1-5]$ ]]; do
+        echo -ne "${WHITE}  Enter your choice [1-5]${NC}: "
+        read dns_choice
+    done
+
+    case $dns_choice in
+        1) configure_cloudflare_dns ;;
+        2) configure_route53 ;;
+        3) configure_google_dns ;;
+        4) configure_digitalocean ;;
+        5) configure_other_dns ;;
+    esac
+}
+
+configure_cloudflare_dns() {
+    DNS_PROVIDER_NAME="cloudflare"
+    DNS_CERTBOT_IMAGE="certbot/dns-cloudflare:latest"
+    DNS_CREDENTIALS_FILE="cloudflare.ini"
+
+    print_subsection
+    echo -e "${WHITE}  Cloudflare API Configuration${NC}"
+    echo ""
+    echo -e "  ${GRAY}You need a Cloudflare API token with Zone:DNS:Edit permission.${NC}"
+    echo -e "  ${GRAY}Create one at: https://dash.cloudflare.com/profile/api-tokens${NC}"
+    echo ""
+
+    echo -ne "${WHITE}  Enter your Cloudflare API token${NC}: "
+    read_masked_token
+    CF_API_TOKEN="$MASKED_INPUT"
+
+    if [ -z "$CF_API_TOKEN" ]; then
+        print_error "API token is required for Cloudflare"
+        exit 1
+    fi
+
+    print_success "Cloudflare credentials saved"
+
+    mkdir -p "${SCRIPT_DIR}/certbot"
+    cat > "${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}" << EOF
+dns_cloudflare_api_token = ${CF_API_TOKEN}
+EOF
+
+    chmod 600 "${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}"
+
+    DNS_CERTBOT_FLAGS="--dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/${DNS_CREDENTIALS_FILE} --dns-cloudflare-propagation-seconds 60"
+}
+
+configure_route53() {
+    DNS_PROVIDER_NAME="route53"
+    DNS_CERTBOT_IMAGE="certbot/dns-route53:latest"
+    DNS_CREDENTIALS_FILE="route53.ini"
+
+    print_subsection
+    echo -e "${WHITE}  AWS Route 53 Configuration${NC}"
+    echo ""
+    echo -e "  ${GRAY}You need AWS credentials with Route 53 permissions.${NC}"
+    echo ""
+
+    echo -ne "${WHITE}  Enter your AWS Access Key ID${NC}: "
+    read_masked_token
+    AWS_ACCESS_KEY_ID="$MASKED_INPUT"
+
+    echo -ne "${WHITE}  Enter your AWS Secret Access Key${NC}: "
+    read_masked_token
+    AWS_SECRET_ACCESS_KEY="$MASKED_INPUT"
+
+    if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+        print_error "Both AWS credentials are required"
+        exit 1
+    fi
+
+    print_success "AWS credentials saved"
+
+    mkdir -p "${SCRIPT_DIR}/certbot"
+    cat > "${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}" << EOF
+[default]
+aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+EOF
+
+    chmod 600 "${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}"
+
+    DNS_CERTBOT_FLAGS="--dns-route53"
+}
+
+configure_google_dns() {
+    DNS_PROVIDER_NAME="google"
+    DNS_CERTBOT_IMAGE="certbot/dns-google:latest"
+    DNS_CREDENTIALS_FILE="google.json"
+
+    print_subsection
+    echo -e "${WHITE}  Google Cloud DNS Configuration${NC}"
+    echo ""
+    echo -e "  ${GRAY}You need a service account JSON file with DNS permissions.${NC}"
+    echo ""
+
+    echo -ne "${WHITE}  Enter the path to your service account JSON file${NC}: "
+    read GOOGLE_JSON_PATH
+
+    if [ ! -f "$GOOGLE_JSON_PATH" ]; then
+        print_error "File not found: $GOOGLE_JSON_PATH"
+        exit 1
+    fi
+
+    mkdir -p "${SCRIPT_DIR}/certbot"
+    cp "$GOOGLE_JSON_PATH" "${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}"
+    chmod 600 "${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}"
+    print_success "Google credentials saved"
+
+    DNS_CERTBOT_FLAGS="--dns-google --dns-google-credentials /etc/letsencrypt/${DNS_CREDENTIALS_FILE} --dns-google-propagation-seconds 120"
+}
+
+configure_digitalocean() {
+    DNS_PROVIDER_NAME="digitalocean"
+    DNS_CERTBOT_IMAGE="certbot/dns-digitalocean:latest"
+    DNS_CREDENTIALS_FILE="digitalocean.ini"
+
+    print_subsection
+    echo -e "${WHITE}  DigitalOcean DNS Configuration${NC}"
+    echo ""
+    echo -e "  ${GRAY}You need a DigitalOcean API token with DNS permissions.${NC}"
+    echo ""
+
+    echo -ne "${WHITE}  Enter your DigitalOcean API token${NC}: "
+    read_masked_token
+    DO_API_TOKEN="$MASKED_INPUT"
+
+    if [ -z "$DO_API_TOKEN" ]; then
+        print_error "API token is required"
+        exit 1
+    fi
+
+    print_success "DigitalOcean credentials saved"
+
+    mkdir -p "${SCRIPT_DIR}/certbot"
+    cat > "${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}" << EOF
+dns_digitalocean_token = ${DO_API_TOKEN}
+EOF
+
+    chmod 600 "${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}"
+
+    DNS_CERTBOT_FLAGS="--dns-digitalocean --dns-digitalocean-credentials /etc/letsencrypt/${DNS_CREDENTIALS_FILE} --dns-digitalocean-propagation-seconds 60"
+}
+
+configure_other_dns() {
+    DNS_PROVIDER_NAME="manual"
+    DNS_CERTBOT_IMAGE="certbot/certbot:latest"
+    DNS_CREDENTIALS_FILE=""
+    DNS_CERTBOT_FLAGS="--manual --preferred-challenges dns"
+
+    print_warning "Manual DNS configuration selected"
+    echo -e "  ${GRAY}You will need to manually add DNS TXT records when prompted.${NC}"
+    echo -e "  ${GRAY}This requires interactive certificate generation.${NC}"
+}
+
+configure_email() {
+    print_section "Let's Encrypt Email Configuration"
+
+    if [ "$PRECONFIG_MODE" = "true" ] && [ -n "$LETSENCRYPT_EMAIL" ]; then
+        print_info "Using pre-configured email: $LETSENCRYPT_EMAIL"
+        return
+    fi
+
+    echo ""
+    echo -e "  ${GRAY}Let's Encrypt requires a valid email for certificate expiration notices.${NC}"
+    echo ""
+
+    while true; do
+        echo -ne "${WHITE}  Email address for Let's Encrypt${NC}: "
+        read email_input
+
+        if [ -z "$email_input" ]; then
+            print_error "Email address is required"
+            continue
+        fi
+
+        # Basic email format validation
+        if [[ ! "$email_input" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            print_error "Invalid email format. Please enter a valid email address."
+            continue
+        fi
+
+        LETSENCRYPT_EMAIL="$email_input"
+        print_success "Email set to: $LETSENCRYPT_EMAIL"
+        break
+    done
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OPTIONAL SERVICES CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
 configure_optional_services() {
     print_section "Optional Services"
 
@@ -1697,6 +1921,18 @@ HEARTBEAT_FAILURE_THRESHOLD=3
 
 # GPIO Configuration
 GPIO_PIN_VICTRON=17
+
+# SSL/Let's Encrypt Configuration
+DNS_PROVIDER=${DNS_PROVIDER_NAME}
+DNS_CERTBOT_IMAGE=${DNS_CERTBOT_IMAGE}
+DNS_CREDENTIALS_FILE=${DNS_CREDENTIALS_FILE}
+LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
+
+# Container Names
+POSTGRES_CONTAINER=${POSTGRES_CONTAINER:-genmaster_db}
+GENMASTER_CONTAINER=${GENMASTER_CONTAINER:-genmaster}
+NGINX_CONTAINER=${NGINX_CONTAINER:-genmaster_nginx}
+REDIS_CONTAINER=${REDIS_CONTAINER:-genmaster_redis}
 EOF
 
     # Add Cloudflare Tunnel if enabled
@@ -1747,6 +1983,8 @@ volumes:
   genmaster_logs:
   genmaster_data:
   nginx_logs:
+  letsencrypt:
+  certbot_data:
   tailscale_state:
   portainer_data:
 
@@ -1838,15 +2076,31 @@ services:
     restart: unless-stopped
     ports:
       - "443:443"
+      - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_data:/var/www/certbot:ro
       - nginx_logs:/var/log/nginx
     networks:
       - genmaster-internal
       - genmaster-external
     depends_on:
       - genmaster
+
+  # ===========================================================================
+  # Certbot (Let's Encrypt SSL)
+  # ===========================================================================
+  certbot:
+    image: ${DNS_CERTBOT_IMAGE:-certbot/certbot:latest}
+    container_name: genmaster_certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_data:/var/www/certbot
+      - ./certbot:/etc/letsencrypt/credentials:ro
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --deploy-hook 'wget -q -O /dev/null http://nginx:80/reload || true' || true; sleep 12h & wait $${!}; done;"
+    networks:
+      - genmaster-internal
 EOF
 
     # Add Cloudflare Tunnel if enabled
@@ -2099,35 +2353,86 @@ deploy_stack() {
 }
 
 show_deployment_summary() {
-    print_header "Deployment Complete!"
+    print_header "Setup Complete!"
 
-    echo -e "  ${WHITE}${BOLD}Access GenMaster:${NC}"
-    echo -e "    URL: ${CYAN}https://${DOMAIN}${NC}"
-    [ "$INSTALL_TAILSCALE" = true ] && echo -e "    Tailscale: ${CYAN}https://${TAILSCALE_HOSTNAME}${NC}"
+    echo -e "  ${WHITE}Your GenMaster instance is now running!${NC}"
     echo ""
 
-    if [ "$AUTOGEN_DB_PASSWORD" = true ] || [ "$AUTOGEN_SLAVE_SECRET" = true ]; then
-        echo -e "  ${WHITE}${BOLD}Auto-Generated Credentials:${NC}"
-        echo -e "  ${YELLOW}⚠ Save these - they won't be shown again!${NC}"
-        echo ""
-        [ "$AUTOGEN_DB_PASSWORD" = true ] && echo -e "    Database Password: ${CYAN}$DB_PASSWORD${NC}"
-        [ "$AUTOGEN_SLAVE_SECRET" = true ] && echo -e "    GenSlave Secret: ${CYAN}$GENSLAVE_API_SECRET${NC}"
+    # Access URLs
+    echo -e "  ${WHITE}${BOLD}Access URLs:${NC}"
+    echo -e "    GenMaster:           ${CYAN}https://${DOMAIN}${NC}"
+    [ "$INSTALL_PORTAINER" = true ] && echo -e "    Portainer:           ${CYAN}https://${DOMAIN}/portainer/${NC}"
+    if [ "$INSTALL_TAILSCALE" = true ]; then
+        echo -e "    Tailscale:           ${CYAN}https://${TAILSCALE_HOSTNAME}.your-tailnet.ts.net${NC}"
+    fi
+    echo ""
+
+    # Database Credentials
+    echo -e "  ${WHITE}${BOLD}Database Credentials:${NC}"
+    echo -e "    Server:              ${CYAN}db${NC}"
+    echo -e "    Username:            ${CYAN}${DB_USER}${NC}"
+    echo -e "    Password:            ${CYAN}${DB_PASSWORD}${NC}"
+    echo -e "    Database:            ${CYAN}${DB_NAME}${NC}"
+    echo ""
+
+    # GenSlave Configuration
+    if [ "$GENSLAVE_ENABLED" = true ] && [ -n "$GENSLAVE_API_URL" ]; then
+        echo -e "  ${WHITE}${BOLD}GenSlave Configuration:${NC}"
+        echo -e "    API URL:             ${CYAN}${GENSLAVE_API_URL}${NC}"
+        [ "$AUTOGEN_SLAVE_SECRET" = true ] && echo -e "    API Secret:          ${CYAN}${GENSLAVE_API_SECRET}${NC}"
         echo ""
     fi
 
-    echo -e "  ${WHITE}${BOLD}Commands:${NC}"
-    echo -e "    Logs:    ${CYAN}docker compose logs -f${NC}"
-    echo -e "    Stop:    ${CYAN}docker compose down${NC}"
-    echo -e "    Restart: ${CYAN}docker compose restart${NC}"
+    # Network Access
+    echo -e "  ${WHITE}${BOLD}Network Access:${NC}"
+    [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ] && echo -e "    Cloudflare Tunnel:   ${GREEN}Active${NC}"
+    [ "$INSTALL_TAILSCALE" = true ] && echo -e "    Tailscale:           ${GREEN}Active${NC} (${TAILSCALE_HOSTNAME})"
     echo ""
 
+    # Tailscale Action Required
+    if [ "$INSTALL_TAILSCALE" = true ]; then
+        echo -e "  ${YELLOW}⚠ TAILSCALE ACTION REQUIRED:${NC}"
+        echo -e "    You must approve the advertised route in Tailscale admin:"
+        echo ""
+        echo -e "    1. Visit: ${CYAN}https://login.tailscale.com/admin/machines${NC}"
+        echo -e "    2. Find your ${WHITE}${TAILSCALE_HOSTNAME}${NC} node"
+        echo -e "    3. Click the node and approve the advertised route"
+        echo ""
+        echo -e "    ${GRAY}NOTE: GenMaster will NOT be accessible via Tailscale${NC}"
+        echo -e "    ${GRAY}      until this route has been approved!${NC}"
+        echo ""
+    fi
+
+    # Cloudflare Action Required
+    if [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ]; then
+        echo -e "  ${YELLOW}⚠ CLOUDFLARE ACTION REQUIRED:${NC}"
+        echo -e "    You must add a Public Hostname in Zero Trust:"
+        echo ""
+        echo -e "    1. Visit: ${CYAN}https://one.dash.cloudflare.com${NC}"
+        echo -e "    2. Networks > Tunnels > [Your Tunnel] > Configure > Public Hostname"
+        echo -e "    3. Add Hostname: ${WHITE}${DOMAIN}${NC}"
+        echo -e "    4. Service: HTTPS -> genmaster_nginx:443"
+        echo -e "    5. Settings: Enable No TLS Verify"
+        echo ""
+    fi
+
+    # GPIO Mode
     if [ "$MOCK_GPIO_MODE" = true ]; then
         echo -e "  ${YELLOW}ℹ Mock GPIO Mode Active${NC}"
+        echo -e "    Running in development/test mode (no physical GPIO)"
         echo -e "    Dev API available at /api/dev/*"
-        echo -e "    Test: ${CYAN}curl -X POST http://localhost:8000/api/dev/gpio/victron-signal -H 'Content-Type: application/json' -d '{\"active\": true}'${NC}"
+        echo ""
     else
         echo -e "  ${GREEN}✓ Real GPIO Mode (Raspberry Pi)${NC}"
+        echo ""
     fi
+
+    # Useful Commands
+    echo -e "  ${WHITE}${BOLD}Useful Commands:${NC}"
+    echo -e "    View logs:         ${CYAN}docker compose logs -f${NC}"
+    echo -e "    Stop services:     ${CYAN}docker compose down${NC}"
+    echo -e "    Start services:    ${CYAN}docker compose up -d${NC}"
+    echo -e "    Restart:           ${CYAN}docker compose restart${NC}"
     echo ""
 }
 
@@ -2405,13 +2710,15 @@ main() {
 
     if [ "$INSTALL_MODE" = "fresh" ]; then
         [ "$CURRENT_STEP" -lt 1 ] && { configure_domain; save_state "Domain" 1; }
-        [ "$CURRENT_STEP" -lt 2 ] && { configure_database; save_state "Database" 2; }
-        [ "$CURRENT_STEP" -lt 3 ] && { configure_containers; save_state "Containers" 3; }
-        [ "$CURRENT_STEP" -lt 4 ] && { configure_timezone; save_state "Timezone" 4; }
-        [ "$CURRENT_STEP" -lt 5 ] && { generate_secret_key; save_state "Secret Key" 5; }
-        [ "$CURRENT_STEP" -lt 6 ] && { configure_genslave; save_state "GenSlave" 6; }
-        [ "$CURRENT_STEP" -lt 7 ] && { configure_webhooks; save_state "Webhooks" 7; }
-        [ "$CURRENT_STEP" -lt 8 ] && { configure_optional_services; save_state "Services" 8; }
+        [ "$CURRENT_STEP" -lt 2 ] && { configure_dns_provider; save_state "DNS Provider" 2; }
+        [ "$CURRENT_STEP" -lt 3 ] && { configure_email; save_state "Email" 3; }
+        [ "$CURRENT_STEP" -lt 4 ] && { configure_database; save_state "Database" 4; }
+        [ "$CURRENT_STEP" -lt 5 ] && { configure_containers; save_state "Containers" 5; }
+        [ "$CURRENT_STEP" -lt 6 ] && { configure_timezone; save_state "Timezone" 6; }
+        [ "$CURRENT_STEP" -lt 7 ] && { generate_secret_key; save_state "Secret Key" 7; }
+        [ "$CURRENT_STEP" -lt 8 ] && { configure_genslave; save_state "GenSlave" 8; }
+        [ "$CURRENT_STEP" -lt 9 ] && { configure_webhooks; save_state "Webhooks" 9; }
+        [ "$CURRENT_STEP" -lt 10 ] && { configure_optional_services; save_state "Services" 10; }
 
         if ! show_configuration_summary; then
             print_error "Cancelled"
