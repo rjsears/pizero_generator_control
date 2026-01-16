@@ -280,6 +280,93 @@ load_state() {
 }
 
 # =============================================================================
+# Hardware Interface Check (I2C/SPI)
+# =============================================================================
+
+check_hardware_interfaces() {
+    local i2c_enabled=false
+    local spi_enabled=false
+    local needs_reboot=false
+
+    # Check if I2C is enabled
+    if grep -q "^dtparam=i2c_arm=on" /boot/config.txt 2>/dev/null || \
+       grep -q "^dtparam=i2c_arm=on" /boot/firmware/config.txt 2>/dev/null; then
+        i2c_enabled=true
+    fi
+
+    # Check if SPI is enabled
+    if grep -q "^dtparam=spi=on" /boot/config.txt 2>/dev/null || \
+       grep -q "^dtparam=spi=on" /boot/firmware/config.txt 2>/dev/null; then
+        spi_enabled=true
+    fi
+
+    # Check if devices exist (indicates reboot has happened after enabling)
+    local i2c_device_exists=false
+    local spi_device_exists=false
+    [ -e /dev/i2c-1 ] && i2c_device_exists=true
+    [ -e /dev/spidev0.0 ] && spi_device_exists=true
+
+    # Determine if there's a problem
+    if [ "$i2c_enabled" = false ] || [ "$spi_enabled" = false ]; then
+        needs_reboot=true
+    elif [ "$i2c_device_exists" = false ] || [ "$spi_device_exists" = false ]; then
+        needs_reboot=true
+    fi
+
+    if [ "$needs_reboot" = true ]; then
+        echo ""
+        echo -e "${RED}╔═══════════════════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║${NC}                    ${WHITE}${BOLD}⚠  HARDWARE CONFIGURATION REQUIRED  ⚠${NC}                   ${RED}║${NC}"
+        echo -e "${RED}╠═══════════════════════════════════════════════════════════════════════════════╣${NC}"
+        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
+        echo -e "${RED}║${NC}  ${WHITE}The Automation Hat Mini requires I2C and SPI interfaces to be enabled.${NC}      ${RED}║${NC}"
+        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
+        echo -e "${RED}║${NC}  ${YELLOW}Current Status:${NC}                                                              ${RED}║${NC}"
+        if [ "$i2c_enabled" = true ]; then
+            echo -e "${RED}║${NC}    I2C: ${GREEN}Enabled in config${NC}                                                    ${RED}║${NC}"
+        else
+            echo -e "${RED}║${NC}    I2C: ${RED}NOT ENABLED${NC}                                                          ${RED}║${NC}"
+        fi
+        if [ "$spi_enabled" = true ]; then
+            echo -e "${RED}║${NC}    SPI: ${GREEN}Enabled in config${NC}                                                    ${RED}║${NC}"
+        else
+            echo -e "${RED}║${NC}    SPI: ${RED}NOT ENABLED${NC}                                                          ${RED}║${NC}"
+        fi
+        if [ "$i2c_device_exists" = true ]; then
+            echo -e "${RED}║${NC}    I2C Device (/dev/i2c-1): ${GREEN}Available${NC}                                       ${RED}║${NC}"
+        else
+            echo -e "${RED}║${NC}    I2C Device (/dev/i2c-1): ${RED}NOT AVAILABLE${NC}                                    ${RED}║${NC}"
+        fi
+        if [ "$spi_device_exists" = true ]; then
+            echo -e "${RED}║${NC}    SPI Device (/dev/spidev0.0): ${GREEN}Available${NC}                                   ${RED}║${NC}"
+        else
+            echo -e "${RED}║${NC}    SPI Device (/dev/spidev0.0): ${RED}NOT AVAILABLE${NC}                                ${RED}║${NC}"
+        fi
+        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
+        echo -e "${RED}║${NC}  ${WHITE}To enable I2C and SPI:${NC}                                                       ${RED}║${NC}"
+        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
+        echo -e "${RED}║${NC}    1. Run: ${CYAN}sudo raspi-config${NC}                                                   ${RED}║${NC}"
+        echo -e "${RED}║${NC}    2. Go to: ${CYAN}Interface Options${NC}                                                  ${RED}║${NC}"
+        echo -e "${RED}║${NC}    3. Enable ${CYAN}I2C${NC} and ${CYAN}SPI${NC}                                                        ${RED}║${NC}"
+        echo -e "${RED}║${NC}    4. ${YELLOW}Reboot the system${NC}                                                         ${RED}║${NC}"
+        echo -e "${RED}║${NC}    5. Run this setup script again                                             ${RED}║${NC}"
+        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
+        echo -e "${RED}╚═══════════════════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+
+        if ! confirm "Continue anyway? (Hardware detection will fail)"; then
+            echo ""
+            print_info "Run 'sudo raspi-config' to enable I2C and SPI, then reboot."
+            exit 0
+        fi
+        echo ""
+        print_warning "Continuing without proper hardware interfaces..."
+        print_warning "Automation Hat Mini detection will fail!"
+        echo ""
+    fi
+}
+
+# =============================================================================
 # System Preparation
 # =============================================================================
 
@@ -903,6 +990,9 @@ main() {
 
     check_root
     print_header
+
+    # Check hardware interfaces before proceeding
+    check_hardware_interfaces
 
     # Load previous state if exists
     if load_state; then
