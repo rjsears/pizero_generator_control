@@ -29,6 +29,18 @@ SCRIPT_VERSION="1.0.0"
 SCRIPT_NAME="GenSlave Setup"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="/opt/genslave"
+
+# Service user - detect automatically or use pi as fallback
+# Priority: SUDO_USER (if running via sudo) > pi user (if exists) > root
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    SERVICE_USER="$SUDO_USER"
+elif id -u pi &>/dev/null; then
+    SERVICE_USER="pi"
+else
+    # Running as root directly or no pi user
+    SERVICE_USER="root"
+fi
+SERVICE_GROUP="$SERVICE_USER"
 CONFIG_FILE="${INSTALL_DIR}/.env"
 STATE_FILE="${INSTALL_DIR}/.setup_state"
 LOG_FILE="/var/log/genslave-setup.log"
@@ -444,7 +456,7 @@ prepare_system() {
     # Create installation directory
     print_step "7" "Creating installation directories..."
     mkdir -p "$INSTALL_DIR"/{app,data,logs,backups}
-    chown -R pi:pi "$INSTALL_DIR"
+    chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
     print_success "Created $INSTALL_DIR"
 
     STATE_SYSTEM_PREPARED=true
@@ -486,7 +498,7 @@ deploy_application() {
     fi
 
     print_step "3" "Setting permissions..."
-    chown -R pi:pi "$INSTALL_DIR/app"
+    chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR/app"
     chmod -R 755 "$INSTALL_DIR/app"
     print_success "Permissions set"
 
@@ -793,7 +805,7 @@ LOG_LEVEL=INFO
 EOF
 
     chmod 600 "$CONFIG_FILE"
-    chown pi:pi "$CONFIG_FILE"
+    chown "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_FILE"
     print_success "Environment configuration created"
 
     STATE_ENV_CONFIGURED=true
@@ -817,8 +829,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-Group=pi
+User=${SERVICE_USER}
+Group=${SERVICE_GROUP}
 WorkingDirectory=${INSTALL_DIR}
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=${INSTALL_DIR}/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001
@@ -858,7 +870,7 @@ ${INSTALL_DIR}/logs/*.log {
     compress
     delaycompress
     notifempty
-    create 0640 pi pi
+    create 0640 ${SERVICE_USER} ${SERVICE_GROUP}
     postrotate
         systemctl restart genslave > /dev/null 2>&1 || true
     endscript
