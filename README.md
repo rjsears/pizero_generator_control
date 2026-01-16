@@ -548,12 +548,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Tailscale](https://tailscale.com/) - Zero-config VPN
 - [Cloudflare](https://www.cloudflare.com/) - Tunnel and security services
 
+I would also like to thank my family for their continued support and understanding during the many hours spent developing and testing this system. Without them, this project would not be possible.
+
+And last but not least, my brother James who is a continual source of inspiration to me and to others. Everyone should have a brother as awesome as mine!
+
 ---
 
 ## Author
 
 **Richard J. Sears**
-- Email: richardjsears@protonmail.com
 - GitHub: [@rjsears](https://github.com/rjsears)
 
 ---
