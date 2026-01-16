@@ -1,15 +1,17 @@
 #!/bin/bash
-#
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 # GenMaster Setup Script
+# Version 1.0.0 - January 15th, 2026
+#
 # Generator Control System - Master Controller Installation
 #
 # This script provides a complete guided installation for GenMaster including:
 # - System preparation and dependency installation
 # - Docker and Docker Compose setup
 # - PostgreSQL database configuration
-# - SSL certificate acquisition (Let's Encrypt via DNS-01)
+# - SSL certificate acquisition (Let's Encrypt via DNS-01) or Cloudflare Tunnel
 # - Tailscale VPN configuration
-# - Cloudflare Tunnel setup (optional)
+# - Cloudflare Tunnel setup (recommended for HTTPS)
 # - Environment configuration
 #
 # Usage:
@@ -17,8 +19,10 @@
 #   Preconfig:    ./setup.sh --preconfig /path/to/preconfig.conf
 #   Unattended:   ./setup.sh --unattended
 #
-# Author: rjsears
-# License: MIT
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 set -o pipefail
 
@@ -85,6 +89,9 @@ DB_PASSWORD=""
 APP_SECRET_KEY=""
 SLAVE_API_SECRET=""
 SLAVE_API_URL=""
+ADMIN_USERNAME="admin"
+ADMIN_PASSWORD=""
+TIMEZONE="America/Los_Angeles"
 
 # =============================================================================
 # Utility Functions
@@ -380,10 +387,19 @@ create_preconfig_template() {
     local template_file="${1:-genmaster-preconfig.conf.template}"
 
     cat > "$template_file" << 'EOF'
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 # GenMaster Preconfig Template
-# Fill in the values and use with: ./setup.sh --preconfig /path/to/this/file
+# Version 1.0.0 - January 15th, 2026
+#
+# Fill in the values and use with:
+#   ./setup.sh --preconfig /path/to/this/file
 #
 # Required values are marked with [REQUIRED]
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 # =============================================================================
 # Domain and Email [REQUIRED]
@@ -392,10 +408,23 @@ DOMAIN_NAME="genmaster.example.com"
 EMAIL_ADDRESS="admin@example.com"
 
 # =============================================================================
-# SSL Configuration [REQUIRED]
-# Options: cloudflare, route53, manual, none
+# Timezone
 # =============================================================================
-SSL_PROVIDER="cloudflare"
+TIMEZONE="America/Los_Angeles"
+
+# =============================================================================
+# Admin Credentials [REQUIRED]
+# =============================================================================
+ADMIN_USERNAME="admin"
+# Generate with: openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16
+ADMIN_PASSWORD=""
+
+# =============================================================================
+# SSL Configuration
+# Options: cloudflare, route53, manual, none
+# Note: If using Cloudflare Tunnel, SSL is handled by Cloudflare - use "none"
+# =============================================================================
+SSL_PROVIDER="none"
 
 # For Cloudflare DNS-01 (if SSL_PROVIDER=cloudflare)
 CLOUDFLARE_API_TOKEN=""
@@ -407,7 +436,8 @@ AWS_SECRET_KEY=""
 # =============================================================================
 # GenSlave Configuration [REQUIRED]
 # =============================================================================
-SLAVE_API_URL="http://genslave:8000"
+# Use Tailscale hostname if using Tailscale, otherwise use IP/hostname
+SLAVE_API_URL="http://genslave:8001"
 # Generate with: openssl rand -hex 32
 SLAVE_API_SECRET=""
 
@@ -424,7 +454,7 @@ DB_PASSWORD=""
 APP_SECRET_KEY=""
 
 # =============================================================================
-# Tailscale VPN (Optional)
+# Tailscale VPN (Optional but Recommended)
 # =============================================================================
 ENABLE_TAILSCALE=true
 # Get from: https://login.tailscale.com/admin/settings/keys
@@ -432,10 +462,11 @@ TAILSCALE_AUTHKEY=""
 TAILSCALE_HOSTNAME="genmaster"
 
 # =============================================================================
-# Cloudflare Tunnel (Optional)
+# Cloudflare Tunnel (Required for HTTPS access)
 # =============================================================================
-ENABLE_CLOUDFLARE_TUNNEL=false
+ENABLE_CLOUDFLARE_TUNNEL=true
 # Get from: https://one.dash.cloudflare.com/ -> Access -> Tunnels
+# Configure tunnel to point to http://localhost:80
 CLOUDFLARE_TUNNEL_TOKEN=""
 
 # =============================================================================
@@ -948,30 +979,58 @@ configure_environment() {
 
     print_step "1" "Gathering application configuration..."
 
+    # Domain configuration (if not already set via SSL configuration)
+    if [ -z "$DOMAIN_NAME" ]; then
+        prompt_input "Enter your domain name" "genmaster.example.com" DOMAIN_NAME
+    fi
+
+    # Timezone configuration
+    prompt_input "Enter timezone" "America/Los_Angeles" TIMEZONE
+
+    # Admin credentials
+    print_step "2" "Configuring admin credentials..."
+    prompt_input "Admin username" "admin" ADMIN_USERNAME
+
+    if [ -z "$ADMIN_PASSWORD" ]; then
+        echo ""
+        echo "  Enter a password for the admin user, or press Enter to auto-generate one."
+        echo ""
+        prompt_secret "Admin password (or Enter to generate)" ADMIN_PASSWORD true
+
+        if [ -z "$ADMIN_PASSWORD" ]; then
+            ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
+            echo ""
+            print_warning "Generated admin password: ${ADMIN_PASSWORD}"
+            echo "  Please save this password securely!"
+            echo ""
+        fi
+    fi
+
     # GenSlave configuration
+    print_step "3" "Configuring GenSlave connection..."
     if [ -z "$SLAVE_API_URL" ]; then
         if [ "$ENABLE_TAILSCALE" = true ]; then
-            prompt_input "GenSlave API URL (Tailscale hostname)" "http://genslave:8000" SLAVE_API_URL
+            prompt_input "GenSlave API URL (Tailscale hostname)" "http://genslave:8001" SLAVE_API_URL
         else
-            prompt_input "GenSlave API URL" "" SLAVE_API_URL
+            prompt_input "GenSlave API URL" "http://genslave.local:8001" SLAVE_API_URL
         fi
     fi
 
     # Generate secrets if not provided
     if [ -z "$APP_SECRET_KEY" ]; then
-        print_step "2" "Generating application secret key..."
+        print_step "4" "Generating application secret key..."
         APP_SECRET_KEY=$(generate_secret 32)
         print_success "Secret key generated"
     fi
 
     if [ -z "$DB_PASSWORD" ]; then
-        print_step "3" "Generating database password..."
+        print_step "5" "Generating database password..."
         DB_PASSWORD=$(generate_secret 32)
         print_success "Database password generated"
     fi
 
     if [ -z "$SLAVE_API_SECRET" ]; then
-        print_step "4" "Generating GenSlave API secret..."
+        print_step "6" "Generating GenSlave API secret..."
         SLAVE_API_SECRET=$(generate_secret 32)
         print_success "GenSlave API secret generated"
         echo ""
@@ -981,11 +1040,22 @@ configure_environment() {
     fi
 
     # Create .env file
-    print_step "5" "Creating environment configuration file..."
+    print_step "7" "Creating environment configuration file..."
 
     cat > "$CONFIG_FILE" << EOF
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 # GenMaster Environment Configuration
 # Generated by setup.sh on $(date)
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+# =============================================================================
+# Domain Configuration
+# =============================================================================
+DOMAIN=${DOMAIN_NAME}
 
 # =============================================================================
 # Application Settings
@@ -997,12 +1067,21 @@ APP_SECRET_KEY=${APP_SECRET_KEY}
 # GenMaster Docker image version
 GENMASTER_VERSION=${DOCKER_TAG}
 
+# Timezone
+TIMEZONE=${TIMEZONE}
+
 # =============================================================================
 # Database Configuration (PostgreSQL)
 # =============================================================================
 DATABASE_USER=genmaster
 DATABASE_PASSWORD=${DB_PASSWORD}
 DATABASE_NAME=genmaster
+
+# =============================================================================
+# Admin User
+# =============================================================================
+ADMIN_USERNAME=${ADMIN_USERNAME}
+ADMIN_PASSWORD=${ADMIN_PASSWORD}
 
 # =============================================================================
 # GenSlave Communication
@@ -1019,8 +1098,8 @@ HEARTBEAT_FAILURE_THRESHOLD=3
 # =============================================================================
 # Webhook Notifications (Optional)
 # =============================================================================
-# WEBHOOK_BASE_URL=http://n8n:5678/webhook/generator
-# WEBHOOK_SECRET=
+WEBHOOK_BASE_URL=
+WEBHOOK_SECRET=
 
 # =============================================================================
 # Logging
@@ -1028,15 +1107,9 @@ HEARTBEAT_FAILURE_THRESHOLD=3
 LOG_LEVEL=INFO
 
 # =============================================================================
-# Web Server Ports
+# Web Server Port
 # =============================================================================
 HTTP_PORT=80
-HTTPS_PORT=443
-
-# =============================================================================
-# SSL Configuration
-# =============================================================================
-SSL_CERT_PATH=${INSTALL_DIR}/nginx/ssl
 
 # =============================================================================
 # Tailscale VPN
@@ -1046,12 +1119,14 @@ EOF
     if [ "$ENABLE_TAILSCALE" = true ]; then
         cat >> "$CONFIG_FILE" << EOF
 TAILSCALE_AUTHKEY=${TAILSCALE_AUTHKEY}
-TAILSCALE_EXTRA_ARGS=--advertise-tags=tag:generator --hostname=${TAILSCALE_HOSTNAME}
+TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME}
+TAILSCALE_EXTRA_ARGS=--advertise-tags=tag:generator
 EOF
     else
         cat >> "$CONFIG_FILE" << EOF
 # TAILSCALE_AUTHKEY=
-# TAILSCALE_EXTRA_ARGS=
+# TAILSCALE_HOSTNAME=genmaster
+# TAILSCALE_EXTRA_ARGS=--advertise-tags=tag:generator
 EOF
     fi
 
@@ -1076,7 +1151,7 @@ EOF
     print_success "Environment configuration created: $CONFIG_FILE"
 
     # Copy docker-compose and nginx files
-    print_step "6" "Copying Docker configuration files..."
+    print_step "8" "Copying Docker configuration files..."
 
     # Download latest docker-compose.yml
     if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
@@ -1158,7 +1233,9 @@ print_summary() {
     echo "  GenMaster has been successfully installed and configured."
     echo ""
     echo -e "  ${BOLD}Access Information:${NC}"
-    if [ "$SSL_PROVIDER" != "none" ] && [ -n "$DOMAIN_NAME" ]; then
+    if [ "$ENABLE_CLOUDFLARE_TUNNEL" = true ] && [ -n "$DOMAIN_NAME" ]; then
+        echo -e "  Web Dashboard:    ${GREEN}https://${DOMAIN_NAME}${NC}"
+    elif [ "$SSL_PROVIDER" != "none" ] && [ -n "$DOMAIN_NAME" ]; then
         echo -e "  Web Dashboard:    ${GREEN}https://${DOMAIN_NAME}${NC}"
     else
         echo -e "  Web Dashboard:    ${GREEN}http://$(hostname -I | awk '{print $1}')${NC}"
@@ -1166,10 +1243,15 @@ print_summary() {
     echo -e "  API Health:       ${GREEN}http://localhost/api/health${NC}"
     echo ""
 
+    echo -e "  ${BOLD}Admin Credentials:${NC}"
+    echo -e "  Username:         ${CYAN}${ADMIN_USERNAME}${NC}"
+    echo -e "  Password:         ${CYAN}${ADMIN_PASSWORD}${NC}"
+    echo ""
+
     echo -e "  ${BOLD}Configuration Files:${NC}"
     echo "  Environment:      $CONFIG_FILE"
     echo "  Docker Compose:   $INSTALL_DIR/docker-compose.yml"
-    echo "  Nginx Config:     $INSTALL_DIR/nginx/conf.d/default.conf"
+    echo "  Nginx Config:     $INSTALL_DIR/nginx/nginx.conf"
     echo ""
 
     echo -e "  ${BOLD}Useful Commands:${NC}"
@@ -1189,7 +1271,7 @@ print_summary() {
     echo -e "  ${BOLD}Next Steps:${NC}"
     echo "  1. Configure GenSlave with the shared secret shown above"
     echo "  2. Verify both devices can communicate via Tailscale"
-    echo "  3. Test the web dashboard"
+    echo "  3. Log in to the web dashboard with your admin credentials"
     echo ""
 
     log_info "Installation completed successfully"

@@ -14,20 +14,17 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /build
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
 # Copy package files first for better caching
-COPY frontend/package.json frontend/pnpm-lock.yaml* ./
+COPY frontend/package.json frontend/package-lock.json* ./
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN npm ci --legacy-peer-deps || npm install
 
 # Copy frontend source
 COPY frontend/ .
 
 # Build production assets
-RUN pnpm build
+RUN npm run build
 
 # =============================================================================
 # Stage 2: Python Runtime

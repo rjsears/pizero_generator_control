@@ -103,6 +103,7 @@ services:
 
   # ==========================================================================
   # Nginx Reverse Proxy
+  # SSL is handled by Cloudflare Tunnel - nginx only listens on port 80
   # ==========================================================================
   nginx:
     image: nginx:alpine
@@ -113,13 +114,9 @@ services:
         condition: service_healthy
     ports:
       - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - nginx_cache:/var/cache/nginx
-      # SSL certificates (mounted by setup.sh)
-      - ${SSL_CERT_PATH:-./nginx/ssl}:/etc/nginx/ssl:ro
     networks:
       - genmaster-internal
     healthcheck:
@@ -171,7 +168,7 @@ services:
   genmaster-dev:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: genmaster-dev
     restart: "no"
     profiles:
@@ -193,7 +190,6 @@ services:
       - LOG_LEVEL=DEBUG
     volumes:
       - ./backend/app:/app/app:ro
-      - ./frontend/dist:/app/static:ro
       - genmaster_logs:/app/logs
     ports:
       - "8000:8000"

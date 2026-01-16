@@ -1,0 +1,43 @@
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# /genmaster/backend/requirements.txt
+#
+# Part of the "RPi Generator Control" suite
+# Version 1.0.0 - January 15th, 2026
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+# Core Framework
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+pydantic==2.6.1
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.25
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# GPIO (with mock support)
+gpiozero==2.0.1
+
+# HTTP Client
+httpx==0.26.0
+aiohttp==3.9.3
+
+# Scheduling
+apscheduler==3.10.4
+
+# Security
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+
+# Utilities
+python-dotenv==1.0.1
+psutil==5.9.8
+
+# Docker SDK (for container management)
+docker==7.0.0

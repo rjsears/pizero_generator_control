@@ -1,0 +1,334 @@
+<!--
+  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  /genmaster/frontend/src/views/SystemView.vue
+
+  Part of the "RPi Generator Control" suite
+  Version 1.0.0 - January 15th, 2026
+
+  Richard J. Sears
+  richardjsears@protonmail.com
+  https://github.com/rjsears
+  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+-->
+
+<template>
+  <MainLayout>
+    <div class="space-y-6">
+      <!-- Page header -->
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">System</h1>
+        <p class="text-gray-600 dark:text-gray-400 mt-1">System information and health monitoring</p>
+      </div>
+
+      <!-- Health Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- CPU -->
+        <Card>
+          <div class="text-center">
+            <div class="relative inline-block">
+              <svg class="w-24 h-24" viewBox="0 0 100 100">
+                <circle
+                  class="text-gray-200 dark:text-gray-700"
+                  stroke="currentColor"
+                  stroke-width="8"
+                  fill="transparent"
+                  r="42"
+                  cx="50"
+                  cy="50"
+                />
+                <circle
+                  :class="getProgressColorClass(cpuPercent)"
+                  stroke="currentColor"
+                  stroke-width="8"
+                  stroke-linecap="round"
+                  fill="transparent"
+                  r="42"
+                  cx="50"
+                  cy="50"
+                  :stroke-dasharray="`${cpuPercent * 2.64} 264`"
+                  transform="rotate(-90 50 50)"
+                />
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-2xl font-bold">{{ cpuPercent }}%</span>
+              </div>
+            </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">CPU Usage</p>
+          </div>
+        </Card>
+
+        <!-- Memory -->
+        <Card>
+          <div class="text-center">
+            <div class="relative inline-block">
+              <svg class="w-24 h-24" viewBox="0 0 100 100">
+                <circle
+                  class="text-gray-200 dark:text-gray-700"
+                  stroke="currentColor"
+                  stroke-width="8"
+                  fill="transparent"
+                  r="42"
+                  cx="50"
+                  cy="50"
+                />
+                <circle
+                  :class="getProgressColorClass(memoryPercent)"
+                  stroke="currentColor"
+                  stroke-width="8"
+                  stroke-linecap="round"
+                  fill="transparent"
+                  r="42"
+                  cx="50"
+                  cy="50"
+                  :stroke-dasharray="`${memoryPercent * 2.64} 264`"
+                  transform="rotate(-90 50 50)"
+                />
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-2xl font-bold">{{ memoryPercent }}%</span>
+              </div>
+            </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Memory Usage</p>
+          </div>
+        </Card>
+
+        <!-- Disk -->
+        <Card>
+          <div class="text-center">
+            <div class="relative inline-block">
+              <svg class="w-24 h-24" viewBox="0 0 100 100">
+                <circle
+                  class="text-gray-200 dark:text-gray-700"
+                  stroke="currentColor"
+                  stroke-width="8"
+                  fill="transparent"
+                  r="42"
+                  cx="50"
+                  cy="50"
+                />
+                <circle
+                  :class="getProgressColorClass(diskPercent)"
+                  stroke="currentColor"
+                  stroke-width="8"
+                  stroke-linecap="round"
+                  fill="transparent"
+                  r="42"
+                  cx="50"
+                  cy="50"
+                  :stroke-dasharray="`${diskPercent * 2.64} 264`"
+                  transform="rotate(-90 50 50)"
+                />
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-2xl font-bold">{{ diskPercent }}%</span>
+              </div>
+            </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Disk Usage</p>
+          </div>
+        </Card>
+
+        <!-- Temperature -->
+        <Card>
+          <div class="text-center">
+            <div class="relative inline-block">
+              <svg class="w-24 h-24" viewBox="0 0 100 100">
+                <circle
+                  class="text-gray-200 dark:text-gray-700"
+                  stroke="currentColor"
+                  stroke-width="8"
+                  fill="transparent"
+                  r="42"
+                  cx="50"
+                  cy="50"
+                />
+                <circle
+                  :class="getTempColorClass(temperature)"
+                  stroke="currentColor"
+                  stroke-width="8"
+                  stroke-linecap="round"
+                  fill="transparent"
+                  r="42"
+                  cx="50"
+                  cy="50"
+                  :stroke-dasharray="`${Math.min(temperature, 100) * 2.64} 264`"
+                  transform="rotate(-90 50 50)"
+                />
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-2xl font-bold">{{ temperature }}°C</span>
+              </div>
+            </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Temperature</p>
+          </div>
+        </Card>
+      </div>
+
+      <!-- GenSlave Status -->
+      <Card title="GenSlave Status">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-4">
+            <div :class="['w-12 h-12 rounded-full flex items-center justify-center', slaveOnline ? 'bg-green-500' : 'bg-red-500']">
+              <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+              </svg>
+            </div>
+            <div>
+              <p class="font-medium text-gray-900 dark:text-white">
+                {{ slaveOnline ? 'Online' : 'Offline' }}
+              </p>
+              <p class="text-sm text-gray-500 dark:text-gray-400">
+                Last heartbeat: {{ lastHeartbeat }}
+              </p>
+            </div>
+          </div>
+          <Button variant="secondary" @click="testSlaveConnection" :loading="testingConnection">
+            Test Connection
+          </Button>
+        </div>
+      </Card>
+
+      <!-- Victron Status -->
+      <Card title="Victron Status">
+        <div class="flex items-center space-x-4">
+          <div :class="['w-12 h-12 rounded-full flex items-center justify-center', victronActive ? 'bg-green-500' : 'bg-gray-500']">
+            <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div>
+            <p class="font-medium text-gray-900 dark:text-white">
+              {{ victronActive ? 'Input Active' : 'Input Inactive' }}
+            </p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              GPIO17 signal detection status
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <!-- System Info -->
+      <Card title="System Information">
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <dt class="text-sm text-gray-500 dark:text-gray-400">Uptime</dt>
+            <dd class="font-medium text-gray-900 dark:text-white">{{ formatUptime(uptime) }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm text-gray-500 dark:text-gray-400">Version</dt>
+            <dd class="font-medium text-gray-900 dark:text-white">1.0.0</dd>
+          </div>
+          <div>
+            <dt class="text-sm text-gray-500 dark:text-gray-400">Platform</dt>
+            <dd class="font-medium text-gray-900 dark:text-white">Raspberry Pi 5</dd>
+          </div>
+          <div>
+            <dt class="text-sm text-gray-500 dark:text-gray-400">Mode</dt>
+            <dd class="font-medium text-gray-900 dark:text-white">
+              {{ systemStore.status?.mock_gpio ? 'Development (Mock)' : 'Production' }}
+            </dd>
+          </div>
+        </dl>
+      </Card>
+
+      <!-- System Actions -->
+      <Card title="System Actions">
+        <div class="flex flex-wrap gap-3">
+          <Button variant="warning" @click="confirmReboot">
+            <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Reboot System
+          </Button>
+        </div>
+      </Card>
+    </div>
+
+    <!-- Reboot Confirmation Modal -->
+    <Modal v-model="showRebootConfirm" title="Reboot System">
+      <p class="text-gray-600 dark:text-gray-400">
+        Are you sure you want to reboot the system? This will temporarily interrupt all services.
+      </p>
+      <template #footer>
+        <Button variant="secondary" @click="showRebootConfirm = false">Cancel</Button>
+        <Button variant="warning" @click="rebootSystem">Reboot</Button>
+      </template>
+    </Modal>
+  </MainLayout>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+import { useSystemStore } from '@/stores/system'
+import { useNotificationStore } from '@/stores/notifications'
+import MainLayout from '@/components/layout/MainLayout.vue'
+import Card from '@/components/common/Card.vue'
+import Button from '@/components/common/Button.vue'
+import Modal from '@/components/common/Modal.vue'
+
+const systemStore = useSystemStore()
+const notifications = useNotificationStore()
+
+const showRebootConfirm = ref(false)
+const testingConnection = ref(false)
+
+// Computed properties
+const cpuPercent = computed(() => systemStore.cpuPercent || 0)
+const memoryPercent = computed(() => systemStore.memoryPercent || 0)
+const diskPercent = computed(() => systemStore.diskPercent || 0)
+const temperature = computed(() => systemStore.temperature || 0)
+const uptime = computed(() => systemStore.uptime || 0)
+const slaveOnline = computed(() => systemStore.isSlaveOnline)
+const victronActive = computed(() => systemStore.victronInputActive)
+
+const lastHeartbeat = computed(() => {
+  const last = systemStore.slaveLastSeen
+  if (!last) return 'Never'
+  return new Date(last * 1000).toLocaleString()
+})
+
+// Helper functions
+function getProgressColorClass(percent) {
+  if (percent >= 90) return 'text-red-500'
+  if (percent >= 70) return 'text-amber-500'
+  return 'text-green-500'
+}
+
+function getTempColorClass(temp) {
+  if (temp >= 80) return 'text-red-500'
+  if (temp >= 60) return 'text-amber-500'
+  return 'text-green-500'
+}
+
+function formatUptime(seconds) {
+  if (!seconds) return '0s'
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+
+  const parts = []
+  if (days > 0) parts.push(`${days}d`)
+  if (hours > 0) parts.push(`${hours}h`)
+  if (minutes > 0) parts.push(`${minutes}m`)
+
+  return parts.join(' ') || '< 1m'
+}
+
+// Actions
+async function testSlaveConnection() {
+  testingConnection.value = true
+  await systemStore.testSlaveConnection()
+  testingConnection.value = false
+}
+
+function confirmReboot() {
+  showRebootConfirm.value = true
+}
+
+async function rebootSystem() {
+  showRebootConfirm.value = false
+  const success = await systemStore.rebootSystem()
+  if (success) {
+    notifications.warning('System is rebooting...')
+  }
+}
+</script>
