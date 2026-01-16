@@ -569,10 +569,11 @@ validate_hardware() {
     hat_result=$("$INSTALL_DIR/venv/bin/python3" << 'PYEOF' 2>&1
 try:
     import automationhat
-    if automationhat.is_automation_hat() or automationhat.is_automation_hat_mini():
-        print("SUCCESS:Automation Hat Mini detected")
+    # is_automation_hat() works for both Automation Hat and Automation Hat Mini
+    if automationhat.is_automation_hat():
+        print("SUCCESS:Automation Hat detected and ready")
     else:
-        print("WARNING:Automation Hat library loaded but no hat detected")
+        print("WARNING:Automation Hat library loaded but no hat detected on I2C bus")
 except ImportError as e:
     print(f"ERROR:Module not found - {e}")
 except Exception as e:
