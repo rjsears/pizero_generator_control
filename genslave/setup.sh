@@ -324,6 +324,8 @@ prepare_system() {
         python3-pip \
         python3-venv \
         python3-dev \
+        python3-smbus \
+        python3-rpi.gpio \
         libgpiod2 \
         i2c-tools \
         curl \
@@ -375,9 +377,11 @@ install_python_environment() {
     "$INSTALL_DIR/venv/bin/pip" install --upgrade pip setuptools wheel > /dev/null 2>&1
     print_success "Pip upgraded"
 
-    print_step "3" "Creating requirements.txt..."
-    cat > "$INSTALL_DIR/requirements.txt" << 'EOF'
-# GenSlave Requirements
+    print_step "3" "Creating requirements files..."
+
+    # Core requirements (work on any system)
+    cat > "$INSTALL_DIR/requirements-core.txt" << 'EOF'
+# GenSlave Core Requirements
 # Core Framework
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
@@ -390,15 +394,6 @@ aiosqlite>=0.19.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 
-# Hardware Control (Automation Hat Mini)
-automationhat>=0.4.0
-RPi.GPIO>=0.7.0
-spidev>=3.5
-
-# LCD Display
-Pillow>=10.0.0
-ST7735>=0.0.4
-
 # HTTP Client (for webhooks)
 httpx>=0.26.0
 
@@ -407,12 +402,48 @@ psutil>=5.9.0
 
 # Configuration
 python-dotenv>=1.0.0
-EOF
-    print_success "Requirements file created"
 
-    print_step "4" "Installing Python dependencies..."
-    "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" > /dev/null 2>&1
-    print_success "Python dependencies installed"
+# LCD Display
+Pillow>=10.0.0
+EOF
+
+    # Hardware requirements (Raspberry Pi only)
+    cat > "$INSTALL_DIR/requirements-hardware.txt" << 'EOF'
+# GenSlave Hardware Requirements (Raspberry Pi only)
+# Automation Hat Mini
+automationhat>=0.4.0
+RPi.GPIO>=0.7.0
+spidev>=3.5
+
+# LCD Display Hardware
+ST7735>=0.0.4
+EOF
+    print_success "Requirements files created"
+
+    print_step "4" "Installing core Python dependencies..."
+    if "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements-core.txt" > /dev/null 2>&1; then
+        print_success "Core dependencies installed"
+    else
+        print_error "Failed to install core dependencies"
+        return 1
+    fi
+
+    print_step "5" "Installing hardware dependencies..."
+    local pip_output
+    pip_output=$("$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements-hardware.txt" 2>&1)
+    local pip_exit_code=$?
+
+    if [ $pip_exit_code -eq 0 ]; then
+        print_success "Hardware dependencies installed"
+    else
+        print_warning "Hardware dependencies failed to install"
+        echo -e "  ${GRAY}Error details:${NC}"
+        echo "$pip_output" | grep -i "error" | head -5 | while read line; do
+            echo -e "    ${DIM}$line${NC}"
+        done
+        print_info "If on Raspberry Pi, ensure I2C and SPI are enabled and reboot"
+        print_info "On non-Pi systems, GenSlave will run in mock/development mode"
+    fi
 
     STATE_PYTHON_INSTALLED=true
     save_state
