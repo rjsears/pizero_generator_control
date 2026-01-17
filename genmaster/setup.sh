@@ -1949,8 +1949,14 @@ EOF
         cat >> "${SCRIPT_DIR}/.env" << EOF
 
 # Tailscale VPN
-TAILSCALE_AUTHKEY=${TAILSCALE_AUTH_KEY}
+# Enable with: docker compose --profile tailscale up -d
+# Get auth key from: https://login.tailscale.com/admin/settings/keys
+TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY}
 TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME}
+# Optional: Advertise routes in CIDR notation
+# Single host: 192.168.1.10/32 (Docker host only)
+# Full subnet: 192.168.1.0/24 (entire local network)
+TAILSCALE_ROUTES=
 EOF
     fi
 
@@ -2129,27 +2135,53 @@ EOF
         cat >> "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
 
   # ===========================================================================
-  # Tailscale VPN
+  # Tailscale VPN with HTTPS Support
   # ===========================================================================
+  # Provides private access via Tailscale network with automatic HTTPS certs.
+  # After startup:
+  #   1. Approve machine at: https://login.tailscale.com/admin/machines
+  #   2. Enable HTTPS at: https://login.tailscale.com/admin/dns
   tailscale:
     image: tailscale/tailscale:latest
     container_name: genmaster_tailscale
-    restart: unless-stopped
-    hostname: ${TAILSCALE_HOSTNAME:-genmaster}
+    restart: always
+    hostname: genmaster-tailscale
     environment:
-      - TS_AUTHKEY=${TAILSCALE_AUTHKEY}
+      - TS_AUTHKEY=${TAILSCALE_AUTH_KEY}
+      - TS_HOSTNAME=${TAILSCALE_HOSTNAME}
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_USERSPACE=true
+      - TS_EXTRA_ARGS=--accept-routes
+      - TS_ROUTES=${TAILSCALE_ROUTES}
+      - TS_AUTH_ONCE=true
+      - TS_SERVE_CONFIG=/config/tailscale-serve.json
     volumes:
       - tailscale_state:/var/lib/tailscale
+      - ./tailscale-serve.json:/config/tailscale-serve.json:ro
     cap_add:
       - NET_ADMIN
-      - SYS_MODULE
     networks:
-      - genmaster-external
+      - genmaster-internal
     profiles:
       - tailscale
 EOF
+
+        # Create Tailscale Serve configuration
+        # ${TS_CERT_DOMAIN} is expanded by Tailscale automatically
+        # Proxy to the actual HTTPS domain (not internal docker)
+        cat > "${SCRIPT_DIR}/tailscale-serve.json" << EOF
+{
+  "TCP": { "443": { "HTTPS": true } },
+  "Web": {
+    "\${TS_CERT_DOMAIN}:443": {
+      "Handlers": {
+        "/": { "Proxy": "https://${DOMAIN}:443" }
+      }
+    }
+  }
+}
+EOF
+        log_info "Created tailscale-serve.json (proxy to https://${DOMAIN}:443)"
     fi
 
     # Add Portainer if enabled
@@ -2392,14 +2424,22 @@ show_deployment_summary() {
     # Tailscale Action Required
     if [ "$INSTALL_TAILSCALE" = true ]; then
         echo -e "  ${YELLOW}⚠ TAILSCALE ACTION REQUIRED:${NC}"
-        echo -e "    You must approve the advertised route in Tailscale admin:"
+        echo -e "    Complete these steps to enable Tailscale HTTPS access:"
         echo ""
-        echo -e "    1. Visit: ${CYAN}https://login.tailscale.com/admin/machines${NC}"
-        echo -e "    2. Find your ${WHITE}${TAILSCALE_HOSTNAME}${NC} node"
-        echo -e "    3. Click the node and approve the advertised route"
+        echo -e "    ${WHITE}Step 1: Approve the machine${NC}"
+        echo -e "      • Visit: ${CYAN}https://login.tailscale.com/admin/machines${NC}"
+        echo -e "      • Find your ${WHITE}${TAILSCALE_HOSTNAME}${NC} node"
+        echo -e "      • Click '...' menu → 'Edit route settings' → Enable routes"
         echo ""
-        echo -e "    ${GRAY}NOTE: GenMaster will NOT be accessible via Tailscale${NC}"
-        echo -e "    ${GRAY}      until this route has been approved!${NC}"
+        echo -e "    ${WHITE}Step 2: Enable HTTPS certificates${NC}"
+        echo -e "      • Visit: ${CYAN}https://login.tailscale.com/admin/dns${NC}"
+        echo -e "      • Enable ${WHITE}MagicDNS${NC} (if not already enabled)"
+        echo -e "      • Enable ${WHITE}HTTPS Certificates${NC}"
+        echo ""
+        echo -e "    ${GRAY}NOTE: GenMaster will NOT be accessible via Tailscale HTTPS${NC}"
+        echo -e "    ${GRAY}      until both steps are completed!${NC}"
+        echo ""
+        echo -e "    After setup, access via: ${CYAN}https://${TAILSCALE_HOSTNAME}.<your-tailnet>.ts.net${NC}"
         echo ""
     fi
 
