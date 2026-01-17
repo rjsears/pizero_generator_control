@@ -17,24 +17,27 @@ export default {
    * @param {Object} credentials - { username, password }
    * @returns {Promise<Object>} - { token, user }
    */
-  login(credentials) {
-    return api.post('/auth/login', credentials)
+  async login(credentials) {
+    const response = await api.post('/auth/login', credentials)
+    return response.data
   },
 
   /**
    * Logout current user
    * @returns {Promise<Object>}
    */
-  logout() {
-    return api.post('/auth/logout')
+  async logout() {
+    const response = await api.post('/auth/logout')
+    return response.data
   },
 
   /**
    * Get current user information
    * @returns {Promise<Object>} - User object
    */
-  getCurrentUser() {
-    return api.get('/auth/me')
+  async getCurrentUser() {
+    const response = await api.get('/auth/me')
+    return response.data
   },
 
   /**
@@ -43,10 +46,11 @@ export default {
    * @param {string} newPassword
    * @returns {Promise<Object>}
    */
-  changePassword(currentPassword, newPassword) {
-    return api.put('/auth/password', {
+  async changePassword(currentPassword, newPassword) {
+    const response = await api.put('/auth/password', {
       current_password: currentPassword,
       new_password: newPassword,
     })
+    return response.data
   },
 }
