@@ -15,10 +15,9 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.dependencies import DbSession, get_db
+from app.dependencies import DbSession
 from app.models import GeneratorRun
 from app.schemas import (
     GeneratorRunHistory,
@@ -130,10 +129,10 @@ async def stop_generator(
 
 @router.get("/history", response_model=List[GeneratorRunHistory])
 async def get_generator_history(
+    db: DbSession,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     trigger_type: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db),
 ) -> List[GeneratorRunHistory]:
     """
     Get generator run history.
@@ -167,8 +166,8 @@ async def get_generator_history(
 
 @router.get("/stats", response_model=GeneratorStats)
 async def get_generator_stats(
+    db: DbSession,
     days: int = Query(30, ge=1, le=365),
-    db: AsyncSession = Depends(get_db),
 ) -> GeneratorStats:
     """
     Get generator runtime statistics.

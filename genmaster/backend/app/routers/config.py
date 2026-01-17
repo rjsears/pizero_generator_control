@@ -11,11 +11,10 @@
 
 """System configuration API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, HTTPException
 from sqlalchemy.future import select
 
-from app.dependencies import AdminUser, get_db, require_admin
+from app.dependencies import AdminUser, DbSession
 from app.models import Config
 from app.schemas import ConfigResponse, ConfigUpdateRequest
 
@@ -25,7 +24,7 @@ router = APIRouter()
 @router.get("", response_model=ConfigResponse)
 @router.get("/", response_model=ConfigResponse)
 async def get_config(
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> ConfigResponse:
     """
     Get system configuration.
@@ -63,8 +62,8 @@ async def get_config(
 @router.put("/", response_model=ConfigResponse)
 async def update_config(
     request: ConfigUpdateRequest,
-    db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(require_admin),
+    db: DbSession,
+    admin: AdminUser,
 ) -> ConfigResponse:
     """
     Update system configuration.

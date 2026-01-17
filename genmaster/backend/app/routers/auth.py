@@ -13,11 +13,10 @@
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.future import select
 
-from app.dependencies import CurrentUser, get_current_user, get_db
+from app.dependencies import CurrentUser, DbSession
 from app.models import Session, User
 from app.schemas import (
     ChangePasswordRequest,
@@ -38,7 +37,7 @@ router = APIRouter()
 @router.post("/login", response_model=LoginResponse)
 async def login(
     request: LoginRequest,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> LoginResponse:
     """
     Authenticate user and return access token.
@@ -91,8 +90,8 @@ async def login(
 
 @router.post("/logout")
 async def logout(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ) -> dict:
     """
     Logout current user by invalidating all their sessions.
@@ -131,7 +130,7 @@ async def get_current_user_info(
 async def change_password(
     request: ChangePasswordRequest,
     current_user: CurrentUser,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> dict:
     """
     Change the current user's password.
@@ -152,7 +151,7 @@ async def change_password(
 
 @router.post("/cleanup")
 async def cleanup_sessions(
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> dict:
     """
     Remove expired sessions.
