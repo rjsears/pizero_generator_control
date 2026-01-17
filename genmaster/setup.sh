@@ -733,8 +733,8 @@ detect_current_version() {
         return
     fi
 
-    if [ -f "${SCRIPT_DIR}/docker-compose.yml" ]; then
-        if grep -q "genmaster" "${SCRIPT_DIR}/docker-compose.yml" 2>/dev/null; then
+    if [ -f "${SCRIPT_DIR}/docker-compose.yaml" ]; then
+        if grep -q "genmaster" "${SCRIPT_DIR}/docker-compose.yaml" 2>/dev/null; then
             echo "1.0"
         else
             echo "unknown"
@@ -797,7 +797,7 @@ backup_existing_config() {
     print_info "Backing up existing configuration..."
 
     [ -f "${SCRIPT_DIR}/.env" ] && cp "${SCRIPT_DIR}/.env" "${backup_dir}/.env.${timestamp}"
-    [ -f "${SCRIPT_DIR}/docker-compose.yml" ] && cp "${SCRIPT_DIR}/docker-compose.yml" "${backup_dir}/docker-compose.yml.${timestamp}"
+    [ -f "${SCRIPT_DIR}/docker-compose.yaml" ] && cp "${SCRIPT_DIR}/docker-compose.yaml" "${backup_dir}/docker-compose.yaml.${timestamp}"
     [ -f "${SCRIPT_DIR}/nginx/nginx.conf" ] && cp "${SCRIPT_DIR}/nginx/nginx.conf" "${backup_dir}/nginx.conf.${timestamp}"
 
     print_success "Backup complete: ${backup_dir}"
@@ -2023,9 +2023,9 @@ EOF
 }
 
 generate_docker_compose() {
-    print_info "Generating docker-compose.yml..."
+    print_info "Generating docker-compose.yaml..."
 
-    cat > "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
+    cat > "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
 # =============================================================================
 # GenMaster Docker Compose Configuration
 # =============================================================================
@@ -2166,7 +2166,7 @@ EOF
 
     # Add Cloudflare Tunnel if enabled
     if [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ]; then
-        cat >> "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
+        cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
 
   # ===========================================================================
   # Cloudflare Tunnel
@@ -2180,14 +2180,13 @@ EOF
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     networks:
       - genmaster-external
-    profiles:
-      - cloudflare
+
 EOF
     fi
 
     # Add Tailscale if enabled
     if [ "$INSTALL_TAILSCALE" = true ]; then
-        cat >> "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
+        cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
 
   # ===========================================================================
   # Tailscale VPN with HTTPS Support
@@ -2216,9 +2215,8 @@ EOF
     cap_add:
       - NET_ADMIN
     networks:
-      - genmaster-internal
-    profiles:
-      - tailscale
+      - genmaster-external
+
 EOF
 
         # Create Tailscale Serve configuration
@@ -2241,7 +2239,7 @@ EOF
 
     # Add Portainer if enabled
     if [ "$INSTALL_PORTAINER" = true ]; then
-        cat >> "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
+        cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
 
   # ===========================================================================
   # Portainer Container Management
@@ -2256,12 +2254,11 @@ EOF
       - portainer_data:/data
     networks:
       - genmaster-internal
-    profiles:
-      - portainer
+
 EOF
     fi
 
-    print_success "docker-compose.yml generated"
+    print_success "docker-compose.yaml generated"
 }
 
 generate_nginx_conf() {
@@ -2492,13 +2489,8 @@ deploy_stack() {
     create_letsencrypt_volume
     obtain_ssl_certificate
 
-    local profiles=""
-    [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ] && profiles="$profiles --profile cloudflare"
-    [ "$INSTALL_TAILSCALE" = true ] && profiles="$profiles --profile tailscale"
-    [ "$INSTALL_PORTAINER" = true ] && profiles="$profiles --profile portainer"
-
     print_info "Building and starting containers..."
-    $docker_compose_cmd $profiles up -d --build
+    $docker_compose_cmd up -d --build
 
     print_info "Waiting for services..."
     sleep 10
@@ -2604,10 +2596,10 @@ show_deployment_summary() {
 
     # Useful Commands
     echo -e "  ${WHITE}${BOLD}Useful Commands:${NC}"
-    echo -e "    View logs:         ${CYAN}docker compose logs -f${NC}"
-    echo -e "    Stop services:     ${CYAN}docker compose down${NC}"
-    echo -e "    Start services:    ${CYAN}docker compose up -d${NC}"
-    echo -e "    Restart:           ${CYAN}docker compose restart${NC}"
+    echo -e "    ${GRAY}View logs:${NC}         docker compose logs -f"
+    echo -e "    ${GRAY}Stop services:${NC}     docker compose down"
+    echo -e "    ${GRAY}Start services:${NC}    docker compose up -d"
+    echo -e "    ${GRAY}Restart:${NC}           docker compose restart"
     echo ""
 }
 
