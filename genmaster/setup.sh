@@ -1949,8 +1949,14 @@ EOF
         cat >> "${SCRIPT_DIR}/.env" << EOF
 
 # Tailscale VPN
+# Get auth key from: https://login.tailscale.com/admin/settings/keys
 TAILSCALE_AUTHKEY=${TAILSCALE_AUTH_KEY}
 TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME}
+# Optional: Advertise routes (e.g., 192.168.1.0/24 for local network access)
+TAILSCALE_ROUTES=
+# Tailscale domain (update after first run - check Tailscale admin for your tailnet name)
+# Example: genmaster.tail1234.ts.net
+TAILSCALE_DOMAIN=${TAILSCALE_HOSTNAME}.ts.net
 EOF
     fi
 
@@ -2132,24 +2138,30 @@ EOF
   # Tailscale VPN with HTTPS Support
   # ===========================================================================
   # Provides private access via Tailscale network with automatic HTTPS certs.
-  # After startup, approve the machine at: https://login.tailscale.com/admin/machines
-  # Enable HTTPS at: https://login.tailscale.com/admin/dns (enable MagicDNS & HTTPS)
+  # After startup:
+  #   1. Approve machine at: https://login.tailscale.com/admin/machines
+  #   2. Enable HTTPS at: https://login.tailscale.com/admin/dns
+  #   3. Update TAILSCALE_DOMAIN in .env with your actual tailnet domain
+  #   4. Update tailscale-serve.json with your actual domain
   tailscale:
     image: tailscale/tailscale:latest
     container_name: genmaster_tailscale
-    restart: unless-stopped
+    restart: always
     hostname: ${TAILSCALE_HOSTNAME:-genmaster}
     environment:
       - TS_AUTHKEY=${TAILSCALE_AUTHKEY}
+      - TS_HOSTNAME=${TAILSCALE_HOSTNAME:-genmaster}
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=true
       - TS_SERVE_CONFIG=/config/tailscale-serve.json
-      - TS_EXTRA_ARGS=--advertise-tags=tag:genmaster
+      - TS_EXTRA_ARGS=--accept-routes --advertise-tags=tag:genmaster
+      - TS_ROUTES=${TAILSCALE_ROUTES:-}
+      - TS_AUTH_ONCE=true
     volumes:
       - tailscale_state:/var/lib/tailscale
       - ./tailscale-serve.json:/config/tailscale-serve.json:ro
     cap_add:
       - NET_ADMIN
-      - SYS_MODULE
     networks:
       - genmaster-internal
       - genmaster-external
@@ -2157,8 +2169,9 @@ EOF
       - tailscale
 EOF
 
-        # Create Tailscale Serve configuration for HTTPS proxy to nginx
-        cat > "${SCRIPT_DIR}/tailscale-serve.json" << 'EOF'
+        # Create Tailscale Serve configuration example (user must copy and edit)
+        if [ ! -f "${SCRIPT_DIR}/tailscale-serve.json.example" ]; then
+            cat > "${SCRIPT_DIR}/tailscale-serve.json.example" << 'EOF'
 {
   "TCP": {
     "443": {
@@ -2166,7 +2179,7 @@ EOF
     }
   },
   "Web": {
-    "${TS_CERT_DOMAIN}:443": {
+    "genmaster.your-tailnet.ts.net:443": {
       "Handlers": {
         "/": {
           "Proxy": "http://nginx:80"
@@ -2176,7 +2189,31 @@ EOF
   }
 }
 EOF
-        log_info "Created Tailscale Serve configuration"
+            log_info "Created tailscale-serve.json.example"
+        fi
+
+        # Create actual tailscale-serve.json with configured hostname
+        # User's tailnet name needs to be added manually or we use a placeholder
+        cat > "${SCRIPT_DIR}/tailscale-serve.json" << EOF
+{
+  "TCP": {
+    "443": {
+      "HTTPS": true
+    }
+  },
+  "Web": {
+    "${TAILSCALE_HOSTNAME}.ts.net:443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://nginx:80"
+        }
+      }
+    }
+  }
+}
+EOF
+        log_info "Created tailscale-serve.json (update with your tailnet domain)"
+        print_warning "Edit tailscale-serve.json to replace '${TAILSCALE_HOSTNAME}.ts.net' with your actual Tailscale domain"
     fi
 
     # Add Portainer if enabled
@@ -2419,7 +2456,7 @@ show_deployment_summary() {
     # Tailscale Action Required
     if [ "$INSTALL_TAILSCALE" = true ]; then
         echo -e "  ${YELLOW}⚠ TAILSCALE ACTION REQUIRED:${NC}"
-        echo -e "    Complete these steps to enable Tailscale access:"
+        echo -e "    Complete these steps to enable Tailscale HTTPS access:"
         echo ""
         echo -e "    ${WHITE}Step 1: Approve the machine${NC}"
         echo -e "      • Visit: ${CYAN}https://login.tailscale.com/admin/machines${NC}"
@@ -2431,14 +2468,19 @@ show_deployment_summary() {
         echo -e "      • Enable ${WHITE}MagicDNS${NC} (if not already enabled)"
         echo -e "      • Enable ${WHITE}HTTPS Certificates${NC}"
         echo ""
-        echo -e "    ${WHITE}Step 3: Create ACL tag (if using tags)${NC}"
+        echo -e "    ${WHITE}Step 3: Update configuration with your tailnet domain${NC}"
+        echo -e "      • Your tailnet domain looks like: ${WHITE}${TAILSCALE_HOSTNAME}.tail1234.ts.net${NC}"
+        echo -e "      • Find your exact domain in Tailscale admin console"
+        echo -e "      • Update ${WHITE}.env${NC}: Set TAILSCALE_DOMAIN to your full domain"
+        echo -e "      • Update ${WHITE}tailscale-serve.json${NC}: Replace the domain in Web section"
+        echo -e "      • Restart: ${WHITE}docker compose --profile tailscale restart tailscale${NC}"
+        echo ""
+        echo -e "    ${WHITE}Step 4: (Optional) Create ACL tag${NC}"
         echo -e "      • Visit: ${CYAN}https://login.tailscale.com/admin/acls${NC}"
         echo -e "      • Add tag: ${WHITE}tag:genmaster${NC} to your ACL policy"
         echo ""
         echo -e "    ${GRAY}NOTE: GenMaster will NOT be accessible via Tailscale HTTPS${NC}"
-        echo -e "    ${GRAY}      until Steps 1 and 2 are completed!${NC}"
-        echo ""
-        echo -e "    After setup, access via: ${CYAN}https://${TAILSCALE_HOSTNAME}.<tailnet>.ts.net${NC}"
+        echo -e "    ${GRAY}      until Steps 1-3 are completed!${NC}"
         echo ""
     fi
 
