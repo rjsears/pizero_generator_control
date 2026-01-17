@@ -189,3 +189,6 @@ export const useContainerStore = defineStore('containers', () => {
     getStatsByName,
   }
 })
+
+// Alias for GenMaster compatibility
+export const useContainersStore = useContainerStore
