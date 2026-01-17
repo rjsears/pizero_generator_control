@@ -89,7 +89,7 @@
             </p>
           </div>
 
-          <div class="flex space-x-2">
+          <div class="flex flex-wrap gap-2">
             <Button
               v-if="container.status !== 'running'"
               variant="success"
@@ -123,6 +123,17 @@
             >
               Logs
             </Button>
+            <Button
+              v-if="container.status === 'running'"
+              variant="ghost"
+              size="sm"
+              @click="openTerminal(container)"
+            >
+              <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Shell
+            </Button>
           </div>
         </Card>
       </div>
@@ -137,6 +148,14 @@
         <Button variant="secondary" @click="showLogsModal = false">Close</Button>
       </template>
     </Modal>
+
+    <!-- Terminal Dialog -->
+    <TerminalDialog
+      v-model="showTerminal"
+      :target="terminalTarget"
+      :target-name="terminalTargetName"
+      target-type="container"
+    />
   </MainLayout>
 </template>
 
@@ -150,6 +169,7 @@ import Toggle from '@/components/common/Toggle.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import ContainerStackLoader from '@/components/common/ContainerStackLoader.vue'
 import Modal from '@/components/common/Modal.vue'
+import TerminalDialog from '@/components/terminal/TerminalDialog.vue'
 
 const containersStore = useContainersStore()
 
@@ -157,6 +177,11 @@ const showAll = ref(false)
 const showLogsModal = ref(false)
 const selectedContainer = ref(null)
 const containerLogs = ref('')
+
+// Terminal state
+const showTerminal = ref(false)
+const terminalTarget = ref('')
+const terminalTargetName = ref('')
 
 const containers = ref([])
 const loading = ref(true)
@@ -242,5 +267,11 @@ async function viewLogs(container) {
 
   const logs = await containersStore.getContainerLogs(container.name)
   containerLogs.value = logs || 'No logs available'
+}
+
+function openTerminal(container) {
+  terminalTarget.value = container.name
+  terminalTargetName.value = container.name
+  showTerminal.value = true
 }
 </script>
