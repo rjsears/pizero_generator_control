@@ -12,8 +12,7 @@
 -->
 
 <template>
-  <MainLayout>
-    <div class="space-y-6">
+  <div class="space-y-6">
       <!-- Page header -->
       <div>
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Run History</h1>
@@ -119,14 +118,12 @@
           </div>
         </div>
       </Card>
-    </div>
-  </MainLayout>
+  </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useGeneratorStore } from '@/stores/generator'
-import MainLayout from '@/components/layout/MainLayout.vue'
 import Card from '@/components/common/Card.vue'
 import Button from '@/components/common/Button.vue'
 import Input from '@/components/common/Input.vue'
