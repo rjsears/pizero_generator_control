@@ -2864,6 +2864,48 @@ main() {
 
     if [ "$INSTALL_MODE" = "reconfigure" ]; then
         [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE" 2>/dev/null
+        # Load existing .env values so we don't re-ask for everything
+        if [ -f "${SCRIPT_DIR}/.env" ]; then
+            print_info "Loading existing configuration from .env..."
+            set -a
+            source "${SCRIPT_DIR}/.env"
+            set +a
+            # Map .env variable names to internal setup.sh variable names
+            DB_NAME="${DATABASE_NAME:-$DB_NAME}"
+            DB_USER="${DATABASE_USER:-$DB_USER}"
+            DB_PASSWORD="${DATABASE_PASSWORD:-$DB_PASSWORD}"
+            DNS_PROVIDER_NAME="${DNS_PROVIDER:-$DNS_PROVIDER_NAME}"
+            GENSLAVE_API_URL="${SLAVE_API_URL:-$GENSLAVE_API_URL}"
+            GENSLAVE_API_SECRET="${SLAVE_API_SECRET:-$GENSLAVE_API_SECRET}"
+            WEBHOOK_URL="${WEBHOOK_BASE_URL:-$WEBHOOK_URL}"
+            SECRET_KEY="${SECRET_KEY:-$(openssl rand -hex 32)}"
+            WEBHOOK_SECRET="${WEBHOOK_SECRET:-$(openssl rand -hex 32)}"
+            # Set optional services flags based on existing config
+            [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ] && INSTALL_CLOUDFLARE_TUNNEL=true
+            [ -n "$TAILSCALE_AUTH_KEY" ] && INSTALL_TAILSCALE=true
+            # Check if portainer is in docker-compose
+            grep -q "portainer:" "${SCRIPT_DIR}/docker-compose.yaml" 2>/dev/null && INSTALL_PORTAINER=true
+            # Set DNS certbot flags based on provider
+            case $DNS_PROVIDER_NAME in
+                cloudflare)
+                    DNS_CERTBOT_IMAGE="certbot/dns-cloudflare:latest"
+                    DNS_CERTBOT_FLAGS="--dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/${DNS_CREDENTIALS_FILE} --dns-cloudflare-propagation-seconds 60"
+                    ;;
+                digitalocean)
+                    DNS_CERTBOT_IMAGE="certbot/dns-digitalocean:latest"
+                    DNS_CERTBOT_FLAGS="--dns-digitalocean --dns-digitalocean-credentials /etc/letsencrypt/${DNS_CREDENTIALS_FILE} --dns-digitalocean-propagation-seconds 60"
+                    ;;
+                route53)
+                    DNS_CERTBOT_IMAGE="certbot/dns-route53:latest"
+                    DNS_CERTBOT_FLAGS="--dns-route53"
+                    ;;
+                google)
+                    DNS_CERTBOT_IMAGE="certbot/dns-google:latest"
+                    DNS_CERTBOT_FLAGS="--dns-google --dns-google-credentials /etc/letsencrypt/${DNS_CREDENTIALS_FILE} --dns-google-propagation-seconds 120"
+                    ;;
+            esac
+            print_success "Loaded existing configuration"
+        fi
         detect_hardware_mode
 
         print_section "Reconfigure Options"
