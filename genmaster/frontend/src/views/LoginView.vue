@@ -76,9 +76,11 @@
       </div>
 
       <!-- Footer -->
-      <p class="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
-        GenMaster v1.0.0
-      </p>
+      <div class="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
+        <p>GenMaster v1.0.0</p>
+        <p class="mt-1">Richard J. Sears</p>
+        <p>richardjsears@protonmail.com</p>
+      </div>
     </div>
   </div>
 </template>

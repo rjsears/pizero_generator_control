@@ -14,7 +14,7 @@
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, Index, delete, func
+from sqlalchemy import DateTime, ForeignKey, Index, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession as AsyncDBSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -41,7 +41,7 @@ class Session(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     token: Mapped[str] = mapped_column(unique=True, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Client Info
     user_agent: Mapped[Optional[str]] = mapped_column(nullable=True)
