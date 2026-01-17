@@ -2180,8 +2180,7 @@ EOF
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     networks:
       - genmaster-external
-    profiles:
-      - cloudflare
+
 EOF
     fi
 
@@ -2217,8 +2216,7 @@ EOF
       - NET_ADMIN
     networks:
       - genmaster-external
-    profiles:
-      - tailscale
+
 EOF
 
         # Create Tailscale Serve configuration
@@ -2256,8 +2254,7 @@ EOF
       - portainer_data:/data
     networks:
       - genmaster-internal
-    profiles:
-      - portainer
+
 EOF
     fi
 
@@ -2492,13 +2489,8 @@ deploy_stack() {
     create_letsencrypt_volume
     obtain_ssl_certificate
 
-    local profiles=""
-    [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ] && profiles="$profiles --profile cloudflare"
-    [ "$INSTALL_TAILSCALE" = true ] && profiles="$profiles --profile tailscale"
-    [ "$INSTALL_PORTAINER" = true ] && profiles="$profiles --profile portainer"
-
     print_info "Building and starting containers..."
-    $docker_compose_cmd $profiles up -d --build
+    $docker_compose_cmd up -d --build
 
     print_info "Waiting for services..."
     sleep 10
@@ -2602,28 +2594,13 @@ show_deployment_summary() {
         echo ""
     fi
 
-    # Build profiles string for commands
-    local profiles=""
-    [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ] && profiles="$profiles --profile cloudflare"
-    [ "$INSTALL_TAILSCALE" = true ] && profiles="$profiles --profile tailscale"
-    [ "$INSTALL_PORTAINER" = true ] && profiles="$profiles --profile portainer"
-    profiles="${profiles# }"  # trim leading space
-
     # Useful Commands
     echo -e "  ${WHITE}${BOLD}Useful Commands:${NC}"
-    echo -e "    View logs:         ${CYAN}docker compose${profiles:+ $profiles} logs -f${NC}"
-    echo -e "    Stop ALL:          ${CYAN}docker compose${profiles:+ $profiles} down${NC}"
-    echo -e "    Start ALL:         ${CYAN}docker compose${profiles:+ $profiles} up -d${NC}"
-    echo -e "    Restart:           ${CYAN}docker compose${profiles:+ $profiles} restart${NC}"
+    echo -e "    ${GRAY}View logs:${NC}         docker compose logs -f"
+    echo -e "    ${GRAY}Stop services:${NC}     docker compose down"
+    echo -e "    ${GRAY}Start services:${NC}    docker compose up -d"
+    echo -e "    ${GRAY}Restart:${NC}           docker compose restart"
     echo ""
-
-    # Save profiles to file for easy reference
-    if [ -n "$profiles" ]; then
-        echo "$profiles" > "${SCRIPT_DIR}/.docker-profiles"
-        echo -e "  ${GRAY}TIP: Profiles saved to .docker-profiles${NC}"
-        echo -e "  ${GRAY}     Use: docker compose \$(cat .docker-profiles) down${NC}"
-        echo ""
-    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
