@@ -1327,7 +1327,7 @@ configure_genslave() {
 
         # Get GenSlave URL
         while true; do
-            echo -ne "${WHITE}  GenSlave API URL (e.g., http://genslave.local:8000)${NC}: "
+            echo -ne "${WHITE}  GenSlave API URL (e.g., http://genslave.local:8001)${NC}: "
             read GENSLAVE_API_URL
 
             if [ -n "$GENSLAVE_API_URL" ]; then
@@ -1383,7 +1383,7 @@ validate_genslave() {
     # Extract host from URL for connectivity test
     local genslave_host=$(echo "$GENSLAVE_API_URL" | sed -E 's|https?://||' | cut -d':' -f1 | cut -d'/' -f1)
     local genslave_port=$(echo "$GENSLAVE_API_URL" | sed -E 's|https?://[^:]+:?||' | cut -d'/' -f1)
-    genslave_port="${genslave_port:-8000}"
+    genslave_port="${genslave_port:-8001}"
 
     print_info "GenSlave host: $genslave_host"
     print_info "GenSlave port: $genslave_port"
@@ -2536,7 +2536,7 @@ main() {
                 echo -e "  ${GRAY}Run ./setup.sh to configure GenSlave first, or enter the URL now:${NC}"
                 echo ""
                 while true; do
-                    echo -ne "${WHITE}  GenSlave API URL (e.g., http://genslave.local:8000)${NC}: "
+                    echo -ne "${WHITE}  GenSlave API URL (e.g., http://genslave.local:8001)${NC}: "
                     read GENSLAVE_API_URL
                     if [ -n "$GENSLAVE_API_URL" ]; then
                         break
@@ -2573,7 +2573,7 @@ main() {
 
             # Get new URL
             while true; do
-                echo -ne "${WHITE}  New GenSlave API URL (e.g., http://genslave.local:8000)${NC}: "
+                echo -ne "${WHITE}  New GenSlave API URL (e.g., http://genslave.local:8001)${NC}: "
                 read new_url
                 if [ -n "$new_url" ]; then
                     # Validate URL format
