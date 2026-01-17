@@ -95,6 +95,92 @@ The RPi Generator Control system is a distributed two-device architecture for au
 
 ---
 
+## GenSlave Native Application Architecture
+
+GenSlave runs as a native Python service (no Docker) to minimize resource usage on the Pi Zero 2W.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              GenSlave (Raspberry Pi Zero 2W)                        │
+│                               512MB RAM / SD Card / ARM                             │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│  │                         Native Python Application                           │    │
+│  │                           /opt/genslave/                                    │    │
+│  ├─────────────────────────────────────────────────────────────────────────────┤    │
+│  │                                                                             │    │
+│  │  ┌──────────────────────────────────────────────────────────────────────┐   │    │
+│  │  │                    FastAPI Application (:8001)                       │   │    │
+│  │  ├──────────────────────────────────────────────────────────────────────┤   │    │
+│  │  │                                                                      │   │    │
+│  │  │  /api/health      - Health check endpoint                            │   │    │
+│  │  │  /api/heartbeat   - Receive heartbeat from GenMaster                 │   │    │
+│  │  │  /api/relay/*     - Relay control (on/off/state/arm/disarm)          │   │    │
+│  │  │  /api/system      - System info (CPU, RAM, temp)                     │   │    │
+│  │  │  /api/failsafe    - Failsafe monitor status                          │   │    │
+│  │  │                                                                      │   │    │
+│  │  └──────────────────────────────────────────────────────────────────────┘   │    │
+│  │                                                                             │    │
+│  │  ┌─────────────────────────┐    ┌─────────────────────────┐                 │    │
+│  │  │     RelayService        │    │    FailsafeMonitor      │                 │    │
+│  │  │                         │    │                         │                 │    │
+│  │  │  - Automation Hat Mini  │    │  - Tracks heartbeats    │                 │    │
+│  │  │  - relay.one.on/off     │    │  - 30s timeout          │                 │    │
+│  │  │  - Arming state         │    │  - Auto-stops generator │                 │    │
+│  │  │  - Mock mode support    │    │  - Backup webhook       │                 │    │
+│  │  └─────────────────────────┘    └─────────────────────────┘                 │    │
+│  │                                                                             │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                     │
+│  ┌──────────────────────────────────────────────────────────────────────────────┐   │
+│  │                              Systemd Service                                 │   │
+│  ├──────────────────────────────────────────────────────────────────────────────┤   │
+│  │  Service:    genslave.service                                                │   │
+│  │  User:       root (required for GPIO/I2C/SPI)                                │   │
+│  │  WorkDir:    /opt/genslave                                                   │   │
+│  │  Command:    uvicorn app.main:app --host 0.0.0.0 --port 8001                 │   │
+│  │  Restart:    always (5s delay)                                               │   │
+│  └──────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                     │
+│  ┌──────────────────────────────────────────────────────────────────────────────┐   │
+│  │                              Hardware Layer                                  │   │
+│  ├──────────────────────────────────────────────────────────────────────────────┤   │
+│  │  Automation Hat Mini:                                                        │   │
+│  │  ├── Relay 1 (GPIO 16) ──────► Generator Remote Start Terminal               │   │
+│  │  ├── I2C Bus           ──────► Hat Communication                             │   │
+│  │  ├── SPI Bus           ──────► LCD Display (optional)                        │   │
+│  │  └── Status LEDs       ──────► Visual Feedback                               │   │
+│  └──────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### GenSlave File Structure
+
+```
+/opt/genslave/
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # FastAPI application
+│   ├── config.py            # Configuration from environment
+│   ├── routers/
+│   │   ├── health.py        # Health check + heartbeat
+│   │   ├── relay.py         # Relay control + arming
+│   │   └── system.py        # System info
+│   └── services/
+│       ├── relay.py         # Automation Hat Mini control
+│       └── failsafe.py      # Heartbeat monitor
+├── data/
+│   └── genslave.db          # SQLite database (optional)
+├── logs/                    # Application logs
+├── venv/                    # Python virtual environment
+├── requirements.txt         # Python dependencies
+└── .env                     # Environment configuration
+```
+
+---
+
 ## Request Flow Architecture
 
 ```

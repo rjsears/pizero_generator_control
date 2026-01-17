@@ -452,7 +452,7 @@ prepare_system() {
     # Create installation directory
     print_step "7" "Creating installation directories..."
     mkdir -p "$INSTALL_DIR"/{app,data,logs,backups}
-    chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
+    chown -R root:root "$INSTALL_DIR"
     print_success "Created $INSTALL_DIR"
 
     STATE_SYSTEM_PREPARED=true
@@ -901,11 +901,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=${SERVICE_USER}
-Group=${SERVICE_GROUP}
+User=root
+Group=root
 WorkingDirectory=${INSTALL_DIR}
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=${INSTALL_DIR}/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001
+Environment="PYTHONPATH=${INSTALL_DIR}"
+EnvironmentFile=-${INSTALL_DIR}/.env
+ExecStart=${INSTALL_DIR}/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
 Restart=always
 RestartSec=5
 
@@ -913,18 +915,15 @@ RestartSec=5
 MemoryMax=200M
 MemoryHigh=150M
 
-# Security hardening
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=${INSTALL_DIR}/data ${INSTALL_DIR}/logs
-
-# GPIO access
-SupplementaryGroups=gpio i2c spi
+# GPIO/I2C/SPI require root access - minimal hardening
+NoNewPrivileges=false
+ProtectSystem=false
+ProtectHome=false
 
 # Logging
-StandardOutput=append:${INSTALL_DIR}/logs/genslave.log
-StandardError=append:${INSTALL_DIR}/logs/genslave.log
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=genslave
 
 [Install]
 WantedBy=multi-user.target
@@ -932,7 +931,29 @@ EOF
 
     print_success "Service file created"
 
-    print_step "2" "Creating log rotation configuration..."
+    print_step "2" "Deploying application code..."
+
+    # Get the directory where setup.sh is located (the genslave repo directory)
+    local SCRIPT_DIR
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    # Check if app directory exists in the repo
+    if [ -d "$SCRIPT_DIR/app" ]; then
+        # Copy app files to install directory
+        cp -r "$SCRIPT_DIR/app/"* "$INSTALL_DIR/app/"
+        print_success "Application code deployed from $SCRIPT_DIR/app/"
+    else
+        print_warning "App directory not found at $SCRIPT_DIR/app/"
+        print_warning "You will need to manually deploy the app code to $INSTALL_DIR/app/"
+    fi
+
+    # Copy requirements if they exist
+    if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
+        cp "$SCRIPT_DIR/requirements.txt" "$INSTALL_DIR/"
+        print_success "Requirements file copied"
+    fi
+
+    print_step "3" "Creating log rotation configuration..."
 
     cat > /etc/logrotate.d/genslave << EOF
 ${INSTALL_DIR}/logs/*.log {
@@ -942,7 +963,7 @@ ${INSTALL_DIR}/logs/*.log {
     compress
     delaycompress
     notifempty
-    create 0640 ${SERVICE_USER} ${SERVICE_GROUP}
+    create 0640 root root
     postrotate
         systemctl restart genslave > /dev/null 2>&1 || true
     endscript
@@ -951,13 +972,26 @@ EOF
 
     print_success "Log rotation configured"
 
-    print_step "3" "Reloading systemd..."
+    print_step "4" "Reloading systemd..."
     systemctl daemon-reload
     print_success "Systemd reloaded"
 
-    print_step "4" "Enabling service..."
+    print_step "5" "Enabling service..."
     systemctl enable genslave
     print_success "Service enabled"
+
+    print_step "6" "Starting service..."
+    if systemctl start genslave; then
+        print_success "Service started"
+        sleep 2
+        if systemctl is-active --quiet genslave; then
+            print_success "GenSlave service is running"
+        else
+            print_warning "Service started but may not be fully ready yet"
+        fi
+    else
+        print_warning "Failed to start service - check logs with: journalctl -u genslave"
+    fi
 
     STATE_SERVICE_INSTALLED=true
     save_state
@@ -1051,20 +1085,36 @@ EOF
 print_summary() {
     print_section "Installation Complete!"
 
-    echo "  GenSlave has been successfully installed."
+    echo "  GenSlave has been successfully installed and started."
     echo ""
     echo -e "  ${BOLD}Installation Location:${NC}"
     echo "  Application:      $INSTALL_DIR/app/"
     echo "  Configuration:    $CONFIG_FILE"
     echo "  Database:         $INSTALL_DIR/data/genslave.db"
-    echo "  Logs:             $INSTALL_DIR/logs/"
+    echo "  Logs:             journalctl -u genslave"
+    echo ""
+
+    echo -e "  ${BOLD}Service Status:${NC}"
+    if systemctl is-active --quiet genslave; then
+        echo -e "  Status:           ${GREEN}Running${NC}"
+    else
+        echo -e "  Status:           ${RED}Not Running${NC}"
+    fi
+    echo ""
+
+    echo -e "  ${BOLD}API Endpoints (port 8001):${NC}"
+    echo "  Health Check:     GET  http://localhost:8001/api/health"
+    echo "  Relay State:      GET  http://localhost:8001/api/relay/state"
+    echo "  Relay ON:         POST http://localhost:8001/api/relay/on"
+    echo "  Relay OFF:        POST http://localhost:8001/api/relay/off"
     echo ""
 
     echo -e "  ${BOLD}Service Management:${NC}"
     echo "  Start:            sudo systemctl start genslave"
     echo "  Stop:             sudo systemctl stop genslave"
+    echo "  Restart:          sudo systemctl restart genslave"
     echo "  Status:           sudo systemctl status genslave"
-    echo "  Logs:             tail -f $INSTALL_DIR/logs/genslave.log"
+    echo "  Logs:             sudo journalctl -u genslave -f"
     echo ""
 
     if [ "$ENABLE_TAILSCALE" = true ]; then
@@ -1072,14 +1122,14 @@ print_summary() {
         echo -e "  ${BOLD}Tailscale:${NC}"
         echo "  IP Address:       $ts_ip"
         echo "  Hostname:         $TAILSCALE_HOSTNAME"
+        echo "  API URL:          http://${TAILSCALE_HOSTNAME}:8001"
         echo ""
     fi
 
     echo -e "  ${BOLD}${YELLOW}Next Steps:${NC}"
-    echo "  1. Reboot the system (if I2C/SPI were enabled): sudo reboot"
-    echo "  2. Start the service: sudo systemctl start genslave"
-    echo "  3. Check status: sudo systemctl status genslave"
-    echo "  4. Verify GenMaster can communicate with GenSlave"
+    echo "  1. Test the API: curl http://localhost:8001/api/health"
+    echo "  2. Configure GenMaster to connect to this GenSlave"
+    echo "  3. Arm automation from GenMaster when ready"
     echo ""
 
     if grep -q "reboot" /var/run/reboot-required 2>/dev/null || [ -f /var/run/reboot-required ]; then

@@ -280,6 +280,41 @@ docker compose logs -f genmaster
 # https://your-domain.com or https://genmaster (via Tailscale)
 ```
 
+### GenSlave Installation (Pi Zero 2W)
+
+GenSlave runs as a native Python service (no Docker) on the Pi Zero 2W:
+
+```bash
+# Clone repository on the Pi Zero 2W
+git clone https://github.com/rjsears/pizero_generator_control.git
+cd pizero_generator_control/genslave
+
+# Run interactive setup
+sudo ./setup.sh
+```
+
+The GenSlave setup will:
+1. **Check I2C/SPI** - Verify hardware interfaces are enabled
+2. **Install dependencies** - Python, system libraries, Automation Hat Mini
+3. **Create virtual environment** - Isolated Python environment
+4. **Deploy application** - Copy app code to /opt/genslave/
+5. **Configure Tailscale** - Optional VPN for GenMaster connectivity
+6. **Create systemd service** - Auto-start on boot
+7. **Start service** - Begin listening on port 8001
+
+### Verify GenSlave
+
+```bash
+# Check service status
+sudo systemctl status genslave
+
+# View logs
+sudo journalctl -u genslave -f
+
+# Test API
+curl http://localhost:8001/api/health
+```
+
 ---
 
 ## ⚙ Configuration
@@ -420,6 +455,30 @@ GET /api/system/health
 
 # GenSlave status
 GET /api/system/slave
+```
+
+### GenSlave API (Port 8001)
+
+```bash
+# Health check
+GET /api/health
+
+# Relay control
+GET  /api/relay/state    # Get current relay state
+POST /api/relay/on       # Turn relay ON (requires armed)
+POST /api/relay/off      # Turn relay OFF
+
+# Arming
+GET  /api/relay/arm      # Get arm status
+POST /api/relay/arm      # Arm automation
+POST /api/relay/disarm   # Disarm automation
+
+# Heartbeat (from GenMaster)
+POST /api/heartbeat      # Receive heartbeat with command
+
+# System info
+GET  /api/system         # CPU, RAM, temperature
+GET  /api/failsafe       # Failsafe monitor status
 ```
 
 ### Automation Arming

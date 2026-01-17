@@ -29,20 +29,28 @@ else:
     try:
         import automationhat as _automationhat
 
-        # The library auto-initializes on import
-        # Test by actually trying to read/set the relay
-        # This is more reliable than is_automation_hat() which may not work for Mini
+        # Test that we can actually use the relay by reading its state
+        # The automationhat library auto-initializes on import
+        # We verify it works by attempting to access the relay
         try:
-            # Try to read relay state - this will fail if no hat
-            _automationhat.relay.one.off()  # Ensure relay starts OFF
+            # Give the HAT a moment to initialize
+            import time
+            time.sleep(0.1)
+
+            # Try to read relay state - this will fail if HAT not present
+            _ = _automationhat.relay.one.is_on()
+
             automationhat = _automationhat
             HAT_AVAILABLE = True
-            logger.info("Automation Hat Mini detected and initialized (relay test passed)")
+            logger.info("Automation Hat Mini detected and ready")
+
         except Exception as e:
-            logger.warning(f"automationhat library loaded but hardware test failed: {e}")
+            logger.warning(
+                f"automationhat library loaded but HAT not responding: {e}"
+            )
 
     except ImportError as e:
-        logger.warning(f"automationhat library not available: {e}")
+        logger.warning(f"automationhat library not installed: {e}")
 
 
 class RelayService:
