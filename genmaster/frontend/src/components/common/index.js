@@ -19,6 +19,8 @@ export { default as Button } from './Button.vue'
 export { default as Input } from './Input.vue'
 export { default as Select } from './Select.vue'
 export { default as Toggle } from './Toggle.vue'
+export { default as EmptyState } from './EmptyState.vue'
+export { default as ConfirmDialog } from './ConfirmDialog.vue'
 
 // Animated loaders with rotating messages
 export { default as GenSlaveLoader } from './GenSlaveLoader.vue'

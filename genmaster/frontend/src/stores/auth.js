@@ -21,7 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref(null)
 
   // Getters
-  const isAuthenticated = computed(() => !!token.value)
+  const isAuthenticated = computed(() => !!token.value && !!user.value)
   const isAdmin = computed(() => user.value?.is_admin || false)
   const username = computed(() => user.value?.username || '')
 
@@ -92,6 +92,13 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
   }
 
+  // Initialize: try to fetch current user if token exists
+  async function init() {
+    if (token.value) {
+      await fetchCurrentUser()
+    }
+  }
+
   return {
     // State
     user,
@@ -110,5 +117,6 @@ export const useAuthStore = defineStore('auth', () => {
     fetchCurrentUser,
     changePassword,
     clearError,
+    init,
   }
 })

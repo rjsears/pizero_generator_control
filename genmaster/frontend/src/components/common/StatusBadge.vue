@@ -10,96 +10,121 @@
   https://github.com/rjsears
   -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
-
-<template>
-  <span :class="badgeClasses">
-    <span v-if="pulse" class="relative flex h-2 w-2 mr-1.5">
-      <span
-        class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
-        :class="pulseColorClass"
-      ></span>
-      <span
-        class="relative inline-flex rounded-full h-2 w-2"
-        :class="dotColorClass"
-      ></span>
-    </span>
-    <slot>{{ text }}</slot>
-  </span>
-</template>
-
 <script setup>
 import { computed } from 'vue'
 
 const props = defineProps({
   status: {
     type: String,
-    default: 'gray',
-    validator: (value) =>
-      ['success', 'warning', 'danger', 'info', 'gray', 'green', 'amber', 'red', 'blue'].includes(value),
+    required: true,
   },
-  text: {
+  size: {
     type: String,
-    default: '',
+    default: 'md', // 'sm', 'md', 'lg'
   },
   pulse: {
     type: Boolean,
     default: false,
   },
-  size: {
-    type: String,
-    default: 'md',
-    validator: (value) => ['sm', 'md', 'lg'].includes(value),
-  },
 })
 
-const statusColors = {
-  success: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  green: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  warning: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-  amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-  danger: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  red: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  gray: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+const statusConfig = {
+  // Container statuses
+  running: { label: 'Running', color: 'emerald' },
+  stopped: { label: 'Stopped', color: 'gray' },
+  restarting: { label: 'Restarting', color: 'amber' },
+  unhealthy: { label: 'Unhealthy', color: 'red' },
+  healthy: { label: 'Healthy', color: 'emerald' },
+  exited: { label: 'Exited', color: 'gray' },
+  created: { label: 'Created', color: 'blue' },
+  paused: { label: 'Paused', color: 'amber' },
+  dead: { label: 'Dead', color: 'red' },
+
+  // Generator statuses
+  starting: { label: 'Starting', color: 'amber' },
+  stopping: { label: 'Stopping', color: 'amber' },
+  cooldown: { label: 'Cooldown', color: 'blue' },
+  idle: { label: 'Idle', color: 'gray' },
+  warmup: { label: 'Warmup', color: 'amber' },
+
+  // Schedule statuses
+  scheduled: { label: 'Scheduled', color: 'blue' },
+  completed: { label: 'Completed', color: 'emerald' },
+  cancelled: { label: 'Cancelled', color: 'gray' },
+  missed: { label: 'Missed', color: 'red' },
+
+  // Generic
+  success: { label: 'Success', color: 'emerald' },
+  failed: { label: 'Failed', color: 'red' },
+  pending: { label: 'Pending', color: 'amber' },
+  active: { label: 'Active', color: 'emerald' },
+  inactive: { label: 'Inactive', color: 'gray' },
+  enabled: { label: 'Enabled', color: 'emerald' },
+  disabled: { label: 'Disabled', color: 'gray' },
+  error: { label: 'Error', color: 'red' },
+  warning: { label: 'Warning', color: 'amber' },
+  info: { label: 'Info', color: 'blue' },
+  online: { label: 'Online', color: 'emerald' },
+  offline: { label: 'Offline', color: 'red' },
+  connected: { label: 'Connected', color: 'emerald' },
+  disconnected: { label: 'Disconnected', color: 'red' },
 }
 
+const config = computed(() => {
+  const status = props.status.toLowerCase()
+  return statusConfig[status] || { label: props.status, color: 'gray' }
+})
+
+const colorClasses = computed(() => {
+  const colors = {
+    emerald: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+    red: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+    amber: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400',
+    blue: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+    gray: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
+  }
+  return colors[config.value.color] || colors.gray
+})
+
+const sizeClasses = computed(() => {
+  const sizes = {
+    sm: 'px-1.5 py-0.5 text-xs',
+    md: 'px-2 py-1 text-xs',
+    lg: 'px-2.5 py-1 text-sm',
+  }
+  return sizes[props.size] || sizes.md
+})
+
 const pulseColors = {
-  success: 'bg-green-400',
-  green: 'bg-green-400',
-  warning: 'bg-amber-400',
+  emerald: 'bg-emerald-400',
   amber: 'bg-amber-400',
-  danger: 'bg-red-400',
   red: 'bg-red-400',
-  info: 'bg-blue-400',
   blue: 'bg-blue-400',
   gray: 'bg-gray-400',
 }
 
-const dotColors = {
-  success: 'bg-green-500',
-  green: 'bg-green-500',
-  warning: 'bg-amber-500',
-  amber: 'bg-amber-500',
-  danger: 'bg-red-500',
-  red: 'bg-red-500',
-  info: 'bg-blue-500',
-  blue: 'bg-blue-500',
-  gray: 'bg-gray-500',
-}
-
-const sizeClasses = {
-  sm: 'px-2 py-0.5 text-xs',
-  md: 'px-2.5 py-0.5 text-xs',
-  lg: 'px-3 py-1 text-sm',
-}
-
-const badgeClasses = computed(() => [
-  'inline-flex items-center rounded-full font-medium',
-  statusColors[props.status] || statusColors.gray,
-  sizeClasses[props.size],
-])
-
-const pulseColorClass = computed(() => pulseColors[props.status] || pulseColors.gray)
-const dotColorClass = computed(() => dotColors[props.status] || dotColors.gray)
+const pulseColorClass = computed(() => pulseColors[config.value.color] || pulseColors.gray)
 </script>
+
+<template>
+  <span
+    :class="[
+      'inline-flex items-center font-medium rounded-full',
+      colorClasses,
+      sizeClasses
+    ]"
+  >
+    <span v-if="pulse" class="relative flex h-1.5 w-1.5 mr-1.5">
+      <span
+        class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+        :class="pulseColorClass"
+      ></span>
+      <span
+        class="relative inline-flex rounded-full h-1.5 w-1.5"
+        :class="pulseColorClass"
+      ></span>
+    </span>
+    <span v-else class="w-1.5 h-1.5 rounded-full mr-1.5 bg-current opacity-75" />
+    {{ config.label }}
+  </span>
+</template>

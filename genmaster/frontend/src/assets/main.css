@@ -1,92 +1,92 @@
-/* -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-   /genmaster/frontend/src/assets/main.css
+/*
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/genmaster/frontend/src/assets/main.css
 
-   Part of the "RPi Generator Control" suite
-   Version 1.0.0 - January 15th, 2026
+Part of the "RPi Generator Control" suite
+Version 1.0.0 - January 15th, 2026
 
-   Richard J. Sears
-   richardjsears@protonmail.com
-   https://github.com/rjsears
-   -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
+Richard J. Sears
+richardjsears@protonmail.com
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+*/
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+@import './themes.css';
+
 /* Base styles */
-@layer base {
-  html {
-    @apply scroll-smooth;
-  }
-
-  body {
-    @apply font-sans text-gray-900 dark:text-gray-100 antialiased;
-  }
-
-  /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    @apply w-2;
-  }
-
-  ::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-gray-800;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 dark:bg-gray-600 rounded-full;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-400 dark:bg-gray-500;
-  }
+body {
+  @apply bg-background-primary text-primary antialiased;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-/* Component styles */
-@layer components {
-  /* Card component */
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  @apply w-2 h-2;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-background-secondary;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-400 dark:bg-slate-600 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500 dark:bg-slate-500;
+}
+
+/* Focus styles */
+*:focus-visible {
+  @apply outline-none ring-2 ring-blue-500 ring-offset-2 ring-offset-background-primary;
+}
+
+/* Custom utilities */
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-500;
+  }
+
   .card {
-    @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700;
+    @apply bg-surface rounded-lg border border-gray-400/60 dark:border-slate-600 shadow-sm;
   }
 
-  .card-header {
-    @apply px-4 py-3 border-b border-gray-200 dark:border-gray-700;
+  .card-hover {
+    @apply card transition-all duration-200 hover:shadow-md hover:border-blue-500/50;
   }
 
-  .card-body {
-    @apply p-4;
-  }
-
-  /* Button variants */
   .btn {
-    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium
-           transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors;
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
   }
 
   .btn-primary {
-    @apply btn bg-primary-600 text-white hover:bg-primary-700
-           focus:ring-primary-500 dark:focus:ring-offset-gray-900;
+    @apply btn bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500;
   }
 
   .btn-secondary {
-    @apply btn bg-gray-200 text-gray-700 hover:bg-gray-300
-           dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600
-           focus:ring-gray-500 dark:focus:ring-offset-gray-900;
+    @apply btn bg-gray-200 dark:bg-slate-700 text-gray-900 dark:text-slate-100;
+    @apply hover:bg-gray-300 dark:hover:bg-slate-600 focus:ring-gray-500;
   }
 
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-700
-           focus:ring-red-500 dark:focus:ring-offset-gray-900;
+    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
   }
 
   .btn-success {
-    @apply btn bg-green-600 text-white hover:bg-green-700
-           focus:ring-green-500 dark:focus:ring-offset-gray-900;
+    @apply btn bg-green-600 text-white hover:bg-green-700 focus:ring-green-500;
   }
 
   .btn-warning {
-    @apply btn bg-amber-500 text-white hover:bg-amber-600
-           focus:ring-amber-500 dark:focus:ring-offset-gray-900;
+    @apply btn bg-amber-500 text-white hover:bg-amber-600 focus:ring-amber-500;
+  }
+
+  .btn-ghost {
+    @apply btn text-secondary hover:bg-surface-hover;
   }
 
   .btn-sm {
@@ -97,18 +97,30 @@
     @apply px-6 py-3 text-lg;
   }
 
-  /* Form inputs */
   .input {
-    @apply w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600
-           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-           placeholder-gray-400 dark:placeholder-gray-500
-           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
-           disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed;
+    @apply w-full px-3 py-2 rounded-lg border border-gray-400/60 dark:border-slate-600;
+    @apply bg-surface text-primary placeholder:text-gray-400;
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
   }
 
   .label {
-    @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
+    @apply block text-sm font-medium text-secondary mb-1;
   }
+
+  /* Generator state colors */
+  .text-gen-stopped { @apply text-gray-500; }
+  .text-gen-starting { @apply text-amber-500; }
+  .text-gen-running { @apply text-green-500; }
+  .text-gen-stopping { @apply text-amber-500; }
+  .text-gen-cooldown { @apply text-blue-500; }
+  .text-gen-error { @apply text-red-500; }
+
+  .bg-gen-stopped { @apply bg-gray-500; }
+  .bg-gen-starting { @apply bg-amber-500; }
+  .bg-gen-running { @apply bg-green-500; }
+  .bg-gen-stopping { @apply bg-amber-500; }
+  .bg-gen-cooldown { @apply bg-blue-500; }
+  .bg-gen-error { @apply bg-red-500; }
 
   /* Status badges */
   .badge {
@@ -141,8 +153,8 @@
   }
 
   .table th {
-    @apply px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider
-           bg-gray-50 dark:bg-gray-800/50;
+    @apply px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider;
+    @apply bg-gray-50 dark:bg-gray-800/50;
   }
 
   .table td {
@@ -151,37 +163,5 @@
 
   .table tbody tr:hover {
     @apply bg-gray-50 dark:bg-gray-800/50;
-  }
-}
-
-/* Utility classes */
-@layer utilities {
-  /* Generator state colors */
-  .text-gen-stopped { @apply text-gray-500; }
-  .text-gen-starting { @apply text-amber-500; }
-  .text-gen-running { @apply text-green-500; }
-  .text-gen-stopping { @apply text-amber-500; }
-  .text-gen-cooldown { @apply text-blue-500; }
-  .text-gen-error { @apply text-red-500; }
-
-  .bg-gen-stopped { @apply bg-gray-500; }
-  .bg-gen-starting { @apply bg-amber-500; }
-  .bg-gen-running { @apply bg-green-500; }
-  .bg-gen-stopping { @apply bg-amber-500; }
-  .bg-gen-cooldown { @apply bg-blue-500; }
-  .bg-gen-error { @apply bg-red-500; }
-
-  /* Animation utilities */
-  .animate-pulse-dot {
-    animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  @keyframes pulse-dot {
-    0%, 100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.5;
-    }
   }
 }
