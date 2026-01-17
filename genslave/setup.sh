@@ -58,6 +58,8 @@ BLUE='\033[0;34m'
 MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
+GRAY='\033[0;90m'
+DIM='\033[2m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
@@ -582,10 +584,18 @@ EOF
     print_success "Requirements files created"
 
     print_step "4" "Installing core Python dependencies..."
-    if "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements-core.txt" > /dev/null 2>&1; then
+    local core_pip_output
+    core_pip_output=$("$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements-core.txt" 2>&1)
+    local core_pip_exit=$?
+
+    if [ $core_pip_exit -eq 0 ]; then
         print_success "Core dependencies installed"
     else
         print_error "Failed to install core dependencies"
+        echo -e "  ${GRAY}Error details:${NC}"
+        echo "$core_pip_output" | grep -iE "error|failed|cannot" | head -5 | while read line; do
+            echo -e "    ${DIM}$line${NC}"
+        done
         return 1
     fi
 
@@ -643,11 +653,19 @@ validate_hardware() {
     hat_result=$("$INSTALL_DIR/venv/bin/python3" << 'PYEOF' 2>&1
 try:
     import automationhat
-    # is_automation_hat() works for both Automation Hat and Automation Hat Mini
-    if automationhat.is_automation_hat():
-        print("SUCCESS:Automation Hat detected and ready")
-    else:
-        print("WARNING:Automation Hat library loaded but no hat detected on I2C bus")
+    # NOTE: is_automation_hat() does NOT work for Automation Hat Mini!
+    # Instead, we test by actually trying to use the relay - this is reliable
+    try:
+        # Cycle the relay to verify it works
+        automationhat.relay.one.off()
+        import time
+        time.sleep(0.1)
+        automationhat.relay.one.on()
+        time.sleep(0.1)
+        automationhat.relay.one.off()
+        print("SUCCESS:Automation Hat Mini detected (relay test passed)")
+    except Exception as e:
+        print(f"WARNING:automationhat library loaded but relay test failed - {e}")
 except ImportError as e:
     print(f"ERROR:Module not found - {e}")
 except Exception as e:
