@@ -44,7 +44,6 @@ fi
 SERVICE_GROUP="$SERVICE_USER"
 CONFIG_FILE="${INSTALL_DIR}/.env"
 STATE_FILE="${INSTALL_DIR}/.setup_state"
-LOG_FILE="/var/log/genslave-setup.log"
 
 # Python version
 PYTHON_VERSION="3.11"
@@ -91,18 +90,6 @@ WEBHOOK_SECRET=""
 # =============================================================================
 # Utility Functions
 # =============================================================================
-
-log() {
-    local level="$1"
-    shift
-    local message="$*"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[${timestamp}] [${level}] ${message}" >> "$LOG_FILE"
-}
-
-log_info() { log "INFO" "$*"; }
-log_warn() { log "WARN" "$*"; }
-log_error() { log "ERROR" "$*"; }
 
 print_header() {
     clear
@@ -1099,8 +1086,6 @@ print_summary() {
         echo "  sudo reboot"
         echo ""
     fi
-
-    log_info "Installation completed successfully"
 }
 
 # =============================================================================
@@ -1178,11 +1163,6 @@ main() {
         esac
     done
 
-    # Initialize
-    mkdir -p "$(dirname "$LOG_FILE")"
-    touch "$LOG_FILE"
-    log_info "GenSlave setup started"
-
     check_root
     print_header
 
@@ -1215,8 +1195,6 @@ main() {
 
     create_helper_scripts
     print_summary
-
-    log_info "GenSlave setup completed"
 }
 
 main "$@"
