@@ -2129,8 +2129,11 @@ EOF
         cat >> "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
 
   # ===========================================================================
-  # Tailscale VPN
+  # Tailscale VPN with HTTPS Support
   # ===========================================================================
+  # Provides private access via Tailscale network with automatic HTTPS certs.
+  # After startup, approve the machine at: https://login.tailscale.com/admin/machines
+  # Enable HTTPS at: https://login.tailscale.com/admin/dns (enable MagicDNS & HTTPS)
   tailscale:
     image: tailscale/tailscale:latest
     container_name: genmaster_tailscale
@@ -2139,17 +2142,41 @@ EOF
     environment:
       - TS_AUTHKEY=${TAILSCALE_AUTHKEY}
       - TS_STATE_DIR=/var/lib/tailscale
-      - TS_USERSPACE=true
+      - TS_SERVE_CONFIG=/config/tailscale-serve.json
+      - TS_EXTRA_ARGS=--advertise-tags=tag:genmaster
     volumes:
       - tailscale_state:/var/lib/tailscale
+      - ./tailscale-serve.json:/config/tailscale-serve.json:ro
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
     networks:
+      - genmaster-internal
       - genmaster-external
     profiles:
       - tailscale
 EOF
+
+        # Create Tailscale Serve configuration for HTTPS proxy to nginx
+        cat > "${SCRIPT_DIR}/tailscale-serve.json" << 'EOF'
+{
+  "TCP": {
+    "443": {
+      "HTTPS": true
+    }
+  },
+  "Web": {
+    "${TS_CERT_DOMAIN}:443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://nginx:80"
+        }
+      }
+    }
+  }
+}
+EOF
+        log_info "Created Tailscale Serve configuration"
     fi
 
     # Add Portainer if enabled
@@ -2392,14 +2419,26 @@ show_deployment_summary() {
     # Tailscale Action Required
     if [ "$INSTALL_TAILSCALE" = true ]; then
         echo -e "  ${YELLOW}⚠ TAILSCALE ACTION REQUIRED:${NC}"
-        echo -e "    You must approve the advertised route in Tailscale admin:"
+        echo -e "    Complete these steps to enable Tailscale access:"
         echo ""
-        echo -e "    1. Visit: ${CYAN}https://login.tailscale.com/admin/machines${NC}"
-        echo -e "    2. Find your ${WHITE}${TAILSCALE_HOSTNAME}${NC} node"
-        echo -e "    3. Click the node and approve the advertised route"
+        echo -e "    ${WHITE}Step 1: Approve the machine${NC}"
+        echo -e "      • Visit: ${CYAN}https://login.tailscale.com/admin/machines${NC}"
+        echo -e "      • Find your ${WHITE}${TAILSCALE_HOSTNAME}${NC} node"
+        echo -e "      • Click '...' menu → 'Edit route settings' → Enable routes"
         echo ""
-        echo -e "    ${GRAY}NOTE: GenMaster will NOT be accessible via Tailscale${NC}"
-        echo -e "    ${GRAY}      until this route has been approved!${NC}"
+        echo -e "    ${WHITE}Step 2: Enable HTTPS certificates${NC}"
+        echo -e "      • Visit: ${CYAN}https://login.tailscale.com/admin/dns${NC}"
+        echo -e "      • Enable ${WHITE}MagicDNS${NC} (if not already enabled)"
+        echo -e "      • Enable ${WHITE}HTTPS Certificates${NC}"
+        echo ""
+        echo -e "    ${WHITE}Step 3: Create ACL tag (if using tags)${NC}"
+        echo -e "      • Visit: ${CYAN}https://login.tailscale.com/admin/acls${NC}"
+        echo -e "      • Add tag: ${WHITE}tag:genmaster${NC} to your ACL policy"
+        echo ""
+        echo -e "    ${GRAY}NOTE: GenMaster will NOT be accessible via Tailscale HTTPS${NC}"
+        echo -e "    ${GRAY}      until Steps 1 and 2 are completed!${NC}"
+        echo ""
+        echo -e "    After setup, access via: ${CYAN}https://${TAILSCALE_HOSTNAME}.<tailnet>.ts.net${NC}"
         echo ""
     fi
 
