@@ -76,4 +76,20 @@ export default {
   getLogs(params = {}) {
     return api.get('/system/logs', { params })
   },
+
+  /**
+   * Get SSL certificate info
+   * @returns {Promise<Object>}
+   */
+  getSslInfo() {
+    return api.get('/system/ssl')
+  },
+
+  /**
+   * Force renew SSL certificate
+   * @returns {Promise<Object>}
+   */
+  forceRenewSsl() {
+    return api.post('/system/ssl/renew')
+  },
 }
