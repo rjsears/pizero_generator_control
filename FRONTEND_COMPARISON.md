@@ -32,7 +32,12 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
 |-------|---------|--------|
 | 2 | System Health UI (core services, logs, docker) | PENDING |
 | 4 | Network Cloudflare Metrics | PENDING (requires API key) |
-| 5 | System Terminal Tab with xterm.js | PENDING |
+
+### Phase 5 Completed (January 17th, 2026)
+
+| Feature | Status |
+|---------|--------|
+| System Terminal Tab with xterm.js | DONE |
 
 ### Phase 4 Completed (January 17th, 2026)
 
@@ -160,6 +165,23 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
   - New Tailscale Peers section showing all peers
   - Peer online/offline status indicators
   - Exit node badges
+
+---
+
+## Files Created/Modified in Phase 5
+
+### Frontend
+- `genmaster/frontend/src/components/system/SystemTerminal.vue` - NEW:
+  - Full terminal component using xterm.js
+  - Container and host shell selection
+  - Dark/light theme support matching app theme
+  - Connection status indicators
+  - Terminal size display
+  - WebSocket connection to backend terminal API
+- `genmaster/frontend/src/views/SystemView.vue` - Added Terminal tab:
+  - New Terminal tab in System view
+  - Header banner with gradient styling
+  - SystemTerminal component integration
 
 ---
 
@@ -396,9 +418,11 @@ These are generator-specific features that are kept:
 19. [ ] Network Cloudflare Metrics (requires API key)
 20. [x] Network Tailscale Peer Info
 
-### Phase 5: Terminal - PENDING
-21. [ ] System Terminal Tab with xterm.js
-22. [ ] Notification Groups feature (note: Groups tab exists but may need enhancement)
+### Phase 5: Terminal - COMPLETE
+21. [x] System Terminal Tab with xterm.js
+22. [x] Container/Host shell selection
+23. [x] Theme switching (dark/light)
+24. [ ] Notification Groups feature (note: Groups tab exists but may need enhancement)
 
 ---
 

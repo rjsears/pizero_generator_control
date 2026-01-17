@@ -20,6 +20,7 @@ import { formatBytes, formatUptime } from '../utils/formatters'
 import Card from '../components/common/Card.vue'
 import LoadingSpinner from '../components/common/LoadingSpinner.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
+import SystemTerminal from '../components/system/SystemTerminal.vue'
 import {
   CpuChipIcon,
   CircleStackIcon,
@@ -50,6 +51,7 @@ const activeTab = ref('health')
 const tabs = [
   { id: 'health', name: 'Health', icon: SignalIcon, iconColor: 'text-emerald-500', bgActive: 'bg-emerald-500/15 dark:bg-emerald-500/20', textActive: 'text-emerald-700 dark:text-emerald-400', borderActive: 'border-emerald-500/30' },
   { id: 'network', name: 'Network', icon: GlobeAltIcon, iconColor: 'text-purple-500', bgActive: 'bg-purple-500/15 dark:bg-purple-500/20', textActive: 'text-purple-700 dark:text-purple-400', borderActive: 'border-purple-500/30' },
+  { id: 'terminal', name: 'Terminal', icon: CommandLineIcon, iconColor: 'text-amber-500', bgActive: 'bg-amber-500/15 dark:bg-amber-500/20', textActive: 'text-amber-700 dark:text-amber-400', borderActive: 'border-amber-500/30' },
   { id: 'genslave', name: 'GenSlave', icon: ServerIcon, iconColor: 'text-blue-500', bgActive: 'bg-blue-500/15 dark:bg-blue-500/20', textActive: 'text-blue-700 dark:text-blue-400', borderActive: 'border-blue-500/30' },
 ]
 
@@ -646,6 +648,28 @@ onMounted(async () => {
           </div>
         </Card>
       </template>
+    </template>
+
+    <!-- Terminal Tab -->
+    <template v-if="activeTab === 'terminal'">
+      <!-- Header Banner -->
+      <div class="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 p-6 text-white shadow-lg">
+        <div class="absolute inset-0 bg-black/10"></div>
+        <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+        <div class="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+        <div class="relative flex items-center gap-4">
+          <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+            <CommandLineIcon class="h-8 w-8" />
+          </div>
+          <div>
+            <h2 class="text-2xl font-bold">Terminal Access</h2>
+            <p class="text-white/80">Connect to container or host shell</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Terminal Component -->
+      <SystemTerminal />
     </template>
 
     <!-- GenSlave Tab -->
