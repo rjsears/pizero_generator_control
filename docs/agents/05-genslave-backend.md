@@ -306,6 +306,9 @@ class Settings(BaseSettings):
     # GenMaster (for reference)
     master_api_url: Optional[str] = None
 
+    # Hardware
+    MOCK_HAT_MODE: bool = False  # Set True for development without hardware
+
     # LCD
     lcd_enabled: bool = True
     lcd_brightness: int = 100
@@ -617,8 +620,9 @@ from typing import Optional
 class HeartbeatRequest(BaseModel):
     """Heartbeat from GenMaster."""
     timestamp: int
-    master_state: dict
-    sequence: int
+    generator_running: bool
+    armed: bool           # Automation armed state from GenMaster
+    command: str = "none" # Commands sent separately, not via heartbeat
 
 
 class HeartbeatResponse(BaseModel):
@@ -626,7 +630,7 @@ class HeartbeatResponse(BaseModel):
     timestamp: int
     slave_state: dict
     relay_state: bool
-    sequence_ack: int
+    armed: bool           # Echo back armed state for verification
     system_health: Optional[dict] = None
 
 
@@ -962,136 +966,139 @@ async def get_config(db: Session = Depends(get_db)):
 
 ### Relay Control Service
 
+**IMPORTANT**: The Automation Hat Mini relay has **no state readback capability**. The `is_on()` method does not exist on the relay object. State must be tracked internally.
+
 ```python
 # genslave/app/services/relay_control.py
+import logging
 import time
 from typing import Optional
-from sqlalchemy.orm import Session
-from app.database import SessionLocal
-from app.models import SystemState
 
-# Try to import automationhat, fallback for development
-try:
-    import automationhat
-    HARDWARE_AVAILABLE = True
-except ImportError:
-    HARDWARE_AVAILABLE = False
-    print("WARNING: automationhat not available, running in simulation mode")
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Try to import automationhat, fall back to mock if not available
+# Detection is done by actually trying to use the relay, not is_automation_hat()
+automationhat = None
+HAT_AVAILABLE = False
+
+if settings.MOCK_HAT_MODE:
+    logger.info("Mock HAT mode enabled via configuration")
+else:
+    try:
+        import automationhat as _automationhat
+        try:
+            # Try to use relay - this will fail if no hat connected
+            # NOTE: is_automation_hat() doesn't work for Mini version
+            _automationhat.relay.one.off()  # Ensure relay starts OFF
+            automationhat = _automationhat
+            HAT_AVAILABLE = True
+            logger.info("Automation Hat Mini detected and initialized (relay test passed)")
+        except Exception as e:
+            logger.warning(f"automationhat library loaded but hardware test failed: {e}")
+    except ImportError as e:
+        logger.warning(f"automationhat library not available: {e}")
 
 
-class RelayControl:
-    """Controls the Automation Hat Mini relay."""
+class RelayService:
+    """
+    Controls the Automation Hat Mini relay.
+
+    IMPORTANT: Automation Hat Mini has no state readback capability.
+    The relay state is tracked internally since there's no is_on() method.
+    """
 
     def __init__(self):
+        # Track state internally - hardware has no readback
         self._state: bool = False
         self._on_time: Optional[int] = None
         self._initialized: bool = False
+        self._mock_mode: bool = not HAT_AVAILABLE
 
-    def initialize(self):
-        """Initialize relay hardware."""
-        if HARDWARE_AVAILABLE:
-            # Small delay for HAT initialization
-            time.sleep(0.1)
-
-            # Ensure relay is OFF on startup
-            automationhat.relay.one.off()
+    def initialize(self) -> None:
+        """Initialize relay - ensures OFF state on startup."""
+        if HAT_AVAILABLE:
+            try:
+                automationhat.relay.one.off()
+                logger.info("Relay initialized to OFF state")
+            except Exception as e:
+                logger.error(f"Failed to initialize relay: {e}")
+                self._mock_mode = True
 
         self._state = False
+        self._on_time = None
         self._initialized = True
-        print("Relay control initialized")
-
-    def cleanup(self):
-        """Cleanup on shutdown."""
-        if HARDWARE_AVAILABLE and self._initialized:
-            # Ensure relay is OFF
-            automationhat.relay.one.off()
-        self._initialized = False
-
-    async def sync_from_database(self):
-        """Sync relay state from database on startup."""
-        db = SessionLocal()
-        try:
-            state = SystemState.get_instance(db)
-
-            # Check if relay was ON before restart
-            if state.relay_state:
-                # Check how long ago it was turned on
-                if state.relay_on_time:
-                    elapsed = int(time.time()) - state.relay_on_time
-                    # If it's been less than 5 minutes, restore state
-                    if elapsed < 300:
-                        print(f"Restoring relay state: ON (was on for {elapsed}s)")
-                        self.turn_on()
-                        self._on_time = state.relay_on_time
-                    else:
-                        # Too long ago, assume it should be off
-                        print("Relay was ON but too long ago, keeping OFF")
-                        state.relay_state = False
-                        state.relay_on_time = None
-                        db.commit()
-        finally:
-            db.close()
+        logger.info(f"RelayService initialized (mock_mode={self._mock_mode})")
 
     def turn_on(self) -> bool:
-        """Turn relay ON (close contact)."""
+        """Turn relay ON (close contact to start generator)."""
         if not self._initialized:
+            logger.error("RelayService not initialized")
             return False
 
         try:
-            if HARDWARE_AVAILABLE:
+            if HAT_AVAILABLE and not self._mock_mode:
                 automationhat.relay.one.on()
-                # Verify state
-                self._state = automationhat.relay.one.is_on()
-            else:
-                self._state = True
 
-            if self._state:
-                self._on_time = int(time.time())
-
-            return self._state
+            # Track state internally (no hardware readback)
+            self._state = True
+            self._on_time = int(time.time())
+            logger.info("Relay turned ON")
+            return True
         except Exception as e:
-            print(f"Error turning relay ON: {e}")
+            logger.error(f"Failed to turn relay ON: {e}")
             return False
 
     def turn_off(self) -> bool:
-        """Turn relay OFF (open contact)."""
+        """Turn relay OFF (open contact to stop generator)."""
         if not self._initialized:
+            logger.error("RelayService not initialized")
             return False
 
         try:
-            if HARDWARE_AVAILABLE:
+            if HAT_AVAILABLE and not self._mock_mode:
                 automationhat.relay.one.off()
-                # Verify state
-                self._state = automationhat.relay.one.is_on()
-            else:
-                self._state = False
 
-            if not self._state:
-                self._on_time = None
-
-            return not self._state  # Return True if successfully OFF
+            # Track state internally (no hardware readback)
+            self._state = False
+            self._on_time = None
+            logger.info("Relay turned OFF")
+            return True
         except Exception as e:
-            print(f"Error turning relay OFF: {e}")
+            logger.error(f"Failed to turn relay OFF: {e}")
             return False
 
     def get_state(self) -> bool:
-        """Get current relay state."""
-        if HARDWARE_AVAILABLE and self._initialized:
-            try:
-                self._state = automationhat.relay.one.is_on()
-            except Exception:
-                pass
+        """Get current relay state (from internal tracking)."""
         return self._state
 
     def get_on_time(self) -> Optional[int]:
-        """Get timestamp when relay was turned on."""
+        """Get timestamp when relay was turned ON."""
         return self._on_time if self._state else None
 
     def get_runtime_seconds(self) -> Optional[int]:
-        """Get runtime in seconds if relay is on."""
+        """Get how long the relay has been ON."""
         if self._state and self._on_time:
             return int(time.time()) - self._on_time
         return None
+
+    @property
+    def is_mock_mode(self) -> bool:
+        """Check if running in mock mode."""
+        return self._mock_mode
+
+    def cleanup(self) -> None:
+        """Cleanup - ensure relay is OFF."""
+        if self._initialized and HAT_AVAILABLE and not self._mock_mode:
+            try:
+                automationhat.relay.one.off()
+            except Exception:
+                pass
+        self._state = False
+        self._on_time = None
+        self._initialized = False
+        logger.info("RelayService cleaned up")
 ```
 
 ### LCD Display Service
@@ -1728,25 +1735,35 @@ ruff>=0.1.0
 
 ### Test Relay
 
+**IMPORTANT**: The Automation Hat Mini relay has **no `is_on()` method** for state readback. You must listen for the relay click or use a multimeter to verify.
+
 ```python
 # test_relay.py - Run on Pi Zero with Automation Hat Mini
 import automationhat
 import time
 
-print("Testing relay...")
-print(f"Initial state: {automationhat.relay.one.is_on()}")
+print("Testing relay on Automation Hat Mini...")
+print("NOTE: No state readback available - listen for relay click!")
 
-print("Turning ON...")
+print("\nTurning ON... (listen for click)")
 automationhat.relay.one.on()
-time.sleep(1)
-print(f"State after ON: {automationhat.relay.one.is_on()}")
+time.sleep(2)
 
-print("Turning OFF...")
+print("Turning OFF... (listen for click)")
 automationhat.relay.one.off()
 time.sleep(1)
-print(f"State after OFF: {automationhat.relay.one.is_on()}")
 
-print("Test complete!")
+print("\nCycling 3 times...")
+for i in range(3):
+    print(f"  Cycle {i+1}: ON")
+    automationhat.relay.one.on()
+    time.sleep(0.5)
+    print(f"  Cycle {i+1}: OFF")
+    automationhat.relay.one.off()
+    time.sleep(0.5)
+
+print("\nTest complete!")
+print("If you heard clicks, the relay is working correctly.")
 ```
 
 ### Test LCD
@@ -1861,7 +1878,59 @@ LOG_LEVEL=INFO
 
 ---
 
+## Boot Behavior / Power Loss Recovery
+
+GenSlave follows a "fail-safe on boot" philosophy. After any power loss or unexpected reboot:
+
+### Startup Sequence
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GenSlave Boot Sequence                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. systemd starts genslave.service                            │
+│                                                                 │
+│  2. RelayService.initialize()                                  │
+│     └─► Relay forced OFF (safety)                              │
+│     └─► State tracked internally (no hardware readback)        │
+│                                                                 │
+│  3. FailsafeService initializes                                │
+│     └─► failsafe_triggered = False                             │
+│                                                                 │
+│  4. HeartbeatMonitor starts                                    │
+│     └─► Waits for first heartbeat from GenMaster               │
+│                                                                 │
+│  5. First heartbeat received                                   │
+│     └─► GenSlave sends relay_state=False to GenMaster          │
+│     └─► GenMaster reconciles state                             │
+│     └─► If automation is armed, GenMaster may send relay ON    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Safety Behaviors
+
+| Scenario | GenSlave Behavior |
+|----------|-------------------|
+| Power loss while relay ON | Relay returns to OFF (hardware default), state reset |
+| GenMaster heartbeat lost | Failsafe triggers → relay forced OFF |
+| Both devices reboot | Both start with relay OFF, GenMaster re-arms if needed |
+| GenSlave reboots, GenMaster running | GenMaster sends armed state, GenSlave responds |
+
+### No State Restoration
+
+Unlike GenMaster, GenSlave does **NOT** restore relay state from database on boot. This is intentional:
+
+1. **Hardware state is authoritative** - On power loss, relay physically opens (OFF)
+2. **GenMaster is source of truth** - Only GenMaster decides when to start generator
+3. **Fail-safe principle** - Generator should never auto-start without explicit command
+
+---
+
 ## Systemd Service
+
+**NOTE**: GenSlave runs on port **8001** (GenMaster runs on 8000).
 
 ```ini
 # /etc/systemd/system/genslave.service
@@ -1872,11 +1941,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-Group=pi
+User=root
+Group=root
 WorkingDirectory=/opt/genslave
 Environment="PATH=/opt/genslave/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/opt/genslave/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+ExecStart=/opt/genslave/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001
 Restart=always
 RestartSec=5
 
@@ -2017,7 +2086,7 @@ else
 fi
 
 # Check API health
-if curl -s http://localhost:8000/api/health | grep -q "healthy"; then
+if curl -s http://localhost:8001/api/health | grep -q "healthy"; then
     echo "✓ API: healthy"
 else
     echo "✗ API: not responding"
