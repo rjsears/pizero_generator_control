@@ -71,10 +71,15 @@ GENSLAVE_API_SECRET=""
 # Mock GPIO mode (auto-detected based on hardware)
 MOCK_GPIO_MODE=false
 
+# Admin user configuration
+ADMIN_USERNAME="admin"
+ADMIN_PASSWORD=""
+
 # Auto-generated credential tracking (for display at end of setup)
 AUTOGEN_DB_PASSWORD=false
 AUTOGEN_SECRET_KEY=false
 AUTOGEN_SLAVE_SECRET=false
+AUTOGEN_ADMIN_PASSWORD=false
 
 # DNS Provider and SSL Configuration
 DNS_PROVIDER_NAME=""
@@ -1399,6 +1404,53 @@ configure_database() {
     print_success "Database configured"
 }
 
+configure_admin_user() {
+    print_section "Admin User Configuration"
+
+    if [ "$PRECONFIG_MODE" = "true" ] && [ -n "$ADMIN_PASSWORD" ]; then
+        print_info "Admin user: $ADMIN_USERNAME"
+        return
+    fi
+
+    echo ""
+    echo -e "  ${GRAY}Configure the initial admin user for the web interface.${NC}"
+    echo ""
+
+    prompt_with_default "Admin username" "$ADMIN_USERNAME" "ADMIN_USERNAME"
+
+    if [ -z "$ADMIN_PASSWORD" ]; then
+        if confirm_prompt "Auto-generate admin password?" "n"; then
+            ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 16)
+            AUTOGEN_ADMIN_PASSWORD=true
+            print_success "Admin password generated"
+        else
+            while true; do
+                echo -ne "${WHITE}  Admin password${NC}: "
+                read -s ADMIN_PASSWORD
+                echo ""
+
+                if [ ${#ADMIN_PASSWORD} -lt 8 ]; then
+                    print_error "Password must be at least 8 characters"
+                    continue
+                fi
+
+                echo -ne "${WHITE}  Confirm password${NC}: "
+                read -s admin_pass_confirm
+                echo ""
+
+                if [ "$ADMIN_PASSWORD" != "$admin_pass_confirm" ]; then
+                    print_error "Passwords do not match"
+                    continue
+                fi
+
+                break
+            done
+        fi
+    fi
+
+    print_success "Admin user configured: $ADMIN_USERNAME"
+}
+
 configure_containers() {
     print_section "Container Names"
 
@@ -2306,6 +2358,10 @@ DATABASE_PORT=5432
 DATABASE_NAME=${DB_NAME}
 DATABASE_USER=${DB_USER}
 DATABASE_PASSWORD=${DB_PASSWORD}
+
+# Admin User (created on first startup)
+ADMIN_USERNAME=${ADMIN_USERNAME}
+ADMIN_PASSWORD=${ADMIN_PASSWORD}
 
 # Redis Configuration
 REDIS_HOST=redis
