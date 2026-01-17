@@ -31,12 +31,22 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
 | Phase | Feature | Status |
 |-------|---------|--------|
 | 2 | System Health UI (core services, logs, docker) | PENDING |
-| 4 | Settings Access Control Tab | PENDING |
-| 4 | Settings Environment Tab | PENDING |
-| 4 | Settings Account Tab enhancements | PENDING |
-| 4 | Network Cloudflare Metrics | PENDING |
-| 4 | Network Tailscale Peer Info | PENDING |
-| 5 | System Terminal Tab with xterm.js | PENDING |
+| 4 | Network Cloudflare Metrics | PENDING (requires API key) |
+
+### Phase 5 Completed (January 17th, 2026)
+
+| Feature | Status |
+|---------|--------|
+| System Terminal Tab with xterm.js | DONE |
+
+### Phase 4 Completed (January 17th, 2026)
+
+| Feature | Status |
+|---------|--------|
+| Settings Access Control Tab | DONE |
+| Settings Environment Tab | DONE |
+| Settings Account Tab enhancements | DONE |
+| Network Tailscale Peer Info | DONE |
 
 ### Phase 3 Completed (January 17th, 2026)
 
@@ -127,6 +137,51 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
   - Critical containers highlighted with amber border
   - Terminal button for running containers
   - ContainerTerminal modal integration
+
+---
+
+## Files Created/Modified in Phase 4
+
+### Backend
+- `genmaster/backend/app/routers/system.py` - Enhanced Tailscale endpoint:
+  - Added peer information (hostname, IPs, online status, OS)
+  - Added tailnet name
+  - Added exit node info
+  - Peer sorting by online status
+
+### Frontend
+- `genmaster/frontend/src/views/SettingsView.vue` - Major enhancements:
+  - Added Access Control tab with IP range management
+  - Quick-add common networks (Tailscale, local networks)
+  - IP range CRUD operations with descriptions
+  - Added Environment tab with environment variable viewing/editing
+  - Sensitive value masking
+  - Restart required indicator
+  - Enhanced Account tab with user profile display
+  - Avatar, username, role, and created date display
+  - New icons: GlobeAltIcon, DocumentTextIcon, PlusIcon, TrashIcon, PencilIcon, XMarkIcon, ExclamationTriangleIcon
+- `genmaster/frontend/src/views/SystemView.vue` - Network tab enhancements:
+  - Enhanced Tailscale card with hostname, tailnet, peer count
+  - New Tailscale Peers section showing all peers
+  - Peer online/offline status indicators
+  - Exit node badges
+
+---
+
+## Files Created/Modified in Phase 5
+
+### Frontend
+- `genmaster/frontend/src/components/system/SystemTerminal.vue` - NEW:
+  - Full terminal component using xterm.js
+  - Container and host shell selection
+  - Dark/light theme support matching app theme
+  - Connection status indicators
+  - Terminal size display
+  - WebSocket connection to backend terminal API
+- `genmaster/frontend/src/views/SystemView.vue` - Added Terminal tab:
+  - New Terminal tab in System view
+  - Header banner with gradient styling
+  - SystemTerminal component integration
 
 ---
 
@@ -356,16 +411,18 @@ These are generator-specific features that are kept:
 14. [x] Critical Container Warnings
 15. [x] Container Terminal Access
 
-### Phase 4: Settings & Network - PENDING
-16. [ ] Settings Access Control Tab
-17. [ ] Settings Environment Tab
-18. [ ] Settings Account Tab enhancements
-19. [ ] Network Cloudflare Metrics
-20. [ ] Network Tailscale Peer Info
+### Phase 4: Settings & Network - COMPLETE
+16. [x] Settings Access Control Tab
+17. [x] Settings Environment Tab
+18. [x] Settings Account Tab enhancements
+19. [ ] Network Cloudflare Metrics (requires API key)
+20. [x] Network Tailscale Peer Info
 
-### Phase 5: Terminal - PENDING
-21. [ ] System Terminal Tab with xterm.js
-22. [ ] Notification Groups feature (note: Groups tab exists but may need enhancement)
+### Phase 5: Terminal - COMPLETE
+21. [x] System Terminal Tab with xterm.js
+22. [x] Container/Host shell selection
+23. [x] Theme switching (dark/light)
+24. [ ] Notification Groups feature (note: Groups tab exists but may need enhancement)
 
 ---
 

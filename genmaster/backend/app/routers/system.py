@@ -562,7 +562,7 @@ async def get_tailscale_status() -> dict:
     """
     Get Tailscale VPN status.
 
-    Returns connection status, IP addresses, and hostname.
+    Returns connection status, IP addresses, hostname, and peer information.
     """
     import logging
 
@@ -574,6 +574,9 @@ async def get_tailscale_status() -> dict:
         "hostname": None,
         "ip_addresses": [],
         "version": None,
+        "peers": [],
+        "exit_node": None,
+        "tailnet_name": None,
         "error": None,
     }
 
@@ -598,9 +601,38 @@ async def get_tailscale_status() -> dict:
                         import json
                         status_data = json.loads(output[0].decode("utf-8"))
                         result["connected"] = status_data.get("BackendState") == "Running"
+
+                        # Self info
                         self_info = status_data.get("Self", {})
                         result["hostname"] = self_info.get("HostName")
                         result["ip_addresses"] = self_info.get("TailscaleIPs", [])
+
+                        # Tailnet name
+                        result["tailnet_name"] = status_data.get("CurrentTailnet", {}).get("Name")
+
+                        # Exit node info
+                        if status_data.get("ExitNodeStatus"):
+                            result["exit_node"] = status_data.get("ExitNodeStatus", {}).get("ID")
+
+                        # Peer info
+                        peers_data = status_data.get("Peer", {})
+                        for peer_id, peer_info in peers_data.items():
+                            peer = {
+                                "id": peer_id,
+                                "hostname": peer_info.get("HostName"),
+                                "ip_addresses": peer_info.get("TailscaleIPs", []),
+                                "online": peer_info.get("Online", False),
+                                "os": peer_info.get("OS"),
+                                "last_seen": peer_info.get("LastSeen"),
+                                "is_exit_node": peer_info.get("ExitNode", False),
+                                "rx_bytes": peer_info.get("RxBytes", 0),
+                                "tx_bytes": peer_info.get("TxBytes", 0),
+                            }
+                            result["peers"].append(peer)
+
+                        # Sort peers by online status then hostname
+                        result["peers"].sort(key=lambda p: (not p["online"], p["hostname"] or ""))
+
                 except Exception as e:
                     logger.debug(f"Failed to get tailscale status: {e}")
 
