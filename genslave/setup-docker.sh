@@ -20,7 +20,7 @@ set -e
 # Configuration
 IMAGE_NAME="rjsears/pizero_generator_control:genslave"
 INSTALL_DIR="/opt/genslave"
-COMPOSE_URL="https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/genslave/docker-compose.yml"
+COMPOSE_URL="https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/genslave/docker-compose.yaml"
 
 # Colors
 RED='\033[0;31m'
@@ -125,13 +125,13 @@ setup_directories() {
     log_success "Created $INSTALL_DIR"
 }
 
-# Download docker-compose.yml
+# Download docker-compose.yaml
 download_compose() {
-    log_info "Downloading docker-compose.yml..."
+    log_info "Downloading docker-compose.yaml..."
 
-    curl -fsSL "$COMPOSE_URL" -o "$INSTALL_DIR/docker-compose.yml"
+    curl -fsSL "$COMPOSE_URL" -o "$INSTALL_DIR/docker-compose.yaml"
 
-    log_success "Downloaded docker-compose.yml"
+    log_success "Downloaded docker-compose.yaml"
 }
 
 # Create .env file for configuration

@@ -142,6 +142,26 @@ export const useContainersStore = defineStore('containers', () => {
     }
   }
 
+  async function recreateContainer(name, pullImage = true) {
+    const notifications = useNotificationStore()
+    actionLoading.value = true
+
+    try {
+      await api.post(`/containers/${name}/recreate`, null, {
+        params: { pull_image: pullImage }
+      })
+      notifications.success(`Container ${name} recreated successfully`)
+      await fetchContainers()
+      return true
+    } catch (err) {
+      const message = err.response?.data?.detail || `Failed to recreate ${name}`
+      notifications.error(message)
+      return false
+    } finally {
+      actionLoading.value = false
+    }
+  }
+
   function getContainerStats(name) {
     return stats.value.find(s => s.name === name) || null
   }
@@ -173,6 +193,7 @@ export const useContainersStore = defineStore('containers', () => {
     startContainer,
     stopContainer,
     restartContainer,
+    recreateContainer,
     getContainerLogs,
     getContainerStats,
     clearError,

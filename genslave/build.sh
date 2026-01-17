@@ -18,7 +18,7 @@ set -e
 # Configuration
 IMAGE_NAME="rjsears/pizero_generator_control"
 IMAGE_TAG="genslave"
-PLATFORM="linux/arm/v6"
+PLATFORM="linux/arm/v7"
 BUILDER_NAME="genslave-builder"
 
 # Colors for output
@@ -40,12 +40,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Check if logged into Docker Hub
+# Note: Docker Desktop uses credential helpers, so we check the config file
 echo -e "${YELLOW}Checking Docker Hub login...${NC}"
-if ! docker info 2>/dev/null | grep -q "Username"; then
-    echo -e "${RED}Not logged into Docker Hub. Please run: docker login${NC}"
+DOCKER_CONFIG="$HOME/.docker/config.json"
+if [[ -f "$DOCKER_CONFIG" ]]; then
+    # Check for auths entry or credsStore (credential helper like macOS Keychain)
+    if grep -q '"https://index.docker.io/v1/"' "$DOCKER_CONFIG" || grep -q '"credsStore"' "$DOCKER_CONFIG"; then
+        echo -e "${GREEN}Docker Hub credentials found${NC}"
+    else
+        echo -e "${RED}Not logged into Docker Hub. Please run: docker login${NC}"
+        exit 1
+    fi
+else
+    echo -e "${RED}Docker config not found. Please run: docker login${NC}"
     exit 1
 fi
-echo -e "${GREEN}Docker Hub login confirmed${NC}"
 
 # Check if buildx is available
 echo -e "${YELLOW}Checking Docker buildx...${NC}"

@@ -31,16 +31,21 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
 | Phase | Feature | Status |
 |-------|---------|--------|
 | 2 | System Health UI (core services, logs, docker) | PENDING |
-| 3 | Container Terminal Access | PENDING |
-| 3 | Container Status Filtering | PENDING |
-| 3 | Container Recreate Button | PENDING |
-| 3 | Critical Container Warnings | PENDING |
 | 4 | Settings Access Control Tab | PENDING |
 | 4 | Settings Environment Tab | PENDING |
 | 4 | Settings Account Tab enhancements | PENDING |
 | 4 | Network Cloudflare Metrics | PENDING |
 | 4 | Network Tailscale Peer Info | PENDING |
 | 5 | System Terminal Tab with xterm.js | PENDING |
+
+### Phase 3 Completed (January 17th, 2026)
+
+| Feature | Status |
+|---------|--------|
+| Container Status Filtering | DONE |
+| Container Recreate Button | DONE |
+| Critical Container Warnings | DONE |
+| Container Terminal Access | DONE |
 
 ---
 
@@ -94,6 +99,34 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
   - Network I/O card with rates and chart
   - Improved Victron and System Health cards
   - Auto-refresh every 60 seconds
+
+---
+
+## Files Created/Modified in Phase 3
+
+### Backend
+- `genmaster/backend/app/routers/containers.py` - Updated with:
+  - Added `pull_image` parameter to recreate endpoint
+  - Conditional image pulling based on parameter
+
+### Frontend
+- `genmaster/frontend/src/stores/containers.js` - Added:
+  - `recreateContainer(name, pullImage)` action
+- `genmaster/frontend/src/components/containers/ContainerTerminal.vue` - NEW:
+  - xterm.js-based terminal component
+  - WebSocket connection to container shell
+  - Dark Tokyo Night theme
+  - Auto-fit to container size
+  - Status bar with connection state
+- `genmaster/frontend/src/views/ContainersView.vue` - Major enhancements:
+  - Status filtering (All/Running/Stopped/Unhealthy)
+  - Clickable stat cards for filtering
+  - Filter indicator with clear button
+  - Recreate button with pull image option
+  - Critical container warnings (genmaster, nginx, postgres)
+  - Critical containers highlighted with amber border
+  - Terminal button for running containers
+  - ContainerTerminal modal integration
 
 ---
 
@@ -317,11 +350,11 @@ These are generator-specific features that are kept:
 10. [x] System Health Recent Logs (API done, UI pending)
 11. [x] System Health Docker Storage (API done, UI pending)
 
-### Phase 3: Containers - PENDING
-12. [ ] Container Terminal Access
-13. [ ] Container Status Filtering
-14. [ ] Container Recreate Button
-15. [ ] Critical Container Warnings
+### Phase 3: Containers - COMPLETE
+12. [x] Container Status Filtering
+13. [x] Container Recreate Button
+14. [x] Critical Container Warnings
+15. [x] Container Terminal Access
 
 ### Phase 4: Settings & Network - PENDING
 16. [ ] Settings Access Control Tab
@@ -363,6 +396,13 @@ These are generator-specific features that are kept:
 - `GET /api/metrics/logs/analysis` - Logs analysis
 - `GET /api/metrics/dashboard` - Combined dashboard data
 
+**Terminal:**
+- `WS /api/terminal/ws` - WebSocket terminal connection
+- `GET /api/terminal/targets` - Available terminal targets
+
+**Containers (updated):**
+- `POST /api/containers/{name}/recreate?pull_image=true` - Recreate with optional image pull
+
 ### Stores Added
 - `debug.js` - Debug mode state management
 - `metrics.js` - Metrics and dashboard data
@@ -371,3 +411,4 @@ These are generator-specific features that are kept:
 - `AboutDialog.vue` - About information modal
 - `HelpDialog.vue` - Help reference modal
 - `MetricsLineChart.vue` - Reusable chart component
+- `ContainerTerminal.vue` - xterm.js container terminal

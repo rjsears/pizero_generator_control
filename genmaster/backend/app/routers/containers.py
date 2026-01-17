@@ -295,11 +295,14 @@ async def delete_container(
 
 
 @router.post("/{name}/recreate")
-async def recreate_container(name: str) -> dict:
+async def recreate_container(
+    name: str,
+    pull_image: bool = Query(True, description="Pull latest image before recreating"),
+) -> dict:
     """
     Recreate a container with the same configuration.
 
-    Pulls the latest image, stops and removes the old container,
+    Optionally pulls the latest image, stops and removes the old container,
     then creates a new one with the same configuration.
     """
     client = get_docker_client()
@@ -321,12 +324,13 @@ async def recreate_container(name: str) -> dict:
         network_mode = config.get("HostConfig", {}).get("NetworkMode", "bridge")
         restart_policy = config.get("HostConfig", {}).get("RestartPolicy", {})
 
-        # Pull latest image
-        logger.info(f"Pulling latest image for {image}")
-        try:
-            client.images.pull(image)
-        except Exception as e:
-            logger.warning(f"Failed to pull image {image}: {e}")
+        # Pull latest image if requested
+        if pull_image:
+            logger.info(f"Pulling latest image for {image}")
+            try:
+                client.images.pull(image)
+            except Exception as e:
+                logger.warning(f"Failed to pull image {image}: {e}")
 
         # Stop and remove old container
         container.stop()
