@@ -89,7 +89,6 @@
           </div>
         </Card>
       </div>
-    </div>
 
     <!-- Create/Edit Modal -->
     <Modal v-model="showModal" :title="editingSchedule ? 'Edit Schedule' : 'Create Schedule'" size="lg">
