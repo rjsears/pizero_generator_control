@@ -789,18 +789,209 @@ handle_version_detection() {
     esac
 }
 
+restore_dns_settings_from_provider() {
+    # Restore DNS_CERTBOT_IMAGE and related settings based on DNS_PROVIDER
+    # This is needed when loading config that only has DNS_PROVIDER saved
+    local provider="${DNS_PROVIDER:-${DNS_PROVIDER_NAME:-}}"
+
+    # Sync variable names (config uses DNS_PROVIDER, code uses DNS_PROVIDER_NAME)
+    if [ -n "$DNS_PROVIDER" ] && [ -z "$DNS_PROVIDER_NAME" ]; then
+        DNS_PROVIDER_NAME="$DNS_PROVIDER"
+    fi
+
+    # Set DNS_CERTBOT_IMAGE based on provider if not already set
+    if [ -z "$DNS_CERTBOT_IMAGE" ] && [ -n "$DNS_PROVIDER_NAME" ]; then
+        case $DNS_PROVIDER_NAME in
+            cloudflare)
+                DNS_CERTBOT_IMAGE="certbot/dns-cloudflare:latest"
+                DNS_CREDENTIALS_FILE="cloudflare.ini"
+                ;;
+            route53)
+                DNS_CERTBOT_IMAGE="certbot/dns-route53:latest"
+                DNS_CREDENTIALS_FILE="route53.ini"
+                ;;
+            google)
+                DNS_CERTBOT_IMAGE="certbot/dns-google:latest"
+                DNS_CREDENTIALS_FILE="google.json"
+                ;;
+            digitalocean)
+                DNS_CERTBOT_IMAGE="certbot/dns-digitalocean:latest"
+                DNS_CREDENTIALS_FILE="digitalocean.ini"
+                ;;
+            manual|*)
+                DNS_CERTBOT_IMAGE="certbot/certbot:latest"
+                DNS_CREDENTIALS_FILE="credentials.ini"
+                ;;
+        esac
+    fi
+}
+
+restore_optional_services_from_config() {
+    # Restore INSTALL_* variables from *_ENABLED variables loaded from config
+    # Config saves: CLOUDFLARE_TUNNEL_ENABLED, TAILSCALE_ENABLED, etc.
+    # Code uses: INSTALL_CLOUDFLARE_TUNNEL, INSTALL_TAILSCALE, etc.
+
+    # Cloudflare Tunnel
+    if [ -n "$CLOUDFLARE_TUNNEL_ENABLED" ]; then
+        INSTALL_CLOUDFLARE_TUNNEL="$CLOUDFLARE_TUNNEL_ENABLED"
+    fi
+
+    # Tailscale
+    if [ -n "$TAILSCALE_ENABLED" ]; then
+        INSTALL_TAILSCALE="$TAILSCALE_ENABLED"
+    fi
+
+    # Portainer
+    if [ -n "$PORTAINER_ENABLED" ]; then
+        INSTALL_PORTAINER="$PORTAINER_ENABLED"
+    fi
+}
+
 backup_existing_config() {
-    local backup_dir="${SCRIPT_DIR}/backups"
-    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_dir="${SCRIPT_DIR}/.backups/$(date +%Y%m%d_%H%M%S)"
 
     mkdir -p "$backup_dir"
     print_info "Backing up existing configuration..."
 
-    [ -f "${SCRIPT_DIR}/.env" ] && cp "${SCRIPT_DIR}/.env" "${backup_dir}/.env.${timestamp}"
-    [ -f "${SCRIPT_DIR}/docker-compose.yaml" ] && cp "${SCRIPT_DIR}/docker-compose.yaml" "${backup_dir}/docker-compose.yaml.${timestamp}"
-    [ -f "${SCRIPT_DIR}/nginx/nginx.conf" ] && cp "${SCRIPT_DIR}/nginx/nginx.conf" "${backup_dir}/nginx.conf.${timestamp}"
+    # Backup all config files
+    for file in .env docker-compose.yaml nginx/nginx.conf .genmaster_setup_config .genmaster_setup_state; do
+        if [ -f "${SCRIPT_DIR}/${file}" ]; then
+            local target_file=$(basename "$file")
+            cp "${SCRIPT_DIR}/${file}" "${backup_dir}/${target_file}"
+        fi
+    done
+
+    # Backup certbot credentials if they exist
+    if [ -d "${SCRIPT_DIR}/certbot" ]; then
+        for cred_file in "${SCRIPT_DIR}/certbot"/*.ini "${SCRIPT_DIR}/certbot"/*.json; do
+            [ -f "$cred_file" ] && cp "$cred_file" "${backup_dir}/"
+        done
+    fi
 
     print_success "Backup complete: ${backup_dir}"
+}
+
+list_available_backups() {
+    local backup_base="${SCRIPT_DIR}/.backups"
+
+    if [ ! -d "$backup_base" ] || [ -z "$(ls -A $backup_base 2>/dev/null)" ]; then
+        return 1
+    fi
+
+    AVAILABLE_BACKUPS=()
+    while IFS= read -r backup_dir; do
+        if [ -d "$backup_dir" ]; then
+            local timestamp=$(basename "$backup_dir")
+            local formatted_date=$(echo "$timestamp" | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)_\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3 \4:\5:\6/')
+            local file_count=$(ls -1 "$backup_dir" 2>/dev/null | wc -l)
+            AVAILABLE_BACKUPS+=("${timestamp}|${formatted_date}|${file_count} files")
+        fi
+    done < <(ls -dt ${backup_base}/*/ 2>/dev/null)
+
+    if [ ${#AVAILABLE_BACKUPS[@]} -eq 0 ]; then
+        return 1
+    fi
+
+    return 0
+}
+
+rollback_config() {
+    print_section "Rollback Configuration"
+
+    if ! list_available_backups; then
+        print_error "No backups found in ${SCRIPT_DIR}/.backups/"
+        echo ""
+        print_info "Backups are created automatically before any reconfiguration."
+        return 1
+    fi
+
+    echo -e "  ${WHITE}Available backups:${NC}"
+    echo ""
+
+    local i=1
+    for backup_info in "${AVAILABLE_BACKUPS[@]}"; do
+        local timestamp=$(echo "$backup_info" | cut -d'|' -f1)
+        local formatted_date=$(echo "$backup_info" | cut -d'|' -f2)
+        local file_count=$(echo "$backup_info" | cut -d'|' -f3)
+        echo -e "    ${CYAN}${i})${NC} ${WHITE}${formatted_date}${NC} (${file_count})"
+        i=$((i + 1))
+    done
+    echo -e "    ${CYAN}${i})${NC} Cancel - return to menu"
+    echo ""
+
+    local max_choice=$i
+    local choice=""
+    while [[ ! "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "$max_choice" ]; do
+        echo -ne "${WHITE}  Select backup to restore [1-${max_choice}]${NC}: "
+        read choice
+    done
+
+    if [ "$choice" -eq "$max_choice" ]; then
+        print_info "Rollback cancelled"
+        return 0
+    fi
+
+    local selected_index=$((choice - 1))
+    local selected_backup=$(echo "${AVAILABLE_BACKUPS[$selected_index]}" | cut -d'|' -f1)
+    local backup_dir="${SCRIPT_DIR}/.backups/${selected_backup}"
+
+    echo ""
+    echo -e "  ${YELLOW}${BOLD}WARNING: This will overwrite your current configuration!${NC}"
+    echo ""
+    echo -e "  ${WHITE}Files to be restored from ${CYAN}${selected_backup}${NC}:${NC}"
+    ls -1 "$backup_dir" | while read file; do
+        echo -e "    • ${file}"
+    done
+    echo ""
+
+    if ! confirm_prompt "Are you sure you want to restore this backup?"; then
+        print_info "Rollback cancelled"
+        return 0
+    fi
+
+    # Create safety backup before rollback
+    print_info "Creating safety backup of current state..."
+    local safety_backup="${SCRIPT_DIR}/.backups/pre_rollback_$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$safety_backup"
+    for file in .env docker-compose.yaml .genmaster_setup_config .genmaster_setup_state; do
+        [ -f "${SCRIPT_DIR}/${file}" ] && cp "${SCRIPT_DIR}/${file}" "${safety_backup}/"
+    done
+    [ -f "${SCRIPT_DIR}/nginx/nginx.conf" ] && cp "${SCRIPT_DIR}/nginx/nginx.conf" "${safety_backup}/nginx.conf"
+
+    # Restore files from backup
+    print_info "Restoring configuration files..."
+    local restored=0
+    for file in "$backup_dir"/*; do
+        local filename=$(basename "$file")
+        if [ "$filename" = "nginx.conf" ]; then
+            mkdir -p "${SCRIPT_DIR}/nginx"
+            cp "$file" "${SCRIPT_DIR}/nginx/nginx.conf"
+        else
+            cp "$file" "${SCRIPT_DIR}/${filename}"
+        fi
+        print_success "Restored ${filename}"
+        restored=$((restored + 1))
+    done
+
+    echo ""
+    print_success "Rollback complete! ${restored} items restored."
+    echo ""
+    echo -e "  ${WHITE}Safety backup saved to:${NC} ${CYAN}${safety_backup}${NC}"
+    echo ""
+
+    if confirm_prompt "Would you like to redeploy the stack with the restored configuration?"; then
+        # Reload the restored config
+        if [ -f "${SCRIPT_DIR}/.env" ]; then
+            source "${SCRIPT_DIR}/.env" 2>/dev/null || true
+            restore_dns_settings_from_provider
+            restore_optional_services_from_config
+        fi
+        deploy_stack
+    else
+        print_info "Configuration restored. Run './setup.sh' and choose 'Reconfigure' then option 6 to redeploy."
+    fi
+
+    return 0
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2277,7 +2468,11 @@ services:
     environment:
       - APP_ENV=${APP_ENV:-production}
       - MOCK_GPIO_MODE=${MOCK_GPIO_MODE:-false}
-      - DATABASE_URL=postgresql+asyncpg://${DATABASE_USER:-genmaster}:${DATABASE_PASSWORD}@db:5432/${DATABASE_NAME:-genmaster}
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=${DATABASE_NAME:-genmaster}
+      - DATABASE_USER=${DATABASE_USER:-genmaster}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
       - GENSLAVE_ENABLED=${GENSLAVE_ENABLED:-true}
@@ -2334,7 +2529,7 @@ services:
     volumes:
       - letsencrypt:/etc/letsencrypt
       - certbot_data:/var/www/certbot
-      - ./${DNS_CREDENTIALS_FILE:-cloudflare.ini}:/credentials.ini:ro
+      - ./certbot/${DNS_CREDENTIALS_FILE:-cloudflare.ini}:/credentials.ini:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew \${DNS_CERTBOT_FLAGS:-} --deploy-hook 'docker exec genmaster_nginx nginx -s reload' || true; sleep 12h & wait $${!}; done;"
     networks:
@@ -3104,12 +3299,13 @@ main() {
         echo -e "    ${CYAN}4)${NC} Optional services"
         echo -e "    ${CYAN}5)${NC} Regenerate configs"
         echo -e "    ${CYAN}6)${NC} Full reconfiguration"
+        echo -e "    ${CYAN}7)${NC} ${YELLOW}Rollback to previous configuration${NC}"
         echo -e "    ${CYAN}0)${NC} Exit"
         echo ""
 
         local choice=""
-        while [[ ! "$choice" =~ ^[0-6]$ ]]; do
-            echo -ne "${WHITE}  Choice [0-6]${NC}: "
+        while [[ ! "$choice" =~ ^[0-7]$ ]]; do
+            echo -ne "${WHITE}  Choice [0-7]${NC}: "
             read choice
         done
 
@@ -3120,6 +3316,7 @@ main() {
             4) configure_optional_services ;;
             5) ;;
             6) INSTALL_MODE="fresh" ;;
+            7) rollback_config; exit 0 ;;
             0) exit 0 ;;
         esac
 
