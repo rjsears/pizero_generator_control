@@ -776,9 +776,22 @@ configure_environment() {
 
     print_step "2" "Configuring API secret..."
     echo ""
+    echo -e "  ${YELLOW}NOTE: If you haven't installed GenMaster yet, you can skip this step.${NC}"
+    echo -e "  ${GRAY}The API secret is generated during GenMaster setup and shown at the end.${NC}"
+    echo -e "  ${GRAY}You can add it later by editing: ${INSTALL_DIR}/.env${NC}"
+    echo ""
     echo "  This secret must match the SLAVE_API_SECRET configured on GenMaster."
     echo ""
-    prompt_secret "Enter API Secret (from GenMaster)" API_SECRET
+    if confirm "Do you have the API secret from GenMaster?" "n"; then
+        prompt_secret "Enter API Secret (from GenMaster)" API_SECRET
+    else
+        API_SECRET="REPLACE_WITH_GENMASTER_SECRET"
+        print_warning "API secret skipped - you MUST update ${INSTALL_DIR}/.env after GenMaster setup"
+        echo -e "  ${CYAN}After GenMaster setup, edit .env and replace:${NC}"
+        echo -e "  ${WHITE}API_SECRET=REPLACE_WITH_GENMASTER_SECRET${NC}"
+        echo -e "  ${CYAN}with the actual SLAVE_API_SECRET from GenMaster${NC}"
+        echo ""
+    fi
 
     print_step "3" "Configuring webhooks (optional)..."
     if confirm "Would you like to configure webhook notifications?"; then

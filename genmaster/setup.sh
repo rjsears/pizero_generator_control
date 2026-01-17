@@ -1355,15 +1355,24 @@ configure_genslave() {
         echo -e "  ${YELLOW}      with the same API secret for communication to work.${NC}"
         echo ""
 
+        # Show the API secret prominently - user needs this for GenSlave setup
+        echo ""
+        echo -e "  ${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "  ${GREEN}║${NC}  ${WHITE}IMPORTANT: Save this API secret for GenSlave setup!${NC}           ${GREEN}║${NC}"
+        echo -e "  ${GREEN}╠════════════════════════════════════════════════════════════════╣${NC}"
+        echo -e "  ${GREEN}║${NC}                                                                ${GREEN}║${NC}"
+        echo -e "  ${GREEN}║${NC}  ${CYAN}SLAVE_API_SECRET=${GENSLAVE_API_SECRET}${NC}  ${GREEN}║${NC}"
+        echo -e "  ${GREEN}║${NC}                                                                ${GREEN}║${NC}"
+        echo -e "  ${GREEN}║${NC}  ${GRAY}You will need this when running GenSlave setup.${NC}              ${GREEN}║${NC}"
+        echo -e "  ${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+
         if confirm_prompt "Is GenSlave already installed and running?" "n"; then
             validate_genslave
         else
             echo ""
             print_info "GenSlave URL saved. You can validate the connection later with:"
             echo -e "    ${CYAN}./setup.sh --genslave${NC}"
-            echo ""
-            print_warning "Remember to configure GenSlave with this API secret:"
-            echo -e "    ${CYAN}SLAVE_API_SECRET=${GENSLAVE_API_SECRET}${NC}"
         fi
 
         print_success "GenSlave configured"
