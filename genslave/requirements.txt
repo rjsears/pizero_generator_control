@@ -11,7 +11,7 @@
 
 # Web Framework
 fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
+uvicorn>=0.27.0  # Note: Using base uvicorn (no uvloop) - Pi Zero can't compile uvloop
 pydantic>=2.5.0
 
 # HTTP Client (for webhook notifications)
