@@ -26,6 +26,7 @@ from app.routers import (
     backup,
     config,
     containers,
+    dev,
     generator,
     health,
     override,
@@ -205,6 +206,7 @@ app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(containers.router, prefix="/api/containers", tags=["Containers"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"])
+app.include_router(dev.router, prefix="/api/dev", tags=["Development"])
 
 
 # Root status endpoint
