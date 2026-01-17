@@ -18,9 +18,9 @@ Create Date: 2026-01-15
 
 from typing import Sequence, Union
 
+import bcrypt as bcrypt_lib
 import sqlalchemy as sa
 from alembic import op
-from passlib.hash import bcrypt
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
@@ -415,7 +415,7 @@ def upgrade() -> None:
     op.execute("INSERT INTO config (id) VALUES (1);")
 
     # Insert default admin user (password: admin - CHANGE IN PRODUCTION!)
-    admin_password_hash = bcrypt.hash("admin")
+    admin_password_hash = bcrypt_lib.hashpw("admin".encode(), bcrypt_lib.gensalt()).decode()
     op.execute(
         f"""
         INSERT INTO users (username, password_hash, is_active, is_admin)
