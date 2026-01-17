@@ -421,7 +421,6 @@ prepare_system() {
         build-essential \
         libffi-dev \
         libssl-dev \
-        libgpiod2 \
         i2c-tools \
         curl \
         jq \
