@@ -411,7 +411,7 @@ prepare_system() {
 
     # Install system dependencies
     print_step "5" "Installing system dependencies..."
-    if ! apt-get install -y \
+    apt-get install -y \
         python3 \
         python3-pip \
         python3-venv \
@@ -425,9 +425,11 @@ prepare_system() {
         i2c-tools \
         curl \
         jq \
-        openssl 2>&1 | tee /tmp/apt-install.log | grep -E "^(Setting up|Unpacking)" > /dev/null; then
+        openssl
+
+    if [ $? -ne 0 ]; then
         print_error "Failed to install some dependencies"
-        print_info "Check /tmp/apt-install.log for details"
+        exit 1
     fi
     print_success "System dependencies installed"
 
