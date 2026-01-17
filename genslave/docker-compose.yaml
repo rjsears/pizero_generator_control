@@ -4,12 +4,14 @@
 # Part of the "RPi Generator Control" suite
 # Version 1.0.0 - January 17th, 2026
 #
-# Run on Pi Zero: docker compose up -d
+# Run on Pi Zero: docker-compose up -d
 #
 # Richard J. Sears
 # richardjsears@protonmail.com
 # https://github.com/rjsears
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+version: "3.8"
 
 services:
   genslave:

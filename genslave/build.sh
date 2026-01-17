@@ -18,7 +18,7 @@ set -e
 # Configuration
 IMAGE_NAME="rjsears/pizero_generator_control"
 IMAGE_TAG="genslave"
-PLATFORM="linux/arm/v7"
+PLATFORM="linux/arm/v6"
 BUILDER_NAME="genslave-builder"
 
 # Colors for output
