@@ -733,8 +733,8 @@ detect_current_version() {
         return
     fi
 
-    if [ -f "${SCRIPT_DIR}/docker-compose.yml" ]; then
-        if grep -q "genmaster" "${SCRIPT_DIR}/docker-compose.yml" 2>/dev/null; then
+    if [ -f "${SCRIPT_DIR}/docker-compose.yaml" ]; then
+        if grep -q "genmaster" "${SCRIPT_DIR}/docker-compose.yaml" 2>/dev/null; then
             echo "1.0"
         else
             echo "unknown"
@@ -797,7 +797,7 @@ backup_existing_config() {
     print_info "Backing up existing configuration..."
 
     [ -f "${SCRIPT_DIR}/.env" ] && cp "${SCRIPT_DIR}/.env" "${backup_dir}/.env.${timestamp}"
-    [ -f "${SCRIPT_DIR}/docker-compose.yml" ] && cp "${SCRIPT_DIR}/docker-compose.yml" "${backup_dir}/docker-compose.yml.${timestamp}"
+    [ -f "${SCRIPT_DIR}/docker-compose.yaml" ] && cp "${SCRIPT_DIR}/docker-compose.yaml" "${backup_dir}/docker-compose.yaml.${timestamp}"
     [ -f "${SCRIPT_DIR}/nginx/nginx.conf" ] && cp "${SCRIPT_DIR}/nginx/nginx.conf" "${backup_dir}/nginx.conf.${timestamp}"
 
     print_success "Backup complete: ${backup_dir}"
@@ -2023,9 +2023,9 @@ EOF
 }
 
 generate_docker_compose() {
-    print_info "Generating docker-compose.yml..."
+    print_info "Generating docker-compose.yaml..."
 
-    cat > "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
+    cat > "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
 # =============================================================================
 # GenMaster Docker Compose Configuration
 # =============================================================================
@@ -2166,7 +2166,7 @@ EOF
 
     # Add Cloudflare Tunnel if enabled
     if [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ]; then
-        cat >> "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
+        cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
 
   # ===========================================================================
   # Cloudflare Tunnel
@@ -2187,7 +2187,7 @@ EOF
 
     # Add Tailscale if enabled
     if [ "$INSTALL_TAILSCALE" = true ]; then
-        cat >> "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
+        cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
 
   # ===========================================================================
   # Tailscale VPN with HTTPS Support
@@ -2241,7 +2241,7 @@ EOF
 
     # Add Portainer if enabled
     if [ "$INSTALL_PORTAINER" = true ]; then
-        cat >> "${SCRIPT_DIR}/docker-compose.yml" << 'EOF'
+        cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
 
   # ===========================================================================
   # Portainer Container Management
@@ -2261,7 +2261,7 @@ EOF
 EOF
     fi
 
-    print_success "docker-compose.yml generated"
+    print_success "docker-compose.yaml generated"
 }
 
 generate_nginx_conf() {
