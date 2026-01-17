@@ -19,7 +19,9 @@ https://github.com/rjsears
 
 /* Base styles */
 body {
-  @apply bg-background-primary text-primary antialiased;
+  @apply antialiased;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
@@ -29,7 +31,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-background-secondary;
+  background-color: var(--color-bg-secondary);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -42,7 +44,8 @@ body {
 
 /* Focus styles */
 *:focus-visible {
-  @apply outline-none ring-2 ring-blue-500 ring-offset-2 ring-offset-background-primary;
+  @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+  --tw-ring-offset-color: var(--color-bg-primary);
 }
 
 /* Custom utilities */
@@ -51,12 +54,46 @@ body {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-500;
   }
 
+  .bg-background-primary {
+    background-color: var(--color-bg-primary);
+  }
+
+  .bg-background-secondary {
+    background-color: var(--color-bg-secondary);
+  }
+
+  .bg-background-tertiary {
+    background-color: var(--color-bg-tertiary);
+  }
+
+  .bg-surface {
+    background-color: var(--color-surface);
+  }
+
+  .bg-surface-hover {
+    background-color: var(--color-surface-hover);
+  }
+
+  .text-primary {
+    color: var(--color-text-primary);
+  }
+
+  .text-secondary {
+    color: var(--color-text-secondary);
+  }
+
+  .text-muted {
+    color: var(--color-text-muted);
+  }
+
   .card {
-    @apply bg-surface rounded-lg border border-gray-400/60 dark:border-slate-600 shadow-sm;
+    @apply rounded-lg border border-gray-400/60 dark:border-slate-600 shadow-sm;
+    background-color: var(--color-surface);
   }
 
   .card-hover {
-    @apply card transition-all duration-200 hover:shadow-md hover:border-blue-500/50;
+    @apply rounded-lg border border-gray-400/60 dark:border-slate-600 shadow-sm transition-all duration-200 hover:shadow-md hover:border-blue-500/50;
+    background-color: var(--color-surface);
   }
 
   .btn {
@@ -86,7 +123,12 @@ body {
   }
 
   .btn-ghost {
-    @apply btn text-secondary hover:bg-surface-hover;
+    @apply btn;
+    color: var(--color-text-secondary);
+  }
+
+  .btn-ghost:hover {
+    background-color: var(--color-surface-hover);
   }
 
   .btn-sm {
@@ -99,12 +141,15 @@ body {
 
   .input {
     @apply w-full px-3 py-2 rounded-lg border border-gray-400/60 dark:border-slate-600;
-    @apply bg-surface text-primary placeholder:text-gray-400;
+    @apply placeholder:text-gray-400;
     @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
   }
 
   .label {
-    @apply block text-sm font-medium text-secondary mb-1;
+    @apply block text-sm font-medium mb-1;
+    color: var(--color-text-secondary);
   }
 
   /* Generator state colors */
