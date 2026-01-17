@@ -2000,17 +2000,27 @@ EOF
 
     # Add Tailscale if enabled
     if [ "$INSTALL_TAILSCALE" = true ]; then
+        # Auto-detect host IP for Tailscale routes
+        local primary_ip=$(get_local_ips | head -1)
+        local tailscale_routes=""
+        if [ -n "$primary_ip" ]; then
+            tailscale_routes="${primary_ip}/32"
+            echo ""
+            print_info "Docker host IP detected: ${primary_ip}"
+            print_info "Tailscale route configured: ${tailscale_routes}"
+            print_info "To expose your full subnet, change TAILSCALE_ROUTES in .env to ${primary_ip%.*}.0/24"
+        fi
+
         cat >> "${SCRIPT_DIR}/.env" << EOF
 
 # Tailscale VPN
-# Enable with: docker compose --profile tailscale up -d
 # Get auth key from: https://login.tailscale.com/admin/settings/keys
 TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY}
 TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME}
-# Optional: Advertise routes in CIDR notation
-# Single host: 192.168.1.10/32 (Docker host only)
-# Full subnet: 192.168.1.0/24 (entire local network)
-TAILSCALE_ROUTES=
+# Advertise routes in CIDR notation
+# Single host: ${primary_ip:-192.168.1.10}/32 (Docker host only)
+# Full subnet: ${primary_ip%.*:-192.168.1}.0/24 (entire local network)
+TAILSCALE_ROUTES=${tailscale_routes}
 EOF
     fi
 
@@ -2043,7 +2053,9 @@ volumes:
   genmaster_logs:
   genmaster_data:
   nginx_logs:
+  # SSL certificates (external, created by setup.sh)
   letsencrypt:
+    external: true
   certbot_data:
   tailscale_state:
   portainer_data:
@@ -2390,6 +2402,7 @@ EOF
 # =============================================================================
 
 create_letsencrypt_volume() {
+    # Volume is external in docker-compose, so we create it manually with exact name
     if $DOCKER_SUDO docker volume inspect letsencrypt >/dev/null 2>&1; then
         print_info "Volume 'letsencrypt' already exists"
     else
@@ -2429,7 +2442,7 @@ obtain_ssl_certificate() {
             ;;
     esac
 
-    # Check if certificate already exists in volume
+    # Check if certificate already exists in volume (external volume, no prefix)
     if $DOCKER_SUDO docker run --rm \
         -v letsencrypt:/etc/letsencrypt:ro \
         alpine \
@@ -2461,12 +2474,26 @@ obtain_ssl_certificate() {
 
     print_success "SSL certificate obtained"
 
-    # Copy certificates to docker volume
-    $DOCKER_SUDO docker run --rm \
+    # Verify certificate was created
+    if [ ! -f "${SCRIPT_DIR}/letsencrypt-temp/live/${DOMAIN}/fullchain.pem" ]; then
+        print_error "Certificate file not found in temp directory"
+        ls -laR "${SCRIPT_DIR}/letsencrypt-temp/" 2>/dev/null || true
+        rm -rf "${SCRIPT_DIR}/letsencrypt-temp"
+        exit 1
+    fi
+
+    print_info "Certificate files found, copying to Docker volume..."
+
+    # Copy certificates to docker volume with error checking (external volume, no prefix)
+    if ! $DOCKER_SUDO docker run --rm \
         -v "${SCRIPT_DIR}/letsencrypt-temp:/source:ro" \
-        -v letsencrypt:/dest \
+        -v letsencrypt:/etc/letsencrypt \
         alpine \
-        sh -c "cp -rL /source/* /dest/"
+        sh -c "cp -rL /source/* /etc/letsencrypt/ && ls -la /etc/letsencrypt/live/${DOMAIN}/"; then
+        print_error "Failed to copy certificates to Docker volume"
+        rm -rf "${SCRIPT_DIR}/letsencrypt-temp"
+        exit 1
+    fi
 
     rm -rf "${SCRIPT_DIR}/letsencrypt-temp"
     print_success "Certificates copied to Docker volume"
@@ -2550,13 +2577,15 @@ show_deployment_summary() {
 
     # Tailscale Action Required
     if [ "$INSTALL_TAILSCALE" = true ]; then
+        local ts_route_ip=$(get_local_ips | head -1)
         echo -e "  ${YELLOW}⚠ TAILSCALE ACTION REQUIRED:${NC}"
-        echo -e "    Complete these steps to enable Tailscale HTTPS access:"
+        echo -e "    Complete these steps to enable Tailscale access:"
         echo ""
-        echo -e "    ${WHITE}Step 1: Approve the machine${NC}"
+        echo -e "    ${WHITE}Step 1: Approve the machine and route${NC}"
         echo -e "      • Visit: ${CYAN}https://login.tailscale.com/admin/machines${NC}"
         echo -e "      • Find your ${WHITE}${TAILSCALE_HOSTNAME}${NC} node"
-        echo -e "      • Click '...' menu → 'Edit route settings' → Enable routes"
+        echo -e "      • Click '...' menu → 'Edit route settings'"
+        echo -e "      • Approve the advertised route: ${WHITE}${ts_route_ip}/32${NC}"
         echo ""
         echo -e "    ${WHITE}Step 2: Enable HTTPS certificates${NC}"
         echo -e "      • Visit: ${CYAN}https://login.tailscale.com/admin/dns${NC}"
