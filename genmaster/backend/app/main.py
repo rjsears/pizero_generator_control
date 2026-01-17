@@ -32,6 +32,7 @@ from app.routers import (
     dev,
     generator,
     health,
+    metrics,
     notifications,
     override,
     schedule,
@@ -41,6 +42,7 @@ from app.routers import (
 )
 from app.services.gpio_monitor import GPIOMonitor
 from app.services.heartbeat import HeartbeatService
+from app.services.metrics_service import get_metrics_service
 from app.services.scheduler import SchedulerService
 from app.services.slave_client import SlaveClient
 from app.services.state_machine import StateMachine
@@ -104,6 +106,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         scheduler_service.start()
         logger.info("Scheduler service started")
 
+        # Initialize metrics collection service
+        metrics_service = get_metrics_service()
+        await metrics_service.start()
+        logger.info("Metrics service started")
+
         # Attempt to reconcile state with GenSlave
         logger.info("Attempting state reconciliation with GenSlave...")
         slave_client = SlaveClient()
@@ -149,6 +156,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("=" * 60)
 
     try:
+        # Stop metrics service
+        metrics_svc = get_metrics_service()
+        await metrics_svc.stop()
+        logger.info("Metrics service stopped")
+
         # Stop scheduler first (no new runs)
         if scheduler_service:
             scheduler_service.stop()
@@ -214,6 +226,7 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["Not
 app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(dev.router, prefix="/api/dev", tags=["Development"])
 app.include_router(terminal.router, prefix="/api/terminal", tags=["Terminal"])
+app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
 
 
 # Root status endpoint
