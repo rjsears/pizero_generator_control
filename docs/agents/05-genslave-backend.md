@@ -5,14 +5,70 @@ This document provides complete specifications for building the GenSlave FastAPI
 
 ---
 
+## Current Implementation Status
+
+**The GenSlave application has been implemented** and is located at `/genslave/app/`. The implementation includes:
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Relay Control** | Implemented | `services/relay.py` |
+| **Heartbeat/Failsafe** | Implemented | `services/failsafe.py` |
+| **Arming System** | Implemented | Syncs with GenMaster |
+| **API Endpoints** | Implemented | Port 8001 |
+| **Systemd Service** | Implemented | Auto-deployed by setup.sh |
+| **LCD Display** | Not Yet | Future enhancement |
+| **SQLite Database** | Not Yet | Currently in-memory state |
+
+### Actual File Structure
+
+```
+/genslave/
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # FastAPI application
+│   ├── config.py            # Environment configuration
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── health.py        # Health + heartbeat endpoints
+│   │   ├── relay.py         # Relay control + arming
+│   │   └── system.py        # System info
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── relay.py         # Automation Hat Mini control
+│   │   └── failsafe.py      # Heartbeat monitor
+│   └── models/
+│       └── __init__.py
+├── requirements.txt
+├── genslave.service         # Systemd service template
+└── setup.sh                 # Installation script
+```
+
+### API Endpoints (Port 8001)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Health check |
+| POST | `/api/heartbeat` | Receive heartbeat from GenMaster |
+| GET | `/api/relay/state` | Get relay state |
+| POST | `/api/relay/on` | Turn relay ON |
+| POST | `/api/relay/off` | Turn relay OFF |
+| GET | `/api/relay/arm` | Get arm status |
+| POST | `/api/relay/arm` | Arm automation |
+| POST | `/api/relay/disarm` | Disarm automation |
+| GET | `/api/system` | Get system info |
+| GET | `/api/failsafe` | Get failsafe status |
+
+---
+
 ## Overview
 
 GenSlave is the secondary controller that:
 1. Controls generator relay via Automation Hat Mini (GPIO16)
-2. Displays status on built-in 0.96" LCD
+2. Displays status on built-in 0.96" LCD (future)
 3. Responds to commands from GenMaster
 4. Monitors GenMaster heartbeats
 5. Executes failsafe shutdown if communication lost
+6. **Supports automation arming (synced from GenMaster)**
 
 ---
 

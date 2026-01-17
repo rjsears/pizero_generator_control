@@ -1,0 +1,53 @@
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# /genslave/genslave.service
+#
+# Systemd service file for GenSlave
+# Part of the "RPi Generator Control" suite
+#
+# Install with:
+#   sudo cp genslave.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable genslave
+#   sudo systemctl start genslave
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+[Unit]
+Description=GenSlave - Generator Relay Control Service
+Documentation=https://github.com/rjsears/pizero_generator_control
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/genslave
+Environment="PATH=/opt/genslave/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONPATH=/opt/genslave"
+
+# Load environment from file if it exists
+EnvironmentFile=-/opt/genslave/.env
+
+# Start the application
+ExecStart=/opt/genslave/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=false
+ProtectSystem=false
+ProtectHome=false
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=genslave
+
+[Install]
+WantedBy=multi-user.target
