@@ -2603,12 +2603,12 @@ main() {
     echo "║  ╚██████╔╝███████╗██║ ╚████║██║ ╚═╝ ██║██║  ██║███████║   ██║   ███████╗██║  ██║    ║"
     echo "║   ╚═════╝ ╚══════╝╚═╝  ╚═══╝╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝    ║"
     echo "║                                                                                     ║"
-    echo "║                          Interactive Setup v${SCRIPT_VERSION}                              ║"
+    echo "║                          Interactive Setup v${SCRIPT_VERSION}                                   ║"
     echo "║                                                                                     ║"
     echo "╚═════════════════════════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 
-    print_header "GenMaster Setup v${SCRIPT_VERSION}"
+  #  print_header "GenMaster Setup v${SCRIPT_VERSION}"
 
     # Auto-confirm mode
     if [ "$PRECONFIG_MODE" = "true" ] && [ "$PRECONFIG_AUTO_CONFIRM" = "true" ]; then
