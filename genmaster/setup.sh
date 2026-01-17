@@ -2468,7 +2468,11 @@ services:
     environment:
       - APP_ENV=${APP_ENV:-production}
       - MOCK_GPIO_MODE=${MOCK_GPIO_MODE:-false}
-      - DATABASE_URL=postgresql+asyncpg://${DATABASE_USER:-genmaster}:${DATABASE_PASSWORD}@db:5432/${DATABASE_NAME:-genmaster}
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=${DATABASE_NAME:-genmaster}
+      - DATABASE_USER=${DATABASE_USER:-genmaster}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
       - GENSLAVE_ENABLED=${GENSLAVE_ENABLED:-true}
