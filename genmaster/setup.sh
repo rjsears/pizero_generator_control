@@ -2812,6 +2812,16 @@ main() {
     PRECONFIG_MODE=false
     PRECONFIG_AUTO_CONFIRM=false
 
+    # CRITICAL: Backup existing .env IMMEDIATELY before doing ANYTHING
+    # This protects against any code path that might corrupt the file
+    if [ -f "${SCRIPT_DIR}/.env" ]; then
+        local backup_dir="${SCRIPT_DIR}/backups"
+        local timestamp=$(date +%Y%m%d_%H%M%S)
+        mkdir -p "$backup_dir"
+        cp "${SCRIPT_DIR}/.env" "${backup_dir}/.env.startup_backup.${timestamp}"
+        echo -e "${GREEN}  ✓${NC} Startup backup: ${backup_dir}/.env.startup_backup.${timestamp}"
+    fi
+
     case "${1:-}" in
         --help|-h) show_help; exit 0 ;;
         --version|-v) echo "v${SCRIPT_VERSION}"; exit 0 ;;
