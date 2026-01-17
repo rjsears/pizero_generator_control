@@ -22,6 +22,7 @@ from app.config import settings
 from app.routers import relay_router, health_router, system_router
 from app.services.relay import relay_service
 from app.services.failsafe import failsafe_monitor
+from app.services.display import display_service
 
 # Configure logging
 logging.basicConfig(
@@ -47,8 +48,14 @@ async def lifespan(app: FastAPI):
     # Connect failsafe monitor to relay service
     failsafe_monitor.set_relay_service(relay_service)
 
+    # Connect display to services
+    display_service.set_services(failsafe_monitor, relay_service)
+
     # Start failsafe monitor
     await failsafe_monitor.start()
+
+    # Start display service
+    await display_service.start()
 
     logger.info(
         f"GenSlave ready - "
@@ -60,6 +67,9 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("GenSlave shutting down...")
+
+    # Stop display service
+    await display_service.stop()
 
     # Stop failsafe monitor
     await failsafe_monitor.stop()

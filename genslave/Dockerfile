@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pil \
     python3-spidev \
     python3-smbus \
+    fonts-dejavu-core \
     gcc \
     g++ \
     make \
