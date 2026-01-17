@@ -16,6 +16,7 @@
 # Usage:
 #   Interactive:  ./setup.sh
 #   Preconfig:    ./setup.sh --preconfig /path/to/preconfig.conf
+#   Set API key:  ./setup.sh --setmasterapi YOUR_API_SECRET
 #
 # Author: rjsears
 # License: MIT
@@ -766,27 +767,86 @@ configure_tailscale() {
 configure_environment() {
     print_section "Environment Configuration"
 
-    print_step "1" "Gathering GenMaster connection details..."
+    print_step "1" "Configuring GenMaster host entry..."
+    echo ""
+    echo -e "  ${GRAY}Adding a hosts entry ensures reliable hostname resolution.${NC}"
+    echo ""
 
-    if [ "$ENABLE_TAILSCALE" = true ]; then
-        prompt_input "GenMaster API URL (Tailscale hostname)" "http://genmaster:8000" MASTER_API_URL
+    local genmaster_hostname=""
+    local genmaster_ip=""
+
+    echo -ne "  ${WHITE}GenMaster hostname (e.g., genmaster)${NC}: "
+    read genmaster_hostname
+    genmaster_hostname="${genmaster_hostname:-genmaster}"
+
+    echo -ne "  ${WHITE}GenMaster IP address (e.g., 192.168.1.50 or Tailscale IP)${NC}: "
+    read genmaster_ip
+
+    if [ -n "$genmaster_ip" ] && [ -n "$genmaster_hostname" ]; then
+        # Check if entry already exists
+        if grep -q "^[^#]*[[:space:]]${genmaster_hostname}$\|^[^#]*[[:space:]]${genmaster_hostname}[[:space:]]" /etc/hosts 2>/dev/null; then
+            print_warning "Host entry for '${genmaster_hostname}' already exists in /etc/hosts"
+            if confirm "Update the existing entry?" "y"; then
+                # Remove old entry and add new one
+                sed -i "/[[:space:]]${genmaster_hostname}$/d; /[[:space:]]${genmaster_hostname}[[:space:]]/d" /etc/hosts
+                echo "${genmaster_ip}    ${genmaster_hostname}" >> /etc/hosts
+                print_success "Updated /etc/hosts: ${genmaster_ip} -> ${genmaster_hostname}"
+            fi
+        else
+            echo "${genmaster_ip}    ${genmaster_hostname}" >> /etc/hosts
+            print_success "Added to /etc/hosts: ${genmaster_ip} -> ${genmaster_hostname}"
+        fi
+
+        # Set default URL based on hostname
+        MASTER_API_URL="http://${genmaster_hostname}:8000"
+        print_info "Default GenMaster URL set to: ${MASTER_API_URL}"
     else
-        prompt_input "GenMaster API URL" "" MASTER_API_URL
+        print_warning "Skipping /etc/hosts entry (hostname or IP not provided)"
     fi
 
-    print_step "2" "Configuring API secret..."
+    echo ""
+    print_step "2" "Gathering GenMaster connection details..."
+
+    if [ "$ENABLE_TAILSCALE" = true ]; then
+        if [ -n "$MASTER_API_URL" ]; then
+            prompt_input "GenMaster API URL (Tailscale hostname)" "$MASTER_API_URL" MASTER_API_URL
+        else
+            prompt_input "GenMaster API URL (Tailscale hostname)" "http://genmaster:8000" MASTER_API_URL
+        fi
+    else
+        if [ -n "$MASTER_API_URL" ]; then
+            prompt_input "GenMaster API URL" "$MASTER_API_URL" MASTER_API_URL
+        else
+            prompt_input "GenMaster API URL" "" MASTER_API_URL
+        fi
+    fi
+
+    print_step "3" "Configuring API secret..."
+    echo ""
+    echo -e "  ${YELLOW}NOTE: If you haven't installed GenMaster yet, you can skip this step.${NC}"
+    echo -e "  ${GRAY}The API secret is generated during GenMaster setup and shown at the end.${NC}"
+    echo -e "  ${GRAY}You can add it later by editing: ${INSTALL_DIR}/.env${NC}"
     echo ""
     echo "  This secret must match the SLAVE_API_SECRET configured on GenMaster."
     echo ""
-    prompt_secret "Enter API Secret (from GenMaster)" API_SECRET
+    if confirm "Do you have the API secret from GenMaster?" "n"; then
+        prompt_secret "Enter API Secret (from GenMaster)" API_SECRET
+    else
+        API_SECRET="REPLACE_WITH_GENMASTER_SECRET"
+        print_warning "API secret skipped - you MUST update ${INSTALL_DIR}/.env after GenMaster setup"
+        echo -e "  ${CYAN}After GenMaster setup, edit .env and replace:${NC}"
+        echo -e "  ${WHITE}API_SECRET=REPLACE_WITH_GENMASTER_SECRET${NC}"
+        echo -e "  ${CYAN}with the actual SLAVE_API_SECRET from GenMaster${NC}"
+        echo ""
+    fi
 
-    print_step "3" "Configuring webhooks (optional)..."
+    print_step "4" "Configuring webhooks (optional)..."
     if confirm "Would you like to configure webhook notifications?"; then
         prompt_input "Webhook URL" "" WEBHOOK_BASE_URL
         prompt_secret "Webhook Secret" WEBHOOK_SECRET true
     fi
 
-    print_step "4" "Creating environment configuration..."
+    print_step "5" "Creating environment configuration..."
 
     cat > "$CONFIG_FILE" << EOF
 # GenSlave Environment Configuration
@@ -1055,15 +1115,55 @@ main() {
                 DEBUG_MODE=true
                 shift
                 ;;
+            --setmasterapi)
+                if [ -z "$2" ]; then
+                    echo -e "${RED}Error: --setmasterapi requires an API secret${NC}"
+                    echo "Usage: $0 --setmasterapi YOUR_API_SECRET"
+                    exit 1
+                fi
+                local new_secret="$2"
+                local env_file="${INSTALL_DIR}/.env"
+
+                if [ ! -f "$env_file" ]; then
+                    echo -e "${RED}Error: ${env_file} not found. Run setup first.${NC}"
+                    exit 1
+                fi
+
+                echo -e "${CYAN}Updating API secret in ${env_file}...${NC}"
+
+                if grep -q "^API_SECRET=" "$env_file"; then
+                    sed -i "s|^API_SECRET=.*|API_SECRET=${new_secret}|" "$env_file"
+                else
+                    echo "API_SECRET=${new_secret}" >> "$env_file"
+                fi
+
+                echo -e "${GREEN}✓${NC} API secret updated"
+
+                # Restart service if running
+                if systemctl is-active --quiet genslave 2>/dev/null; then
+                    echo -e "${CYAN}Restarting genslave service...${NC}"
+                    systemctl restart genslave
+                    echo -e "${GREEN}✓${NC} Service restarted"
+                else
+                    echo -e "${YELLOW}Note: genslave service is not running${NC}"
+                fi
+
+                exit 0
+                ;;
             --help|-h)
                 echo "GenSlave Setup Script"
                 echo ""
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
                 echo "Options:"
-                echo "  --preconfig FILE    Use preconfig file"
-                echo "  --debug             Enable debug mode"
-                echo "  --help              Show this help message"
+                echo "  --preconfig FILE       Use preconfig file"
+                echo "  --setmasterapi SECRET  Set/update the API secret from GenMaster"
+                echo "  --debug                Enable debug mode"
+                echo "  --help                 Show this help message"
+                echo ""
+                echo "Examples:"
+                echo "  $0                              # Interactive setup"
+                echo "  $0 --setmasterapi abc123xyz     # Update API secret"
                 exit 0
                 ;;
             *)
