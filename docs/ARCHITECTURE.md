@@ -165,7 +165,8 @@ The heartbeat system ensures reliable communication between GenMaster and GenSla
 │             ├──►│   "timestamp": 1234567, │───────────►│                            │
 │             │   │   "generator_running":  │            │                            │
 │             │   │     true/false,         │            │                            │
-│             │   │   "command": "start"    │            │                            │
+│             │   │   "armed": true/false,  │            │  ← Armed state synced      │
+│             │   │   "command": "start"    │            │    from GenMaster          │
 │             │   │     /"stop"/"none"      │            │                            │
 │             │   │ }                       │            │                            │
 │             │   └─────────────────────────┘            │                            │
@@ -176,7 +177,8 @@ The heartbeat system ensures reliable communication between GenMaster and GenSla
 │             │◄──│   "relay_state": true,  │◄───────────┤                            │
 │             │   │   "uptime": 3600,       │            │                            │
 │             │   │   "failsafe_active":    │            │                            │
-│             │   │     false               │            │                            │
+│             │   │     false,              │            │                            │
+│             │   │   "armed": true/false   │            │  ← GenSlave armed state    │
 │             │   │ }                       │            │                            │
 │             │   └─────────────────────────┘            │                            │
 │             │                                          │                            │
@@ -219,6 +221,148 @@ The heartbeat system ensures reliable communication between GenMaster and GenSla
 │  └──────────────────────────────────────────────────────────────┘                   │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Boot Sequence / Power Loss Recovery
+
+Both GenMaster and GenSlave implement safety measures for power loss and reboot scenarios.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         POWER LOSS RECOVERY SEQUENCE                                │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  ┌───────────────────────────────────────────────────────────────────────────────┐  │
+│  │                         GenSlave Boot Sequence                                │  │
+│  ├───────────────────────────────────────────────────────────────────────────────┤  │
+│  │                                                                               │  │
+│  │  1. systemd starts genslave.service                                           │  │
+│  │         │                                                                     │  │
+│  │         ▼                                                                     │  │
+│  │  2. relay.py imports automationhat                                            │  │
+│  │         │                                                                     │  │
+│  │         ▼                                                                     │  │
+│  │  3. RELAY SET TO OFF (line 37) ←── CRITICAL SAFETY: Hardware reset            │  │
+│  │         │                                                                     │  │
+│  │         ▼                                                                     │  │
+│  │  4. RelayService.__init__()                                                   │  │
+│  │     - _armed = False ←── Always disarmed on boot                              │  │
+│  │     - _mock_state = False                                                     │  │
+│  │         │                                                                     │  │
+│  │         ▼                                                                     │  │
+│  │  5. FailsafeMonitor starts                                                    │  │
+│  │     - _last_heartbeat = None                                                  │  │
+│  │     - Waits for heartbeats from GenMaster                                     │  │
+│  │         │                                                                     │  │
+│  │         ▼                                                                     │  │
+│  │  6. GenSlave READY (waiting for GenMaster heartbeat)                          │  │
+│  │     - Armed state will sync from GenMaster via heartbeat                      │  │
+│  │                                                                               │  │
+│  └───────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                     │
+│  ┌───────────────────────────────────────────────────────────────────────────────┐  │
+│  │                        GenMaster Boot Sequence                                │  │
+│  ├───────────────────────────────────────────────────────────────────────────────┤  │
+│  │                                                                               │  │
+│  │  1. Docker starts containers (PostgreSQL, Redis, GenMaster, Nginx)            │  │
+│  │         │                                                                     │  │
+│  │         ▼                                                                     │  │
+│  │  2. StateMachine.initialize() loads from database                             │  │
+│  │         │                                                                     │  │
+│  │         ├──► Log pre-boot state for debugging                                 │  │
+│  │         │                                                                     │  │
+│  │         ├──► RESET automation_armed = False ←── ALWAYS disarm on boot         │  │
+│  │         │                                                                     │  │
+│  │         ├──► RESET slave_connection_status = "unknown"                        │  │
+│  │         │                                                                     │  │
+│  │         ├──► If generator_running was True:                                   │  │
+│  │         │      - Set generator_running = False                                │  │
+│  │         │      - Close orphaned run record (stop_reason = "power_loss")       │  │
+│  │         │      - Log WARNING                                                  │  │
+│  │         │                                                                     │  │
+│  │         └──► Log SYSTEM_BOOT_RESET event                                      │  │
+│  │         │                                                                     │  │
+│  │         ▼                                                                     │  │
+│  │  3. Services start (GPIO Monitor, Heartbeat, Scheduler)                       │  │
+│  │         │                                                                     │  │
+│  │         ▼                                                                     │  │
+│  │  4. Reconciliation with GenSlave                                              │  │
+│  │         │                                                                     │  │
+│  │         ├──► Query GenSlave relay state: GET /api/relay/state                 │  │
+│  │         │                                                                     │  │
+│  │         ├──► If slave unreachable:                                            │  │
+│  │         │      - Log warning, continue (slave may boot later)                 │  │
+│  │         │                                                                     │  │
+│  │         ├──► If relay ON but generator_running = False:                       │  │
+│  │         │      - Log RECONCILIATION_MISMATCH                                  │  │
+│  │         │      - WARNING: Manual intervention may be required                 │  │
+│  │         │                                                                     │  │
+│  │         └──► Update slave_connection_status = "connected"                     │  │
+│  │         │                                                                     │  │
+│  │         ▼                                                                     │  │
+│  │  5. Log SYSTEM_BOOT event                                                     │  │
+│  │         │                                                                     │  │
+│  │         ▼                                                                     │  │
+│  │  6. GenMaster READY                                                           │  │
+│  │     - Heartbeats start (sync armed state to GenSlave)                         │  │
+│  │     - Victron signals IGNORED until armed                                     │  │
+│  │     - Scheduled runs SKIPPED until armed                                      │  │
+│  │                                                                               │  │
+│  └───────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                     │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                              POST-BOOT STATE                                        │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  After any power loss or reboot:                                                    │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│  │  Component          │ State              │ Notes                            │    │
+│  │  ──────────────────────────────────────────────────────────────────────────│    │
+│  │  GenMaster armed    │ False              │ ALWAYS reset on boot             │    │
+│  │  GenSlave armed     │ False (synced)     │ Synced from GenMaster            │    │
+│  │  GenSlave relay     │ OFF                │ Hardware safety reset            │    │
+│  │  generator_running  │ False              │ Reset if was True                │    │
+│  │  slave_connection   │ "unknown"→"connected" │ Updated by heartbeat          │    │
+│  │  Victron response   │ DISABLED           │ Until operator arms              │    │
+│  │  Scheduled runs     │ DISABLED           │ Until operator arms              │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                     │
+│  OPERATOR ACTION REQUIRED:                                                          │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│  │  1. Verify GenSlave connection in web UI (should show "connected")          │    │
+│  │  2. Review system status and any warning messages                           │    │
+│  │  3. Click "Arm Automation" or POST /api/system/arm                          │    │
+│  │  4. System now responds to Victron signals and schedules                    │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Reconciliation Events
+
+| Event | Severity | Description |
+|-------|----------|-------------|
+| `SYSTEM_BOOT_RESET` | WARNING/INFO | Logged on every boot with pre-boot state |
+| `RECONCILIATION_MISMATCH` | WARNING | GenSlave relay ON but no active run in GenMaster |
+
+### Database Fields Reset on Boot
+
+```sql
+-- Always reset
+automation_armed = False
+automation_armed_at = NULL
+automation_armed_by = NULL
+slave_connection_status = 'unknown'
+missed_heartbeat_count = 0
+
+-- Reset if generator was running
+generator_running = False
+run_trigger = 'idle'
+generator_start_time = NULL
+current_run_id = NULL  -- After closing orphaned run
 ```
 
 ---

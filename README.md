@@ -450,7 +450,33 @@ The arming system prevents accidental generator operations during startup, maint
 - **Startup Safety**: Prevents race conditions when GenMaster/GenSlave boot at different times
 - **Maintenance Mode**: Disarm before working on the generator or electrical systems
 - **Testing**: Safely test configurations without triggering the generator
-- **Recovery**: After power loss, operator must consciously arm the system
+- **Power Loss Recovery**: After any reboot, system starts disarmed requiring operator confirmation
+
+### Power Loss / Reboot Behavior
+
+When power is lost or devices reboot, the system automatically enters a safe state:
+
+| On Boot | GenMaster | GenSlave |
+|---------|-----------|----------|
+| **Automation Armed** | Always reset to **False** | Reset to **False** (synced via heartbeat) |
+| **Generator Running** | Reset to **False** | N/A |
+| **Relay State** | N/A | Always **OFF** on boot |
+| **Connection Status** | Reset to "unknown" | Waits for heartbeat |
+
+**What happens on GenMaster boot:**
+1. Resets `automation_armed = False` (requires operator to re-arm)
+2. Resets `generator_running = False` if it was True before crash
+3. Closes any orphaned generator run records with `stop_reason = "power_loss"`
+4. Attempts to reconcile state with GenSlave
+5. Logs `SYSTEM_BOOT_RESET` event
+
+**What happens on GenSlave boot:**
+1. Relay is immediately set to **OFF** (hardware safety)
+2. Internal armed state reset to **False**
+3. Failsafe monitor starts waiting for heartbeats
+4. Armed state is synced from GenMaster via heartbeat
+
+**Important:** The generator will NOT auto-start after a power loss, even if the Victron signal is active. An operator must explicitly arm the system first.
 
 ### Arming Behavior
 
