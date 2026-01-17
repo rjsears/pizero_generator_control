@@ -1,14 +1,14 @@
 <!--
-  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-  /genmaster/frontend/src/components/common/StatusBadge.vue
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/management/frontend/src/components/common/StatusBadge.vue
 
-  Part of the "RPi Generator Control" suite
-  Version 1.0.0 - January 15th, 2026
+Part of the "n8n_nginx/n8n_management" suite
+Version 3.0.0 - January 1st, 2026
 
-  Richard J. Sears
-  richardjsears@protonmail.com
-  https://github.com/rjsears
-  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Richard J. Sears
+richard@n8nmanagement.net
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
 <script setup>
 import { computed } from 'vue'
@@ -22,10 +22,6 @@ const props = defineProps({
     type: String,
     default: 'md', // 'sm', 'md', 'lg'
   },
-  pulse: {
-    type: Boolean,
-    default: false,
-  },
 })
 
 const statusConfig = {
@@ -35,39 +31,29 @@ const statusConfig = {
   restarting: { label: 'Restarting', color: 'amber' },
   unhealthy: { label: 'Unhealthy', color: 'red' },
   healthy: { label: 'Healthy', color: 'emerald' },
-  exited: { label: 'Exited', color: 'gray' },
-  created: { label: 'Created', color: 'blue' },
-  paused: { label: 'Paused', color: 'amber' },
-  dead: { label: 'Dead', color: 'red' },
 
-  // Generator statuses
-  starting: { label: 'Starting', color: 'amber' },
-  stopping: { label: 'Stopping', color: 'amber' },
-  cooldown: { label: 'Cooldown', color: 'blue' },
-  idle: { label: 'Idle', color: 'gray' },
-  warmup: { label: 'Warmup', color: 'amber' },
-
-  // Schedule statuses
-  scheduled: { label: 'Scheduled', color: 'blue' },
-  completed: { label: 'Completed', color: 'emerald' },
-  cancelled: { label: 'Cancelled', color: 'gray' },
-  missed: { label: 'Missed', color: 'red' },
-
-  // Generic
+  // Backup statuses
   success: { label: 'Success', color: 'emerald' },
   failed: { label: 'Failed', color: 'red' },
   pending: { label: 'Pending', color: 'amber' },
+  partial: { label: 'Partial', color: 'amber' },
+
+  // Verification statuses
+  passed: { label: 'Passed', color: 'emerald' },
+  skipped: { label: 'Skipped', color: 'gray' },
+
+  // Notification statuses
+  sent: { label: 'Sent', color: 'emerald' },
+
+  // Generic
   active: { label: 'Active', color: 'emerald' },
   inactive: { label: 'Inactive', color: 'gray' },
+  archived: { label: 'Archived', color: 'amber' },
   enabled: { label: 'Enabled', color: 'emerald' },
   disabled: { label: 'Disabled', color: 'gray' },
   error: { label: 'Error', color: 'red' },
   warning: { label: 'Warning', color: 'amber' },
   info: { label: 'Info', color: 'blue' },
-  online: { label: 'Online', color: 'emerald' },
-  offline: { label: 'Offline', color: 'red' },
-  connected: { label: 'Connected', color: 'emerald' },
-  disconnected: { label: 'Disconnected', color: 'red' },
 }
 
 const config = computed(() => {
@@ -94,16 +80,6 @@ const sizeClasses = computed(() => {
   }
   return sizes[props.size] || sizes.md
 })
-
-const pulseColors = {
-  emerald: 'bg-emerald-400',
-  amber: 'bg-amber-400',
-  red: 'bg-red-400',
-  blue: 'bg-blue-400',
-  gray: 'bg-gray-400',
-}
-
-const pulseColorClass = computed(() => pulseColors[config.value.color] || pulseColors.gray)
 </script>
 
 <template>
@@ -114,17 +90,7 @@ const pulseColorClass = computed(() => pulseColors[config.value.color] || pulseC
       sizeClasses
     ]"
   >
-    <span v-if="pulse" class="relative flex h-1.5 w-1.5 mr-1.5">
-      <span
-        class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
-        :class="pulseColorClass"
-      ></span>
-      <span
-        class="relative inline-flex rounded-full h-1.5 w-1.5"
-        :class="pulseColorClass"
-      ></span>
-    </span>
-    <span v-else class="w-1.5 h-1.5 rounded-full mr-1.5 bg-current opacity-75" />
+    <span class="w-1.5 h-1.5 rounded-full mr-1.5 bg-current opacity-75" />
     {{ config.label }}
   </span>
 </template>

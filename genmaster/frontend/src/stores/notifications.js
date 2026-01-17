@@ -1,95 +1,79 @@
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// /genmaster/frontend/src/stores/notifications.js
-//
-// Part of the "RPi Generator Control" suite
-// Version 1.0.0 - January 15th, 2026
-//
-// Richard J. Sears
-// richardjsears@protonmail.com
-// https://github.com/rjsears
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/*
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/management/frontend/src/stores/notifications.js
+
+Part of the "n8n_nginx/n8n_management" suite
+Version 3.0.0 - January 1st, 2026
+
+Richard J. Sears
+richard@n8nmanagement.net
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+*/
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 
-let notificationId = 0
-
+// Toast notification store
 export const useNotificationStore = defineStore('notifications', () => {
-  // State
-  const notifications = ref([])
+  const toasts = ref([])
+  let nextId = 0
 
-  // Getters
-  const activeNotifications = computed(() => notifications.value)
-  const hasNotifications = computed(() => notifications.value.length > 0)
-
-  // Actions
-  function add(notification) {
-    const id = ++notificationId
-    const defaults = {
+  function addToast(message, type = 'info', duration = 5000) {
+    const id = nextId++
+    const toast = {
       id,
-      type: 'info',
-      title: '',
-      message: '',
-      duration: 5000,
-      dismissible: true,
+      message,
+      type, // 'success', 'error', 'warning', 'info'
+      duration,
     }
 
-    const newNotification = { ...defaults, ...notification }
-    notifications.value.push(newNotification)
+    toasts.value.push(toast)
 
-    // Auto-dismiss after duration
-    if (newNotification.duration > 0) {
+    if (duration > 0) {
       setTimeout(() => {
-        remove(id)
-      }, newNotification.duration)
+        removeToast(id)
+      }, duration)
     }
 
     return id
   }
 
-  function remove(id) {
-    const index = notifications.value.findIndex(n => n.id === id)
-    if (index !== -1) {
-      notifications.value.splice(index, 1)
+  function removeToast(id) {
+    const index = toasts.value.findIndex(t => t.id === id)
+    if (index > -1) {
+      toasts.value.splice(index, 1)
     }
   }
 
+  function success(message, duration = 5000) {
+    return addToast(message, 'success', duration)
+  }
+
+  function error(message, duration = 8000) {
+    return addToast(message, 'error', duration)
+  }
+
+  function warning(message, duration = 6000) {
+    return addToast(message, 'warning', duration)
+  }
+
+  function info(message, duration = 5000) {
+    return addToast(message, 'info', duration)
+  }
+
   function clear() {
-    notifications.value = []
-  }
-
-  // Convenience methods
-  function success(message, title = 'Success') {
-    return add({ type: 'success', title, message })
-  }
-
-  function error(message, title = 'Error') {
-    return add({ type: 'error', title, message, duration: 8000 })
-  }
-
-  function warning(message, title = 'Warning') {
-    return add({ type: 'warning', title, message, duration: 6000 })
-  }
-
-  function info(message, title = 'Info') {
-    return add({ type: 'info', title, message })
+    toasts.value = []
   }
 
   return {
-    // State
-    notifications,
-
-    // Getters
-    activeNotifications,
-    hasNotifications,
-
-    // Actions
-    add,
-    remove,
-    clear,
+    toasts,
+    addToast,
+    removeToast,
     success,
     error,
     warning,
     info,
+    clear,
   }
 })

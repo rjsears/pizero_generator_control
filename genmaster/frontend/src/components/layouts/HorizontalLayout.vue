@@ -1,26 +1,30 @@
 <!--
-  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-  /genmaster/frontend/src/components/layouts/HorizontalLayout.vue
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/genmaster/frontend/src/components/layouts/HorizontalLayout.vue
 
-  Part of the "RPi Generator Control" suite
-  Version 1.0.0 - January 15th, 2026
+Part of the "RPi Generator Control" suite
+Version 1.0.0 - January 17th, 2026
 
-  Richard J. Sears
-  richardjsears@protonmail.com
-  https://github.com/rjsears
-  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Richard J. Sears
+richardjsears@protonmail.com
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useThemeStore } from '../../stores/theme'
+import { useDebugStore } from '../../stores/debug'
+import AboutDialog from '../common/AboutDialog.vue'
+import HelpDialog from '../common/HelpDialog.vue'
 import {
   HomeIcon,
   BoltIcon,
-  GlobeAltIcon,
-  CalendarIcon,
+  ServerIcon,
+  CalendarDaysIcon,
   ClockIcon,
+  BellIcon,
   ServerStackIcon,
   CpuChipIcon,
   Cog6ToothIcon,
@@ -28,28 +32,37 @@ import {
   SunIcon,
   MoonIcon,
   InformationCircleIcon,
+  QuestionMarkCircleIcon,
+  BugAntIcon,
 } from '@heroicons/vue/24/outline'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
+const debugStore = useDebugStore()
 
 // Dialog states
 const showAbout = ref(false)
+const showHelp = ref(false)
 
 const navItems = [
   { name: 'Dashboard', route: 'dashboard', icon: HomeIcon },
   { name: 'Generator', route: 'generator', icon: BoltIcon },
-  { name: 'GenSlave', route: 'genslave', icon: GlobeAltIcon },
-  { name: 'Schedule', route: 'schedule', icon: CalendarIcon },
+  { name: 'GenSlave', route: 'genslave', icon: ServerIcon },
+  { name: 'Schedule', route: 'schedule', icon: CalendarDaysIcon },
   { name: 'History', route: 'history', icon: ClockIcon },
+  { name: 'Notifications', route: 'notifications', icon: BellIcon },
   { name: 'Containers', route: 'containers', icon: ServerStackIcon },
   { name: 'System', route: 'system', icon: CpuChipIcon },
   { name: 'Settings', route: 'settings', icon: Cog6ToothIcon },
 ]
 
 const isActive = (routeName) => route.name === routeName
+
+function goToDebugSettings() {
+  router.push({ name: 'settings', query: { tab: 'api-debug' } })
+}
 
 async function handleLogout() {
   await authStore.logout()
@@ -67,7 +80,7 @@ async function handleLogout() {
           <div class="flex items-center">
             <div class="flex-shrink-0">
               <span class="text-xl font-bold text-primary">Gen</span>
-              <span class="text-xl font-light text-secondary ml-1">Master</span>
+              <span class="text-xl font-light text-secondary ml-0.5">Master</span>
             </div>
           </div>
 
@@ -91,6 +104,25 @@ async function handleLogout() {
 
           <!-- Right side -->
           <div class="flex items-center space-x-3">
+            <!-- Debug mode indicator (only shown when active) -->
+            <button
+              v-if="debugStore.isEnabled"
+              @click="goToDebugSettings"
+              class="p-2 text-emerald-500 hover:text-emerald-400 transition-colors"
+              title="Debug Mode Active - Click to disable"
+            >
+              <BugAntIcon class="h-5 w-5" />
+            </button>
+
+            <!-- Help button -->
+            <button
+              @click="showHelp = true"
+              class="p-2 rounded-lg text-secondary hover:text-primary hover:bg-surface-hover transition-colors"
+              title="Help & Documentation"
+            >
+              <QuestionMarkCircleIcon class="h-5 w-5" />
+            </button>
+
             <!-- About button -->
             <button
               @click="showAbout = true"
@@ -133,50 +165,9 @@ async function handleLogout() {
     </main>
 
     <!-- About Dialog -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="showAbout"
-          class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-        >
-          <div class="absolute inset-0 bg-black/50" @click="showAbout = false" />
-          <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-400 dark:border-gray-700">
-            <div class="px-6 py-4 border-b border-gray-400 dark:border-gray-700">
-              <div class="flex items-center gap-3">
-                <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-500/20">
-                  <BoltIcon class="h-6 w-6 text-blue-500" />
-                </div>
-                <div>
-                  <h3 class="text-lg font-semibold text-primary">GenMaster</h3>
-                  <p class="text-sm text-secondary">RPi Generator Control Suite</p>
-                </div>
-              </div>
-            </div>
-            <div class="px-6 py-4 space-y-3">
-              <p class="text-sm text-secondary">Version 1.0.0</p>
-              <p class="text-sm text-secondary">January 15th, 2026</p>
-              <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
-                <p class="text-sm text-primary font-medium">Richard J. Sears</p>
-                <p class="text-sm text-secondary">richardjsears@protonmail.com</p>
-              </div>
-            </div>
-            <div class="px-6 py-4 border-t border-gray-400 dark:border-gray-700">
-              <button @click="showAbout = false" class="w-full btn-secondary">Close</button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <AboutDialog :open="showAbout" @close="showAbout = false" />
+
+    <!-- Help Dialog -->
+    <HelpDialog :open="showHelp" @close="showHelp = false" />
   </div>
 </template>
-
-<style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-</style>

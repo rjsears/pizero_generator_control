@@ -1,46 +1,40 @@
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// /genmaster/frontend/vite.config.js
-//
-// Part of the "RPi Generator Control" suite
-// Version 1.0.0 - January 15th, 2026
-//
-// Richard J. Sears
-// richardjsears@protonmail.com
-// https://github.com/rjsears
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/*
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/genmaster/frontend/vite.config.js
+
+Part of the "RPi Generator Control" suite
+Version 1.0.0 - January 17th, 2026
+
+Richard J. Sears
+richardjsears@protonmail.com
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+*/
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { fileURLToPath, URL } from 'node:url'
+import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [vue()],
+  base: '/',
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    }
+      '@': resolve(__dirname, 'src'),
+    },
   },
   server: {
     port: 3000,
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
-        changeOrigin: true
-      }
-    }
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets',
+    emptyOutDir: true,
     sourcemap: false,
-    minify: 'esbuild',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'vendor': ['vue', 'vue-router', 'pinia'],
-          'charts': ['chart.js', 'vue-chartjs']
-        }
-      }
-    }
-  }
+  },
 })

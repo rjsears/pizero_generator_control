@@ -1,89 +1,79 @@
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// /genmaster/frontend/src/router/index.js
-//
-// Part of the "RPi Generator Control" suite
-// Version 1.0.0 - January 15th, 2026
-//
-// Richard J. Sears
-// richardjsears@protonmail.com
-// https://github.com/rjsears
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/*
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/genmaster/frontend/src/router/index.js
+
+Part of the "RPi Generator Control" suite
+Version 1.0.0 - January 17th, 2026
+
+Richard J. Sears
+richardjsears@protonmail.com
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+*/
 
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-
-// Lazy-loaded views
-const DashboardView = () => import('@/views/DashboardView.vue')
-const GeneratorView = () => import('@/views/GeneratorView.vue')
-const GenSlaveView = () => import('@/views/GenSlaveView.vue')
-const ScheduleView = () => import('@/views/ScheduleView.vue')
-const HistoryView = () => import('@/views/HistoryView.vue')
-const NotificationsView = () => import('@/views/NotificationsView.vue')
-const ContainersView = () => import('@/views/ContainersView.vue')
-const SystemView = () => import('@/views/SystemView.vue')
-const SettingsView = () => import('@/views/SettingsView.vue')
-const LoginView = () => import('@/views/LoginView.vue')
+import { useAuthStore } from '../stores/auth'
 
 const routes = [
   {
     path: '/login',
     name: 'login',
-    component: LoginView,
-    meta: { requiresAuth: false, title: 'Login' },
+    component: () => import('../views/LoginView.vue'),
+    meta: { guest: true },
   },
   {
     path: '/',
     name: 'dashboard',
-    component: DashboardView,
-    meta: { requiresAuth: true, title: 'Dashboard' },
+    component: () => import('../views/DashboardView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/generator',
     name: 'generator',
-    component: GeneratorView,
-    meta: { requiresAuth: true, title: 'Generator Control' },
+    component: () => import('../views/GeneratorView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/genslave',
     name: 'genslave',
-    component: GenSlaveView,
-    meta: { requiresAuth: true, title: 'GenSlave' },
+    component: () => import('../views/GenSlaveView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/schedule',
     name: 'schedule',
-    component: ScheduleView,
-    meta: { requiresAuth: true, title: 'Schedule' },
+    component: () => import('../views/ScheduleView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/history',
     name: 'history',
-    component: HistoryView,
-    meta: { requiresAuth: true, title: 'Run History' },
+    component: () => import('../views/HistoryView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/notifications',
     name: 'notifications',
-    component: NotificationsView,
-    meta: { requiresAuth: true, title: 'Notifications' },
+    component: () => import('../views/NotificationsView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/containers',
     name: 'containers',
-    component: ContainersView,
-    meta: { requiresAuth: true, title: 'Containers' },
+    component: () => import('../views/ContainersView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/system',
     name: 'system',
-    component: SystemView,
-    meta: { requiresAuth: true, title: 'System' },
+    component: () => import('../views/SystemView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/settings',
     name: 'settings',
-    component: SettingsView,
-    meta: { requiresAuth: true, title: 'Settings' },
+    component: () => import('../views/SettingsView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/:pathMatch(.*)*',
@@ -92,7 +82,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory('/'),
   routes,
 })
 
@@ -100,21 +90,20 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
-  // Update page title
-  document.title = to.meta.title
-    ? `${to.meta.title} - GenMaster`
-    : 'GenMaster'
+  // Initialize auth if not done yet
+  if (!authStore.user && authStore.token) {
+    await authStore.fetchCurrentUser()
+  }
 
-  // Check if route requires authentication
-  const requiresAuth = to.meta.requiresAuth !== false
-
-  if (requiresAuth && !authStore.isAuthenticated) {
-    // Redirect to login
+  // Check if route requires auth
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'login', query: { redirect: to.fullPath } })
-  } else if (to.name === 'login' && authStore.isAuthenticated) {
-    // Already logged in, redirect to dashboard
+  }
+  // Check if route is guest-only (like login)
+  else if (to.meta.guest && authStore.isAuthenticated) {
     next({ name: 'dashboard' })
-  } else {
+  }
+  else {
     next()
   }
 })

@@ -1,13 +1,15 @@
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// /genmaster/frontend/src/utils/formatters.js
-//
-// Part of the "RPi Generator Control" suite
-// Version 1.0.0 - January 15th, 2026
-//
-// Richard J. Sears
-// richardjsears@protonmail.com
-// https://github.com/rjsears
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/*
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/management/frontend/src/utils/formatters.js
+
+Part of the "n8n_nginx/n8n_management" suite
+Version 3.0.0 - January 1st, 2026
+
+Richard J. Sears
+richard@n8nmanagement.net
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+*/
 
 /**
  * Format bytes to human readable string
@@ -77,32 +79,26 @@ export function formatScheduleTime(time) {
 }
 
 /**
+ * Format schedule object to AM/PM string
+ * @param {Object} schedule - Schedule object with hour/minute properties
+ * @returns {string} Formatted time (e.g. "2:30 PM")
+ */
+export function formatScheduleTimeFromSchedule(schedule) {
+  if (!schedule) return 'Not configured'
+  const hour = schedule.hour ?? 0
+  const minute = schedule.minute ?? 0
+  const period = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
+  return `${displayHour}:${String(minute).padStart(2, '0')} ${period}`
+}
+
+/**
  * Get color class for progress bar based on percent
  * @param {number} percent - Percentage value (0-100)
  * @returns {string} Tailwind CSS color class
  */
 export function getProgressColor(percent) {
   if (percent >= 90) return 'bg-red-500'
-  if (percent >= 75) return 'bg-amber-500'
+  if (percent >= 75) return 'bg-amber-500' // Using 75 to match SystemView logic, Dashboard used 70
   return 'bg-emerald-500'
-}
-
-/**
- * Format duration in milliseconds to readable string
- * @param {number} ms - Duration in milliseconds
- * @returns {string} Formatted duration
- */
-export function formatDuration(ms) {
-  if (!ms) return '0s'
-  const seconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-
-  if (hours > 0) {
-    return `${hours}h ${minutes % 60}m`
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`
-  }
-  return `${seconds}s`
 }

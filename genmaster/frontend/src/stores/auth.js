@@ -1,28 +1,29 @@
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// /genmaster/frontend/src/stores/auth.js
-//
-// Part of the "RPi Generator Control" suite
-// Version 1.0.0 - January 15th, 2026
-//
-// Richard J. Sears
-// richardjsears@protonmail.com
-// https://github.com/rjsears
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/*
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/management/frontend/src/stores/auth.js
+
+Part of the "n8n_nginx/n8n_management" suite
+Version 3.0.0 - January 1st, 2026
+
+Richard J. Sears
+richard@n8nmanagement.net
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+*/
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import authService from '@/services/auth'
+import api from '../services/api'
 
 export const useAuthStore = defineStore('auth', () => {
   // State
   const user = ref(null)
-  const token = ref(localStorage.getItem('token') || null)
+  const token = ref(localStorage.getItem('auth_token'))
   const loading = ref(false)
   const error = ref(null)
 
   // Getters
   const isAuthenticated = computed(() => !!token.value && !!user.value)
-  const isAdmin = computed(() => user.value?.is_admin || false)
   const username = computed(() => user.value?.username || '')
 
   // Actions
@@ -31,10 +32,10 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      const response = await authService.login(credentials)
-      token.value = response.token.access_token
-      user.value = response.user
-      localStorage.setItem('token', token.value)
+      const response = await api.post('/auth/login', credentials)
+      token.value = response.data.token
+      user.value = response.data.user
+      localStorage.setItem('auth_token', response.data.token)
       return true
     } catch (err) {
       error.value = err.response?.data?.detail || 'Login failed'
@@ -46,30 +47,29 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     try {
-      await authService.logout()
+      await api.post('/auth/logout')
     } catch {
-      // Ignore logout errors
+      // Ignore errors during logout
     } finally {
       token.value = null
       user.value = null
-      localStorage.removeItem('token')
+      localStorage.removeItem('auth_token')
     }
   }
 
   async function fetchCurrentUser() {
-    if (!token.value) return
+    if (!token.value) return false
 
-    loading.value = true
     try {
-      const userData = await authService.getCurrentUser()
-      user.value = userData
+      const response = await api.get('/auth/me')
+      user.value = response.data
+      return true
     } catch {
-      // Token might be invalid, clear it
+      // Token invalid, clear it
       token.value = null
       user.value = null
-      localStorage.removeItem('token')
-    } finally {
-      loading.value = false
+      localStorage.removeItem('auth_token')
+      return false
     }
   }
 
@@ -78,7 +78,10 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      await authService.changePassword(currentPassword, newPassword)
+      await api.put('/auth/password', {
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
       return true
     } catch (err) {
       error.value = err.response?.data?.detail || 'Password change failed'
@@ -86,10 +89,6 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       loading.value = false
     }
-  }
-
-  function clearError() {
-    error.value = null
   }
 
   // Initialize: try to fetch current user if token exists
@@ -105,18 +104,14 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     loading,
     error,
-
     // Getters
     isAuthenticated,
-    isAdmin,
     username,
-
     // Actions
     login,
     logout,
     fetchCurrentUser,
     changePassword,
-    clearError,
     init,
   }
 })
