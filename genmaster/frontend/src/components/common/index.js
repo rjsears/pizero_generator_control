@@ -19,3 +19,9 @@ export { default as Button } from './Button.vue'
 export { default as Input } from './Input.vue'
 export { default as Select } from './Select.vue'
 export { default as Toggle } from './Toggle.vue'
+
+// Animated loaders with rotating messages
+export { default as GenSlaveLoader } from './GenSlaveLoader.vue'
+export { default as ContainerStackLoader } from './ContainerStackLoader.vue'
+export { default as ScheduleLoader } from './ScheduleLoader.vue'
+export { default as HistoryLoader } from './HistoryLoader.vue'

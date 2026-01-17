@@ -15,6 +15,7 @@ import { useAuthStore } from '@/stores/auth'
 // Lazy-loaded views
 const DashboardView = () => import('@/views/DashboardView.vue')
 const GeneratorView = () => import('@/views/GeneratorView.vue')
+const GenSlaveView = () => import('@/views/GenSlaveView.vue')
 const ScheduleView = () => import('@/views/ScheduleView.vue')
 const HistoryView = () => import('@/views/HistoryView.vue')
 const ContainersView = () => import('@/views/ContainersView.vue')
@@ -40,6 +41,12 @@ const routes = [
     name: 'generator',
     component: GeneratorView,
     meta: { requiresAuth: true, title: 'Generator Control' },
+  },
+  {
+    path: '/genslave',
+    name: 'genslave',
+    component: GenSlaveView,
+    meta: { requiresAuth: true, title: 'GenSlave' },
   },
   {
     path: '/schedule',

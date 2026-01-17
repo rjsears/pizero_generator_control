@@ -2235,7 +2235,7 @@ EOF
   }
 }
 EOF
-        log_info "Created tailscale-serve.json (proxy to https://${DOMAIN}:443)"
+        log INFO "Created tailscale-serve.json (proxy to https://${DOMAIN}:443)"
     fi
 
     # Add Portainer if enabled

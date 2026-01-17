@@ -12,8 +12,9 @@
 """Health check API endpoints."""
 
 import time
+from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.schemas import (
     HealthCheck,
@@ -46,6 +47,13 @@ def get_webhook_service():
     return webhook_service
 
 
+def get_slave_client():
+    """Get slave client from app state."""
+    from app.main import slave_client
+
+    return slave_client
+
+
 @router.get("", response_model=HealthCheck)
 @router.get("/", response_model=HealthCheck)
 async def health_check() -> HealthCheck:
@@ -71,6 +79,46 @@ async def get_slave_health(
     Returns connection status, heartbeat timing, and relay state.
     """
     return await state_machine.get_slave_health()
+
+
+@router.get("/slave/details")
+async def get_slave_details(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Get detailed GenSlave system information.
+
+    Proxies to GenSlave's /api/system endpoint and returns full system metrics
+    including CPU, RAM, disk, temperature, network interfaces, and WiFi signal.
+    """
+    response = await slave_client.get_system_health()
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to connect to GenSlave",
+        )
+
+    return response.data
+
+
+@router.post("/test-slave")
+async def test_slave_connection(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Test connection to GenSlave.
+
+    Makes a simple request to GenSlave and returns success/failure with latency.
+    """
+    response = await slave_client.get_system_health()
+
+    return {
+        "success": response.success,
+        "latency_ms": response.latency_ms,
+        "error": response.error,
+        "response_time_ms": response.latency_ms,  # Alias for frontend compatibility
+    }
 
 
 @router.post("/test/heartbeat", response_model=HeartbeatTestResponse)

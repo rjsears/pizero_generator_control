@@ -43,8 +43,8 @@
       </Card>
 
       <!-- Loading state -->
-      <div v-else-if="loading" class="flex justify-center py-12">
-        <LoadingSpinner size="lg" text="Loading containers..." />
+      <div v-else-if="loading">
+        <ContainerStackLoader />
       </div>
 
       <!-- Empty state -->
@@ -148,7 +148,7 @@ import Card from '@/components/common/Card.vue'
 import Button from '@/components/common/Button.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
-import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import ContainerStackLoader from '@/components/common/ContainerStackLoader.vue'
 import Modal from '@/components/common/Modal.vue'
 
 const containersStore = useContainersStore()

@@ -32,6 +32,20 @@ router = APIRouter(prefix="/api/system", tags=["system"])
 # =========================================================================
 
 
+class NetworkInfo(BaseModel):
+    """Network interface information."""
+
+    interface: str = Field(description="Interface name")
+    ip_address: Optional[str] = Field(None, description="IP address")
+    mac_address: Optional[str] = Field(None, description="MAC address")
+    is_wifi: bool = Field(default=False, description="Whether this is a WiFi interface")
+    wifi_ssid: Optional[str] = Field(None, description="Connected WiFi SSID")
+    wifi_signal_dbm: Optional[int] = Field(None, description="WiFi signal strength in dBm")
+    wifi_signal_percent: Optional[int] = Field(
+        None, description="WiFi signal strength as percentage"
+    )
+
+
 class SystemInfo(BaseModel):
     """System information and resource usage."""
 
@@ -40,14 +54,20 @@ class SystemInfo(BaseModel):
     cpu_percent: float = Field(description="CPU usage percentage")
     ram_total_mb: int = Field(description="Total RAM in MB")
     ram_used_mb: int = Field(description="Used RAM in MB")
+    ram_available_mb: int = Field(description="Available RAM in MB")
     ram_percent: float = Field(description="RAM usage percentage")
     disk_total_gb: float = Field(description="Total disk space in GB")
     disk_used_gb: float = Field(description="Used disk space in GB")
+    disk_free_gb: float = Field(description="Free disk space in GB")
     disk_percent: float = Field(description="Disk usage percentage")
     temperature_celsius: Optional[float] = Field(
         None, description="CPU temperature in Celsius"
     )
     uptime_seconds: int = Field(description="System uptime in seconds")
+    ip_address: Optional[str] = Field(None, description="Primary IP address")
+    network_interfaces: list[NetworkInfo] = Field(
+        default_factory=list, description="Network interface details"
+    )
     status: Literal["healthy", "warning", "critical"] = Field(
         description="Overall health status"
     )
@@ -131,18 +151,26 @@ async def get_system_info() -> SystemInfo:
             if status != "critical":
                 status = "warning"
 
+    # Network info
+    network_interfaces = _get_network_interfaces()
+    primary_ip = _get_primary_ip(network_interfaces)
+
     return SystemInfo(
         hostname=platform.node(),
         platform=platform.system().lower(),
         cpu_percent=cpu_percent,
         ram_total_mb=int(memory.total / (1024 * 1024)),
         ram_used_mb=int(memory.used / (1024 * 1024)),
+        ram_available_mb=int(memory.available / (1024 * 1024)),
         ram_percent=ram_percent,
         disk_total_gb=round(disk.total / (1024**3), 1),
         disk_used_gb=round(disk.used / (1024**3), 1),
+        disk_free_gb=round(disk.free / (1024**3), 1),
         disk_percent=disk_percent,
         temperature_celsius=temperature,
         uptime_seconds=_get_uptime(),
+        ip_address=primary_ip,
+        network_interfaces=network_interfaces,
         status=status,
         warnings=warnings,
     )
@@ -213,3 +241,156 @@ def _get_uptime() -> int:
             return int(float(f.read().split()[0]))
     except Exception:
         return 0
+
+
+def _get_network_interfaces() -> list[NetworkInfo]:
+    """Get network interface information including WiFi signal strength."""
+    interfaces = []
+
+    try:
+        net_if_addrs = psutil.net_if_addrs()
+        net_if_stats = psutil.net_if_stats()
+
+        for iface_name, addrs in net_if_addrs.items():
+            # Skip loopback and down interfaces
+            if iface_name == "lo":
+                continue
+
+            stats = net_if_stats.get(iface_name)
+            if stats and not stats.isup:
+                continue
+
+            ip_address = None
+            mac_address = None
+
+            for addr in addrs:
+                # IPv4 address
+                if addr.family.name == "AF_INET":
+                    ip_address = addr.address
+                # MAC address
+                elif addr.family.name == "AF_PACKET":
+                    mac_address = addr.address
+
+            # Check if this is a WiFi interface
+            is_wifi = iface_name.startswith(("wlan", "wlp", "wifi"))
+            wifi_ssid = None
+            wifi_signal_dbm = None
+            wifi_signal_percent = None
+
+            if is_wifi and ip_address:
+                wifi_info = _get_wifi_info(iface_name)
+                if wifi_info:
+                    wifi_ssid = wifi_info.get("ssid")
+                    wifi_signal_dbm = wifi_info.get("signal_dbm")
+                    wifi_signal_percent = wifi_info.get("signal_percent")
+
+            interfaces.append(
+                NetworkInfo(
+                    interface=iface_name,
+                    ip_address=ip_address,
+                    mac_address=mac_address,
+                    is_wifi=is_wifi,
+                    wifi_ssid=wifi_ssid,
+                    wifi_signal_dbm=wifi_signal_dbm,
+                    wifi_signal_percent=wifi_signal_percent,
+                )
+            )
+    except Exception as e:
+        logger.warning(f"Failed to get network interfaces: {e}")
+
+    return interfaces
+
+
+def _get_wifi_info(interface: str) -> Optional[dict]:
+    """Get WiFi information for an interface using iwconfig/iw."""
+    try:
+        # Try iw first (more modern)
+        import subprocess
+
+        result = subprocess.run(
+            ["iw", "dev", interface, "link"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode == 0:
+            output = result.stdout
+            info = {}
+
+            # Parse SSID
+            for line in output.split("\n"):
+                if "SSID:" in line:
+                    info["ssid"] = line.split("SSID:")[1].strip()
+                elif "signal:" in line:
+                    # Format: "signal: -45 dBm"
+                    signal_str = line.split("signal:")[1].strip().split()[0]
+                    signal_dbm = int(signal_str)
+                    info["signal_dbm"] = signal_dbm
+                    # Convert dBm to percentage (rough approximation)
+                    # -30 dBm = 100%, -90 dBm = 0%
+                    info["signal_percent"] = max(
+                        0, min(100, int((signal_dbm + 90) * 100 / 60))
+                    )
+
+            if info:
+                return info
+
+    except Exception:
+        pass
+
+    # Fallback to iwconfig
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["iwconfig", interface],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode == 0:
+            output = result.stdout
+            info = {}
+
+            # Parse ESSID
+            if 'ESSID:"' in output:
+                essid_start = output.index('ESSID:"') + 7
+                essid_end = output.index('"', essid_start)
+                info["ssid"] = output[essid_start:essid_end]
+
+            # Parse signal level
+            if "Signal level=" in output:
+                signal_part = output.split("Signal level=")[1].split()[0]
+                if "dBm" in signal_part:
+                    signal_dbm = int(signal_part.replace("dBm", ""))
+                else:
+                    # Some drivers report as ratio (e.g., 70/100)
+                    signal_dbm = int(signal_part.split("/")[0]) - 100
+                info["signal_dbm"] = signal_dbm
+                info["signal_percent"] = max(
+                    0, min(100, int((signal_dbm + 90) * 100 / 60))
+                )
+
+            if info:
+                return info
+
+    except Exception:
+        pass
+
+    return None
+
+
+def _get_primary_ip(interfaces: list[NetworkInfo]) -> Optional[str]:
+    """Get the primary IP address from interfaces."""
+    # Prefer WiFi, then ethernet
+    for iface in interfaces:
+        if iface.is_wifi and iface.ip_address:
+            return iface.ip_address
+
+    for iface in interfaces:
+        if iface.ip_address and not iface.interface.startswith(("docker", "br-", "veth")):
+            return iface.ip_address
+
+    return None
