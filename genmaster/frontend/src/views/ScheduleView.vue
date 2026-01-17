@@ -29,8 +29,8 @@
       </div>
 
       <!-- Loading state -->
-      <div v-if="loading" class="flex justify-center py-12">
-        <LoadingSpinner size="lg" text="Loading schedules..." />
+      <div v-if="loading">
+        <ScheduleLoader />
       </div>
 
       <!-- Empty state -->
@@ -176,7 +176,7 @@ import Input from '@/components/common/Input.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Modal from '@/components/common/Modal.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
-import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import ScheduleLoader from '@/components/common/ScheduleLoader.vue'
 
 const notifications = useNotificationStore()
 

@@ -424,19 +424,24 @@ prepare_system() {
 
     # Install system dependencies
     print_step "5" "Installing system dependencies..."
-    apt-get install -y -qq \
+    if ! apt-get install -y \
         python3 \
         python3-pip \
         python3-venv \
         python3-dev \
         python3-smbus \
         python3-rpi.gpio \
+        build-essential \
+        libffi-dev \
+        libssl-dev \
         libgpiod2 \
         i2c-tools \
         curl \
         jq \
-        openssl \
-        > /dev/null 2>&1
+        openssl 2>&1 | tee /tmp/apt-install.log | grep -E "^(Setting up|Unpacking)" > /dev/null; then
+        print_error "Failed to install some dependencies"
+        print_info "Check /tmp/apt-install.log for details"
+    fi
     print_success "System dependencies installed"
 
     # Enable required interfaces

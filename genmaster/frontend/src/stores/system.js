@@ -19,6 +19,7 @@ export const useSystemStore = defineStore('system', () => {
   const health = ref(null)
   const status = ref(null)
   const slaveHealth = ref(null)
+  const slaveDetails = ref(null)
   const victronStatus = ref(null)
   const loading = ref(false)
   const error = ref(null)
@@ -87,6 +88,17 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  async function fetchSlaveDetails() {
+    try {
+      const data = await systemService.getSlaveDetails()
+      slaveDetails.value = data
+      return data
+    } catch (err) {
+      slaveDetails.value = null
+      throw err
+    }
+  }
+
   async function fetchVictronStatus() {
     try {
       victronStatus.value = await systemService.getVictronStatus()
@@ -134,6 +146,7 @@ export const useSystemStore = defineStore('system', () => {
     health,
     status,
     slaveHealth,
+    slaveDetails,
     victronStatus,
     loading,
     error,
@@ -154,6 +167,7 @@ export const useSystemStore = defineStore('system', () => {
     fetchHealth,
     fetchStatus,
     fetchSlaveHealth,
+    fetchSlaveDetails,
     fetchVictronStatus,
     rebootSystem,
     testSlaveConnection,

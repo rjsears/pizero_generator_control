@@ -29,11 +29,19 @@ export default {
   },
 
   /**
-   * Get slave health status
+   * Get slave health status (basic)
    * @returns {Promise<Object>}
    */
   getSlaveHealth() {
     return api.get('/health/slave')
+  },
+
+  /**
+   * Get detailed slave system info (CPU, RAM, disk, network, WiFi, etc.)
+   * @returns {Promise<Object>}
+   */
+  getSlaveDetails() {
+    return api.get('/health/slave/details')
   },
 
   /**

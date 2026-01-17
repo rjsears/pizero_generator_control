@@ -46,8 +46,8 @@
       </Card>
 
       <!-- Loading state -->
-      <div v-if="loading" class="flex justify-center py-12">
-        <LoadingSpinner size="lg" text="Loading history..." />
+      <div v-if="loading">
+        <HistoryLoader />
       </div>
 
       <!-- Empty state -->
@@ -131,7 +131,7 @@ import Card from '@/components/common/Card.vue'
 import Button from '@/components/common/Button.vue'
 import Input from '@/components/common/Input.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
-import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import HistoryLoader from '@/components/common/HistoryLoader.vue'
 
 const generatorStore = useGeneratorStore()
 
