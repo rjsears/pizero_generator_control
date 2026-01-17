@@ -31,8 +31,7 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
 | Phase | Feature | Status |
 |-------|---------|--------|
 | 2 | System Health UI (core services, logs, docker) | PENDING |
-| 4 | Network Cloudflare Metrics | PENDING |
-| 4 | Network Tailscale Peer Info | PENDING |
+| 4 | Network Cloudflare Metrics | PENDING (requires API key) |
 | 5 | System Terminal Tab with xterm.js | PENDING |
 
 ### Phase 4 Completed (January 17th, 2026)
@@ -42,6 +41,7 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
 | Settings Access Control Tab | DONE |
 | Settings Environment Tab | DONE |
 | Settings Account Tab enhancements | DONE |
+| Network Tailscale Peer Info | DONE |
 
 ### Phase 3 Completed (January 17th, 2026)
 
@@ -137,6 +137,13 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
 
 ## Files Created/Modified in Phase 4
 
+### Backend
+- `genmaster/backend/app/routers/system.py` - Enhanced Tailscale endpoint:
+  - Added peer information (hostname, IPs, online status, OS)
+  - Added tailnet name
+  - Added exit node info
+  - Peer sorting by online status
+
 ### Frontend
 - `genmaster/frontend/src/views/SettingsView.vue` - Major enhancements:
   - Added Access Control tab with IP range management
@@ -148,6 +155,11 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
   - Enhanced Account tab with user profile display
   - Avatar, username, role, and created date display
   - New icons: GlobeAltIcon, DocumentTextIcon, PlusIcon, TrashIcon, PencilIcon, XMarkIcon, ExclamationTriangleIcon
+- `genmaster/frontend/src/views/SystemView.vue` - Network tab enhancements:
+  - Enhanced Tailscale card with hostname, tailnet, peer count
+  - New Tailscale Peers section showing all peers
+  - Peer online/offline status indicators
+  - Exit node badges
 
 ---
 
@@ -377,12 +389,12 @@ These are generator-specific features that are kept:
 14. [x] Critical Container Warnings
 15. [x] Container Terminal Access
 
-### Phase 4: Settings & Network - PARTIAL
+### Phase 4: Settings & Network - COMPLETE
 16. [x] Settings Access Control Tab
 17. [x] Settings Environment Tab
 18. [x] Settings Account Tab enhancements
-19. [ ] Network Cloudflare Metrics
-20. [ ] Network Tailscale Peer Info
+19. [ ] Network Cloudflare Metrics (requires API key)
+20. [x] Network Tailscale Peer Info
 
 ### Phase 5: Terminal - PENDING
 21. [ ] System Terminal Tab with xterm.js
