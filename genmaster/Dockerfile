@@ -23,8 +23,8 @@ RUN npm install --legacy-peer-deps
 # Copy frontend source
 COPY frontend/ .
 
-# Build production assets (with error output)
-RUN npm run build 2>&1 || (echo "=== BUILD FAILED ===" && cat /build/npm-debug.log 2>/dev/null || true && exit 1)
+# Build production assets
+RUN set -ex && npm run build
 
 # =============================================================================
 # Stage 2: Python Runtime
