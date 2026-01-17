@@ -2602,13 +2602,28 @@ show_deployment_summary() {
         echo ""
     fi
 
+    # Build profiles string for commands
+    local profiles=""
+    [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ] && profiles="$profiles --profile cloudflare"
+    [ "$INSTALL_TAILSCALE" = true ] && profiles="$profiles --profile tailscale"
+    [ "$INSTALL_PORTAINER" = true ] && profiles="$profiles --profile portainer"
+    profiles="${profiles# }"  # trim leading space
+
     # Useful Commands
     echo -e "  ${WHITE}${BOLD}Useful Commands:${NC}"
-    echo -e "    View logs:         ${CYAN}docker compose logs -f${NC}"
-    echo -e "    Stop services:     ${CYAN}docker compose down${NC}"
-    echo -e "    Start services:    ${CYAN}docker compose up -d${NC}"
-    echo -e "    Restart:           ${CYAN}docker compose restart${NC}"
+    echo -e "    View logs:         ${CYAN}docker compose${profiles:+ $profiles} logs -f${NC}"
+    echo -e "    Stop ALL:          ${CYAN}docker compose${profiles:+ $profiles} down${NC}"
+    echo -e "    Start ALL:         ${CYAN}docker compose${profiles:+ $profiles} up -d${NC}"
+    echo -e "    Restart:           ${CYAN}docker compose${profiles:+ $profiles} restart${NC}"
     echo ""
+
+    # Save profiles to file for easy reference
+    if [ -n "$profiles" ]; then
+        echo "$profiles" > "${SCRIPT_DIR}/.docker-profiles"
+        echo -e "  ${GRAY}TIP: Profiles saved to .docker-profiles${NC}"
+        echo -e "  ${GRAY}     Use: docker compose \$(cat .docker-profiles) down${NC}"
+        echo ""
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
