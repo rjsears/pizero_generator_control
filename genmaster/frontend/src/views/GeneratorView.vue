@@ -162,7 +162,6 @@
           </Button>
         </div>
       </Card>
-    </div>
 
     <!-- Confirm Modal -->
     <Modal v-model="showConfirm" :title="confirmTitle">
