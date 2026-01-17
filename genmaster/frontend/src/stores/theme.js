@@ -10,85 +10,159 @@
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
-
-const STORAGE_KEY = 'genmaster-theme'
+import { ref, computed } from 'vue'
 
 export const useThemeStore = defineStore('theme', () => {
-  // State
-  const theme = ref('system') // 'light', 'dark', or 'system'
+  // Internal state
+  const _colorMode = ref('dark') // 'light' or 'dark'
+  const _layoutMode = ref('sidebar') // 'horizontal' or 'sidebar'
+  const _sidebarCollapsed = ref(false)
 
-  // Getters
-  const isDark = computed(() => {
-    if (theme.value === 'system') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches
-    }
-    return theme.value === 'dark'
+  // Read-only getters
+  const isDark = computed(() => _colorMode.value === 'dark')
+  const isSidebar = computed(() => _layoutMode.value === 'sidebar')
+  const sidebarCollapsed = computed(() => _sidebarCollapsed.value)
+
+  // For compatibility
+  const currentPreset = computed(() => {
+    return _colorMode.value === 'dark' ? 'modern_dark' : 'modern_light'
   })
 
-  const currentTheme = computed(() => theme.value)
+  // Theme classes for App.vue root element
+  const themeClasses = computed(() => {
+    const classes = []
+    if (isDark.value) classes.push('dark')
+    if (isSidebar.value) classes.push('layout-sidebar')
+    else classes.push('layout-horizontal')
+    return classes.join(' ')
+  })
 
-  // Actions
-  function initialize() {
-    // Load saved preference
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved && ['light', 'dark', 'system'].includes(saved)) {
-      theme.value = saved
+  // Writable computed for v-model binding
+  const colorMode = computed({
+    get: () => _colorMode.value,
+    set: (val) => setColorMode(val)
+  })
+
+  const layout = computed({
+    get: () => _layoutMode.value,
+    set: (val) => setLayoutMode(val)
+  })
+
+  // Apply theme to DOM
+  function applyTheme() {
+    const html = document.documentElement
+    const body = document.body
+
+    // Reset classes
+    html.classList.remove('dark', 'layout-sidebar', 'layout-horizontal')
+    body.classList.remove('dark', 'layout-sidebar', 'layout-horizontal')
+
+    // Apply dark mode
+    if (isDark.value) {
+      html.classList.add('dark')
+      body.classList.add('dark')
     }
 
-    // Listen for system theme changes
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      // Force reactivity update when system preference changes
-      if (theme.value === 'system') {
-        theme.value = 'system'
-      }
-    })
+    // Apply layout
+    if (isSidebar.value) {
+      html.classList.add('layout-sidebar')
+      body.classList.add('layout-sidebar')
+    } else {
+      html.classList.add('layout-horizontal')
+      body.classList.add('layout-horizontal')
+    }
+  }
 
-    // Apply initial theme
+  // Actions
+  function setColorMode(mode) {
+    _colorMode.value = mode
+    localStorage.setItem('color_mode', mode)
     applyTheme()
   }
 
-  function setTheme(newTheme) {
-    if (['light', 'dark', 'system'].includes(newTheme)) {
-      theme.value = newTheme
-      localStorage.setItem(STORAGE_KEY, newTheme)
-      applyTheme()
+  function setLayoutMode(mode) {
+    _layoutMode.value = mode
+    localStorage.setItem('layout_mode', mode)
+    applyTheme()
+  }
+
+  function setPreset(presetName) {
+    // For compatibility - presets just set color mode
+    if (presetName === 'modern_dark') {
+      setColorMode('dark')
+    } else {
+      setColorMode('light')
     }
+  }
+
+  function toggleColorMode() {
+    setColorMode(_colorMode.value === 'light' ? 'dark' : 'light')
   }
 
   function toggleTheme() {
-    const themes = ['light', 'dark', 'system']
-    const currentIndex = themes.indexOf(theme.value)
-    const nextIndex = (currentIndex + 1) % themes.length
-    setTheme(themes[nextIndex])
+    toggleColorMode()
   }
 
-  function applyTheme() {
-    const root = document.documentElement
+  function toggleSidebar() {
+    _sidebarCollapsed.value = !_sidebarCollapsed.value
+    localStorage.setItem('sidebar_collapsed', _sidebarCollapsed.value)
+  }
 
-    if (isDark.value) {
-      root.classList.add('dark')
+  function init() {
+    // Load from local storage
+    const savedColorMode = localStorage.getItem('color_mode')
+    const savedLayout = localStorage.getItem('layout_mode')
+    const savedCollapsed = localStorage.getItem('sidebar_collapsed')
+
+    if (savedColorMode) {
+      _colorMode.value = savedColorMode
     } else {
-      root.classList.remove('dark')
+      // System preference
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        _colorMode.value = 'dark'
+      }
     }
+
+    if (savedLayout) {
+      _layoutMode.value = savedLayout
+    }
+
+    if (savedCollapsed !== null) {
+      _sidebarCollapsed.value = savedCollapsed === 'true'
+    }
+
+    applyTheme()
   }
 
-  // Watch for theme changes
-  watch(isDark, () => {
-    applyTheme()
-  })
+  // Alias for backwards compatibility
+  function initialize() {
+    init()
+  }
 
   return {
-    // State
-    theme,
-
-    // Getters
+    // Read-only state
+    currentPreset,
+    sidebarCollapsed,
+    themeClasses,
+    // Computed getters
     isDark,
-    currentTheme,
-
+    isSidebar,
+    // Writable computed for v-model binding
+    colorMode,
+    layout,
+    // Legacy compatibility
+    layoutMode: _layoutMode,
+    theme: _colorMode,
     // Actions
-    initialize,
-    setTheme,
+    setPreset,
+    applyPreset: setPreset,
+    setColorMode,
+    setLayoutMode,
+    toggleColorMode,
     toggleTheme,
+    toggleSidebar,
+    applyTheme,
+    init,
+    initialize,
   }
 })
