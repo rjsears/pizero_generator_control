@@ -2157,8 +2157,9 @@ services:
     volumes:
       - letsencrypt:/etc/letsencrypt
       - certbot_data:/var/www/certbot
-      - ./certbot:/etc/letsencrypt/credentials:ro
-    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --deploy-hook 'wget -q -O /dev/null http://nginx:80/reload || true' || true; sleep 12h & wait $${!}; done;"
+      - ./${DNS_CREDENTIALS_FILE:-cloudflare.ini}:/credentials.ini:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew \${DNS_CERTBOT_FLAGS:-} --deploy-hook 'docker exec genmaster_nginx nginx -s reload' || true; sleep 12h & wait $${!}; done;"
     networks:
       - genmaster-internal
 EOF
@@ -2173,7 +2174,7 @@ EOF
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: genmaster_cloudflared
-    restart: unless-stopped
+    restart: always
     command: tunnel run
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
@@ -2322,8 +2323,8 @@ $(echo -e "$internal_ips")
         http2 on;
         server_name ${DOMAIN};
 
-        ssl_certificate /etc/nginx/ssl/cert.pem;
-        ssl_certificate_key /etc/nginx/ssl/key.pem;
+        ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_prefer_server_ciphers off;
 
@@ -2385,17 +2386,93 @@ EOF
 EOF
 
     print_success "nginx.conf generated"
+}
 
-    # Generate self-signed SSL cert
-    if [ ! -f "${SCRIPT_DIR}/nginx/ssl/cert.pem" ]; then
-        print_info "Generating self-signed SSL certificate..."
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout "${SCRIPT_DIR}/nginx/ssl/key.pem" \
-            -out "${SCRIPT_DIR}/nginx/ssl/cert.pem" \
-            -subj "/CN=${DOMAIN}" 2>/dev/null
-        chmod 600 "${SCRIPT_DIR}/nginx/ssl/key.pem"
-        print_success "SSL certificate generated"
+# =============================================================================
+# SSL CERTIFICATE MANAGEMENT
+# =============================================================================
+
+create_letsencrypt_volume() {
+    if $DOCKER_SUDO docker volume inspect letsencrypt >/dev/null 2>&1; then
+        print_info "Volume 'letsencrypt' already exists"
+    else
+        $DOCKER_SUDO docker volume create letsencrypt
+        print_success "Volume 'letsencrypt' created"
     fi
+}
+
+obtain_ssl_certificate() {
+    print_section "SSL Certificate"
+
+    local cred_volume_opt=""
+    local certbot_flags=""
+    local domains_arg="-d $DOMAIN"
+
+    # Setup credentials based on DNS provider
+    case $DNS_PROVIDER_NAME in
+        cloudflare)
+            cred_volume_opt="-v ${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}:/credentials.ini:ro"
+            certbot_flags="--dns-cloudflare --dns-cloudflare-credentials /credentials.ini --dns-cloudflare-propagation-seconds 60"
+            ;;
+        digitalocean)
+            cred_volume_opt="-v ${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}:/credentials.ini:ro"
+            certbot_flags="--dns-digitalocean --dns-digitalocean-credentials /credentials.ini --dns-digitalocean-propagation-seconds 60"
+            ;;
+        route53)
+            cred_volume_opt="-v ${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}:/root/.aws/credentials:ro"
+            certbot_flags="--dns-route53"
+            ;;
+        google)
+            cred_volume_opt="-v ${SCRIPT_DIR}/certbot/${DNS_CREDENTIALS_FILE}:/credentials.json:ro"
+            certbot_flags="--dns-google --dns-google-credentials /credentials.json --dns-google-propagation-seconds 120"
+            ;;
+        *)
+            print_error "Unknown DNS provider: $DNS_PROVIDER_NAME"
+            exit 1
+            ;;
+    esac
+
+    # Check if certificate already exists in volume
+    if $DOCKER_SUDO docker run --rm \
+        -v letsencrypt:/etc/letsencrypt:ro \
+        alpine \
+        sh -c "test -f /etc/letsencrypt/live/${DOMAIN}/fullchain.pem" 2>/dev/null; then
+        print_success "Valid SSL certificate already exists for ${DOMAIN}"
+        return 0
+    fi
+
+    print_info "Obtaining SSL certificate for ${DOMAIN}..."
+
+    # Create temp directory for initial cert
+    mkdir -p "${SCRIPT_DIR}/letsencrypt-temp"
+
+    # Run certbot to obtain certificate
+    if ! $DOCKER_SUDO docker run --rm \
+        -v "${SCRIPT_DIR}/letsencrypt-temp:/etc/letsencrypt" \
+        $cred_volume_opt \
+        $DNS_CERTBOT_IMAGE \
+        certonly \
+        $certbot_flags \
+        $domains_arg \
+        --agree-tos \
+        --non-interactive \
+        --email "$LETSENCRYPT_EMAIL"; then
+        print_error "Failed to obtain SSL certificate"
+        rm -rf "${SCRIPT_DIR}/letsencrypt-temp"
+        exit 1
+    fi
+
+    print_success "SSL certificate obtained"
+
+    # Copy certificates to docker volume
+    $DOCKER_SUDO docker run --rm \
+        -v "${SCRIPT_DIR}/letsencrypt-temp:/source:ro" \
+        -v letsencrypt:/dest \
+        alpine \
+        sh -c "cp -rL /source/* /dest/"
+
+    rm -rf "${SCRIPT_DIR}/letsencrypt-temp"
+    print_success "Certificates copied to Docker volume"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2410,6 +2487,10 @@ deploy_stack() {
     [ -n "$DOCKER_SUDO" ] && docker_compose_cmd="$DOCKER_SUDO $docker_compose_cmd"
 
     cd "$SCRIPT_DIR"
+
+    # Create letsencrypt volume and obtain SSL certificate BEFORE starting stack
+    create_letsencrypt_volume
+    obtain_ssl_certificate
 
     local profiles=""
     [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ] && profiles="$profiles --profile cloudflare"

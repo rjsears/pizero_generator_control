@@ -76,4 +76,68 @@ export default {
   getLogs(params = {}) {
     return api.get('/system/logs', { params })
   },
+
+  /**
+   * Get SSL certificate info
+   * @returns {Promise<Object>}
+   */
+  getSslInfo() {
+    return api.get('/system/ssl')
+  },
+
+  /**
+   * Force renew SSL certificate
+   * @returns {Promise<Object>}
+   */
+  forceRenewSsl() {
+    return api.post('/system/ssl/renew')
+  },
+
+  /**
+   * Get external services status (Cloudflare, Tailscale)
+   * @returns {Promise<Object>}
+   */
+  getExternalServices() {
+    return api.get('/system/external-services')
+  },
+
+  /**
+   * Get Cloudflare Tunnel status
+   * @returns {Promise<Object>}
+   */
+  getCloudflareStatus() {
+    return api.get('/system/cloudflare')
+  },
+
+  /**
+   * Get Tailscale VPN status
+   * @returns {Promise<Object>}
+   */
+  getTailscaleStatus() {
+    return api.get('/system/tailscale')
+  },
+
+  /**
+   * Get Docker daemon info
+   * @returns {Promise<Object>}
+   */
+  getDockerInfo() {
+    return api.get('/system/docker/info')
+  },
+
+  /**
+   * Get network information
+   * @returns {Promise<Object>}
+   */
+  getNetworkInfo() {
+    return api.get('/system/network')
+  },
+
+  /**
+   * Get timezone information
+   * @returns {Promise<Object>}
+   */
+  getTimezone() {
+    return api.get('/system/timezone')
+  },
 }

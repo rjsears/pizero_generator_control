@@ -254,3 +254,154 @@ async def get_container_logs(
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         client.close()
+
+
+@router.delete("/{name}")
+async def delete_container(
+    name: str,
+    force: bool = Query(False, description="Force removal of running container"),
+) -> dict:
+    """
+    Delete a container.
+
+    Use force=true to remove a running container.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        container = client.containers.get(name)
+
+        # Check if container is running and force is not set
+        if container.status == "running" and not force:
+            raise HTTPException(
+                status_code=400,
+                detail="Container is running. Use force=true to remove it.",
+            )
+
+        container.remove(force=force)
+        return {"success": True, "message": f"Container {name} deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if "404" in str(e):
+            raise HTTPException(status_code=404, detail="Container not found")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.post("/{name}/recreate")
+async def recreate_container(name: str) -> dict:
+    """
+    Recreate a container with the same configuration.
+
+    Pulls the latest image, stops and removes the old container,
+    then creates a new one with the same configuration.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        container = client.containers.get(name)
+
+        # Get container configuration
+        config = container.attrs
+        image = config["Config"]["Image"]
+        labels = config["Config"].get("Labels", {})
+        env = config["Config"].get("Env", [])
+        volumes = config.get("HostConfig", {}).get("Binds", [])
+        ports = config.get("HostConfig", {}).get("PortBindings", {})
+        network_mode = config.get("HostConfig", {}).get("NetworkMode", "bridge")
+        restart_policy = config.get("HostConfig", {}).get("RestartPolicy", {})
+
+        # Pull latest image
+        logger.info(f"Pulling latest image for {image}")
+        try:
+            client.images.pull(image)
+        except Exception as e:
+            logger.warning(f"Failed to pull image {image}: {e}")
+
+        # Stop and remove old container
+        container.stop()
+        container.remove()
+
+        # Create new container
+        new_container = client.containers.run(
+            image,
+            name=name,
+            labels=labels,
+            environment=env,
+            volumes=volumes,
+            ports=ports if ports else None,
+            network_mode=network_mode,
+            restart_policy=restart_policy,
+            detach=True,
+        )
+
+        return {
+            "success": True,
+            "message": f"Container {name} recreated",
+            "new_id": new_container.short_id,
+        }
+    except Exception as e:
+        if "404" in str(e):
+            raise HTTPException(status_code=404, detail="Container not found")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.get("/health")
+async def get_containers_health() -> dict:
+    """
+    Get overall container health status.
+
+    Returns count of running, stopped, and unhealthy containers.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        containers = client.containers.list(all=True)
+
+        running = 0
+        stopped = 0
+        unhealthy = 0
+
+        for c in containers:
+            if c.status == "running":
+                running += 1
+                # Check health status if available
+                health = c.attrs.get("State", {}).get("Health", {})
+                if health.get("Status") == "unhealthy":
+                    unhealthy += 1
+            else:
+                stopped += 1
+
+        overall = "healthy"
+        if unhealthy > 0:
+            overall = "unhealthy"
+        elif stopped > running:
+            overall = "warning"
+
+        return {
+            "status": overall,
+            "total": len(containers),
+            "running": running,
+            "stopped": stopped,
+            "unhealthy": unhealthy,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()

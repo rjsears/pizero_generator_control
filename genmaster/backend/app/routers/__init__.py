@@ -23,6 +23,7 @@ from app.routers import (
     schedule,
     settings,
     system,
+    terminal,
 )
 
 __all__ = [
@@ -37,4 +38,5 @@ __all__ = [
     "schedule",
     "settings",
     "system",
+    "terminal",
 ]
