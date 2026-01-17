@@ -15,8 +15,8 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import bcrypt as bcrypt_lib
 from jose import JWTError, jwt
-from passlib.hash import bcrypt
 
 from app.config import settings
 
@@ -35,7 +35,7 @@ def hash_password(password: str) -> str:
     Returns:
         Hashed password
     """
-    return bcrypt.hash(password)
+    return bcrypt_lib.hashpw(password.encode(), bcrypt_lib.gensalt()).decode()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -50,7 +50,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         True if password matches
     """
     try:
-        return bcrypt.verify(plain_password, hashed_password)
+        return bcrypt_lib.checkpw(plain_password.encode(), hashed_password.encode())
     except Exception:
         return False
 

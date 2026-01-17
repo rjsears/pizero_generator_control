@@ -14,10 +14,9 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.dependencies import get_db
+from app.dependencies import DbSession
 from app.models import ScheduledRun
 from app.schemas import (
     ScheduleCreateRequest,
@@ -57,8 +56,8 @@ def _schedule_to_response(schedule: ScheduledRun) -> ScheduleResponse:
 @router.get("", response_model=List[ScheduleResponse])
 @router.get("/", response_model=List[ScheduleResponse])
 async def list_schedules(
+    db: DbSession,
     enabled_only: bool = Query(False),
-    db: AsyncSession = Depends(get_db),
 ) -> List[ScheduleResponse]:
     """
     List all scheduled runs.
@@ -80,7 +79,7 @@ async def list_schedules(
 @router.post("/", response_model=ScheduleResponse)
 async def create_schedule(
     request: ScheduleCreateRequest,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     scheduler_service=Depends(get_scheduler_service),
 ) -> ScheduleResponse:
     """
@@ -111,7 +110,7 @@ async def create_schedule(
 @router.get("/{schedule_id}", response_model=ScheduleResponse)
 async def get_schedule(
     schedule_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> ScheduleResponse:
     """
     Get a specific scheduled run.
@@ -131,7 +130,7 @@ async def get_schedule(
 async def update_schedule(
     schedule_id: int,
     request: ScheduleUpdateRequest,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     scheduler_service=Depends(get_scheduler_service),
 ) -> ScheduleResponse:
     """
@@ -168,7 +167,7 @@ async def update_schedule(
 @router.delete("/{schedule_id}")
 async def delete_schedule(
     schedule_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
     scheduler_service=Depends(get_scheduler_service),
 ) -> dict:
     """

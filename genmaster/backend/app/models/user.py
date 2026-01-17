@@ -14,7 +14,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, List
 
-from passlib.hash import bcrypt
+import bcrypt as bcrypt_lib
 from sqlalchemy import Index, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -54,11 +54,14 @@ class User(Base):
 
     def set_password(self, password: str) -> None:
         """Hash and set password."""
-        self.password_hash = bcrypt.hash(password)
+        self.password_hash = bcrypt_lib.hashpw(password.encode(), bcrypt_lib.gensalt()).decode()
 
     def verify_password(self, password: str) -> bool:
         """Verify password against hash."""
-        return bcrypt.verify(password, self.password_hash)
+        try:
+            return bcrypt_lib.checkpw(password.encode(), self.password_hash.encode())
+        except Exception:
+            return False
 
     @classmethod
     async def create(

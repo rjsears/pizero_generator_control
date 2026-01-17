@@ -14,7 +14,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
-from app.dependencies import AdminUser, require_admin
+from app.dependencies import AdminUser
 from app.schemas import BackupInfo, BackupListResponse, BackupResponse
 from app.services.backup import BackupService
 
@@ -29,8 +29,8 @@ def get_backup_service() -> BackupService:
 @router.post("", response_model=BackupResponse)
 @router.post("/", response_model=BackupResponse)
 async def create_backup(
+    admin: AdminUser,
     backup_service: BackupService = Depends(get_backup_service),
-    admin: AdminUser = Depends(require_admin),
 ) -> BackupResponse:
     """
     Create a new database backup.
@@ -78,8 +78,8 @@ async def list_backups(
 @router.get("/download/{filename}")
 async def download_backup(
     filename: str,
+    admin: AdminUser,
     backup_service: BackupService = Depends(get_backup_service),
-    admin: AdminUser = Depends(require_admin),
 ) -> FileResponse:
     """
     Download a backup file.
@@ -101,8 +101,8 @@ async def download_backup(
 @router.delete("/{filename}")
 async def delete_backup(
     filename: str,
+    admin: AdminUser,
     backup_service: BackupService = Depends(get_backup_service),
-    admin: AdminUser = Depends(require_admin),
 ) -> dict:
     """
     Delete a backup file.

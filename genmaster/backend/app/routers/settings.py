@@ -13,11 +13,10 @@
 
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import AdminUser, get_db, require_admin
+from app.dependencies import AdminUser, DbSession
 from app.models import Settings
 from app.schemas import WebhookConfig
 from app.services.webhook import WebhookService
@@ -44,7 +43,7 @@ class SettingResponse(BaseModel):
 @router.get("", response_model=List[SettingResponse])
 @router.get("/", response_model=List[SettingResponse])
 async def get_all_settings(
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> List[SettingResponse]:
     """
     Get all settings.
@@ -64,7 +63,7 @@ async def get_all_settings(
 @router.get("/{key}", response_model=SettingResponse)
 async def get_setting(
     key: str,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> SettingResponse:
     """
     Get a specific setting by key.
@@ -85,8 +84,8 @@ async def get_setting(
 async def set_setting(
     key: str,
     data: SettingValue,
-    db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(require_admin),
+    db: DbSession,
+    admin: AdminUser,
 ) -> SettingResponse:
     """
     Set or update a setting.
@@ -105,8 +104,8 @@ async def set_setting(
 @router.delete("/{key}")
 async def delete_setting(
     key: str,
-    db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(require_admin),
+    db: DbSession,
+    admin: AdminUser,
 ) -> dict:
     """
     Delete a setting.
@@ -128,7 +127,7 @@ async def delete_setting(
 
 @router.get("/webhooks/config", response_model=WebhookConfig)
 async def get_webhook_config(
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> WebhookConfig:
     """
     Get webhook configuration.
@@ -148,8 +147,8 @@ async def get_webhook_config(
 @router.put("/webhooks/config", response_model=WebhookConfig)
 async def update_webhook_config(
     data: WebhookConfig,
-    db: AsyncSession = Depends(get_db),
-    admin: AdminUser = Depends(require_admin),
+    db: DbSession,
+    admin: AdminUser,
 ) -> WebhookConfig:
     """
     Update webhook configuration.
