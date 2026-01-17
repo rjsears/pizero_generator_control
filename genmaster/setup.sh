@@ -1990,6 +1990,82 @@ show_configuration_summary() {
 generate_env_file() {
     print_info "Generating .env file..."
 
+    # CRITICAL: Create backup of existing .env before ANY changes
+    if [ -f "${SCRIPT_DIR}/.env" ]; then
+        local backup_file="${SCRIPT_DIR}/.env.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "${SCRIPT_DIR}/.env" "$backup_file"
+        print_success "Backup created: $backup_file"
+
+        # Load existing values as fallbacks (preserve what we have)
+        local EXISTING_DOMAIN EXISTING_SECRET_KEY EXISTING_TIMEZONE EXISTING_DB_NAME
+        local EXISTING_DB_USER EXISTING_DB_PASSWORD EXISTING_GENSLAVE_ENABLED
+        local EXISTING_GENSLAVE_API_URL EXISTING_GENSLAVE_API_SECRET EXISTING_WEBHOOK_URL
+        local EXISTING_WEBHOOK_SECRET EXISTING_DNS_PROVIDER EXISTING_DNS_CERTBOT_IMAGE
+        local EXISTING_DNS_CREDENTIALS_FILE EXISTING_LETSENCRYPT_EMAIL
+        local EXISTING_CLOUDFLARE_TUNNEL_TOKEN EXISTING_TAILSCALE_AUTH_KEY
+        local EXISTING_TAILSCALE_HOSTNAME EXISTING_TAILSCALE_ROUTES
+
+        # Source existing .env to get current values
+        set +e  # Don't exit on error during source
+        while IFS='=' read -r key value; do
+            # Skip comments and empty lines
+            [[ "$key" =~ ^#.*$ ]] && continue
+            [[ -z "$key" ]] && continue
+            # Remove any surrounding quotes from value
+            value="${value%\"}"
+            value="${value#\"}"
+            value="${value%\'}"
+            value="${value#\'}"
+            case "$key" in
+                DOMAIN) EXISTING_DOMAIN="$value" ;;
+                SECRET_KEY) EXISTING_SECRET_KEY="$value" ;;
+                TIMEZONE) EXISTING_TIMEZONE="$value" ;;
+                DATABASE_NAME) EXISTING_DB_NAME="$value" ;;
+                DATABASE_USER) EXISTING_DB_USER="$value" ;;
+                DATABASE_PASSWORD) EXISTING_DB_PASSWORD="$value" ;;
+                GENSLAVE_ENABLED) EXISTING_GENSLAVE_ENABLED="$value" ;;
+                SLAVE_API_URL) EXISTING_GENSLAVE_API_URL="$value" ;;
+                SLAVE_API_SECRET) EXISTING_GENSLAVE_API_SECRET="$value" ;;
+                WEBHOOK_BASE_URL) EXISTING_WEBHOOK_URL="$value" ;;
+                WEBHOOK_SECRET) EXISTING_WEBHOOK_SECRET="$value" ;;
+                DNS_PROVIDER) EXISTING_DNS_PROVIDER="$value" ;;
+                DNS_CERTBOT_IMAGE) EXISTING_DNS_CERTBOT_IMAGE="$value" ;;
+                DNS_CREDENTIALS_FILE) EXISTING_DNS_CREDENTIALS_FILE="$value" ;;
+                LETSENCRYPT_EMAIL) EXISTING_LETSENCRYPT_EMAIL="$value" ;;
+                CLOUDFLARE_TUNNEL_TOKEN) EXISTING_CLOUDFLARE_TUNNEL_TOKEN="$value" ;;
+                TAILSCALE_AUTH_KEY) EXISTING_TAILSCALE_AUTH_KEY="$value" ;;
+                TAILSCALE_HOSTNAME) EXISTING_TAILSCALE_HOSTNAME="$value" ;;
+                TAILSCALE_ROUTES) EXISTING_TAILSCALE_ROUTES="$value" ;;
+            esac
+        done < "${SCRIPT_DIR}/.env"
+        set -e
+
+        # Use existing values as fallbacks if current values are empty
+        DOMAIN="${DOMAIN:-$EXISTING_DOMAIN}"
+        SECRET_KEY="${SECRET_KEY:-$EXISTING_SECRET_KEY}"
+        TIMEZONE="${TIMEZONE:-$EXISTING_TIMEZONE}"
+        DB_NAME="${DB_NAME:-$EXISTING_DB_NAME}"
+        DB_USER="${DB_USER:-$EXISTING_DB_USER}"
+        DB_PASSWORD="${DB_PASSWORD:-$EXISTING_DB_PASSWORD}"
+        GENSLAVE_ENABLED="${GENSLAVE_ENABLED:-$EXISTING_GENSLAVE_ENABLED}"
+        GENSLAVE_API_URL="${GENSLAVE_API_URL:-$EXISTING_GENSLAVE_API_URL}"
+        GENSLAVE_API_SECRET="${GENSLAVE_API_SECRET:-$EXISTING_GENSLAVE_API_SECRET}"
+        WEBHOOK_URL="${WEBHOOK_URL:-$EXISTING_WEBHOOK_URL}"
+        WEBHOOK_SECRET="${WEBHOOK_SECRET:-$EXISTING_WEBHOOK_SECRET}"
+        DNS_PROVIDER_NAME="${DNS_PROVIDER_NAME:-$EXISTING_DNS_PROVIDER}"
+        DNS_CERTBOT_IMAGE="${DNS_CERTBOT_IMAGE:-$EXISTING_DNS_CERTBOT_IMAGE}"
+        DNS_CREDENTIALS_FILE="${DNS_CREDENTIALS_FILE:-$EXISTING_DNS_CREDENTIALS_FILE}"
+        LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-$EXISTING_LETSENCRYPT_EMAIL}"
+        CLOUDFLARE_TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN:-$EXISTING_CLOUDFLARE_TUNNEL_TOKEN}"
+        TAILSCALE_AUTH_KEY="${TAILSCALE_AUTH_KEY:-$EXISTING_TAILSCALE_AUTH_KEY}"
+        TAILSCALE_HOSTNAME="${TAILSCALE_HOSTNAME:-$EXISTING_TAILSCALE_HOSTNAME}"
+        TAILSCALE_ROUTES="${TAILSCALE_ROUTES:-$EXISTING_TAILSCALE_ROUTES}"
+
+        # Re-check optional services based on preserved tokens
+        [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ] && INSTALL_CLOUDFLARE_TUNNEL=true
+        [ -n "$TAILSCALE_AUTH_KEY" ] && INSTALL_TAILSCALE=true
+    fi
+
     # Determine environment mode based on hardware detection
     local app_env="production"
     if [ "$MOCK_GPIO_MODE" = true ]; then
@@ -2935,6 +3011,9 @@ main() {
     fi
 
     if [ "$INSTALL_MODE" = "reconfigure" ]; then
+        # CRITICAL: Backup FIRST before touching anything
+        backup_existing_config
+
         [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE" 2>/dev/null
         # Load existing .env values so we don't re-ask for everything
         if [ -f "${SCRIPT_DIR}/.env" ]; then
