@@ -45,3 +45,6 @@ psutil==5.9.8
 # Version 7.1.0 fixes requests 2.32+ compatibility (http+docker scheme)
 # See: https://github.com/docker/docker-py/pull/3257
 docker==7.1.0
+
+# Notifications
+apprise==1.9.0

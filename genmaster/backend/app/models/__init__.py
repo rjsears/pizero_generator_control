@@ -15,6 +15,11 @@ from app.models.base import Base
 from app.models.config_model import Config
 from app.models.event_log import EventLog
 from app.models.generator_runs import GeneratorRun
+from app.models.notifications import (
+    NotificationChannel,
+    NotificationGroup,
+    NotificationHistory,
+)
 from app.models.scheduled_runs import ScheduledRun
 from app.models.session import Session
 from app.models.settings import Settings
@@ -26,6 +31,9 @@ __all__ = [
     "Config",
     "EventLog",
     "GeneratorRun",
+    "NotificationChannel",
+    "NotificationGroup",
+    "NotificationHistory",
     "ScheduledRun",
     "Session",
     "Settings",

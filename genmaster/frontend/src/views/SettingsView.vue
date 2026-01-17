@@ -16,6 +16,7 @@ import { useRoute } from 'vue-router'
 import { useThemeStore } from '../stores/theme'
 import { useAuthStore } from '../stores/auth'
 import { useNotificationStore } from '../stores/notifications'
+import { useDebugStore } from '../stores/debug'
 import { settingsApi, authApi } from '../services/api'
 import Card from '../components/common/Card.vue'
 import LoadingSpinner from '../components/common/LoadingSpinner.vue'
@@ -23,7 +24,6 @@ import {
   Cog6ToothIcon,
   PaintBrushIcon,
   ShieldCheckIcon,
-  BellIcon,
   UserIcon,
   KeyIcon,
   EyeIcon,
@@ -36,12 +36,14 @@ import {
   ArrowPathIcon,
   BoltIcon,
   LockClosedIcon,
+  BugAntIcon,
 } from '@heroicons/vue/24/outline'
 
 const route = useRoute()
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
 const notificationStore = useNotificationStore()
+const debugStore = useDebugStore()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -56,22 +58,9 @@ watch(() => route.query.tab, (newTab) => {
 const tabs = [
   { id: 'appearance', name: 'Appearance', icon: PaintBrushIcon, iconColor: 'text-pink-500', bgActive: 'bg-pink-500/15 dark:bg-pink-500/20', textActive: 'text-pink-700 dark:text-pink-400', borderActive: 'border-pink-500/30' },
   { id: 'generator', name: 'Generator', icon: BoltIcon, iconColor: 'text-emerald-500', bgActive: 'bg-emerald-500/15 dark:bg-emerald-500/20', textActive: 'text-emerald-700 dark:text-emerald-400', borderActive: 'border-emerald-500/30' },
-  { id: 'webhooks', name: 'Webhooks', icon: BellIcon, iconColor: 'text-amber-500', bgActive: 'bg-amber-500/15 dark:bg-amber-500/20', textActive: 'text-amber-700 dark:text-amber-400', borderActive: 'border-amber-500/30' },
   { id: 'security', name: 'Security', icon: ShieldCheckIcon, iconColor: 'text-red-500', bgActive: 'bg-red-500/15 dark:bg-red-500/20', textActive: 'text-red-700 dark:text-red-400', borderActive: 'border-red-500/30' },
   { id: 'account', name: 'Account', icon: UserIcon, iconColor: 'text-purple-500', bgActive: 'bg-purple-500/15 dark:bg-purple-500/20', textActive: 'text-purple-700 dark:text-purple-400', borderActive: 'border-purple-500/30' },
-]
-
-// Webhook event types
-const eventTypes = [
-  { key: 'generator_started', label: 'Generator Started', description: 'When generator starts running' },
-  { key: 'generator_stopped', label: 'Generator Stopped', description: 'When generator stops (any reason)' },
-  { key: 'generator_failed', label: 'Generator Failed', description: 'When generator fails to start/stop' },
-  { key: 'heartbeat_lost', label: 'Heartbeat Lost', description: 'When GenSlave connection is lost' },
-  { key: 'heartbeat_restored', label: 'Heartbeat Restored', description: 'When GenSlave connection is restored' },
-  { key: 'failsafe_triggered', label: 'Failsafe Triggered', description: 'When GenSlave triggers failsafe stop' },
-  { key: 'schedule_executed', label: 'Schedule Executed', description: 'When scheduled run starts' },
-  { key: 'system_warning', label: 'System Warning', description: 'High temp, low disk, etc.' },
-  { key: 'system_error', label: 'System Error', description: 'Critical system errors' },
+  { id: 'advanced', name: 'Advanced', icon: BugAntIcon, iconColor: 'text-amber-500', bgActive: 'bg-amber-500/15 dark:bg-amber-500/20', textActive: 'text-amber-700 dark:text-amber-400', borderActive: 'border-amber-500/30' },
 ]
 
 // Generator config state
@@ -86,16 +75,6 @@ const config = ref({
 const savingConfig = ref(false)
 const testingConnection = ref(false)
 
-// Webhook state
-const webhookConfig = ref({
-  base_url: '',
-  secret: '',
-  enabled: false,
-  events: {},
-})
-const savingWebhook = ref(false)
-const testingWebhook = ref(false)
-
 // Security settings
 const securitySettings = ref({
   session_timeout: 60,
@@ -108,11 +87,6 @@ const savingSecurity = ref(false)
 const passwordForm = ref({ current: '', new: '', confirm: '' })
 const showPasswords = ref({ current: false, new: false, confirm: false })
 const changingPassword = ref(false)
-
-// Initialize webhook events
-eventTypes.forEach(e => {
-  webhookConfig.value.events[e.key] = true
-})
 
 // Theme selection
 function selectTheme(mode) {
@@ -135,19 +109,8 @@ async function loadSettings() {
       // Use defaults
     }
 
-    // Load webhook config
-    try {
-      const webhookRes = await settingsApi.getWebhookConfig()
-      if (webhookRes.data) {
-        webhookConfig.value = {
-          ...webhookConfig.value,
-          ...webhookRes.data,
-          events: { ...webhookConfig.value.events, ...(webhookRes.data.events || {}) },
-        }
-      }
-    } catch {
-      // Use defaults
-    }
+    // Load debug mode
+    await debugStore.loadDebugMode()
 
     // Load security settings
     try {
@@ -193,36 +156,6 @@ async function testConnection() {
     notificationStore.error(`Connection failed: ${err.message}`)
   } finally {
     testingConnection.value = false
-  }
-}
-
-// Save webhook config
-async function saveWebhookConfig() {
-  savingWebhook.value = true
-  try {
-    await settingsApi.updateWebhookConfig(webhookConfig.value)
-    notificationStore.success('Webhook settings saved')
-  } catch {
-    notificationStore.error('Failed to save webhook settings')
-  } finally {
-    savingWebhook.value = false
-  }
-}
-
-// Test webhook
-async function testWebhook() {
-  testingWebhook.value = true
-  try {
-    const response = await settingsApi.testWebhook()
-    if (response.data?.success) {
-      notificationStore.success(`Webhook test successful (${response.data.response_time_ms}ms)`)
-    } else {
-      notificationStore.error(`Webhook test failed: ${response.data?.error}`)
-    }
-  } catch {
-    notificationStore.error('Failed to test webhook')
-  } finally {
-    testingWebhook.value = false
   }
 }
 
@@ -527,93 +460,6 @@ onMounted(() => {
         </Card>
       </div>
 
-      <!-- Webhooks Tab -->
-      <div v-if="activeTab === 'webhooks'" class="space-y-6">
-        <Card title="Webhook Notifications" subtitle="Send notifications to external services">
-          <!-- Master Enable Toggle -->
-          <div class="flex items-center justify-between p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 mb-6">
-            <div>
-              <p class="font-medium text-primary">Enable Webhooks</p>
-              <p class="text-sm text-muted">Send notifications to external webhook URL</p>
-            </div>
-            <button
-              @click="webhookConfig.enabled = !webhookConfig.enabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out',
-                webhookConfig.enabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-              ]"
-            >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  webhookConfig.enabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
-            </button>
-          </div>
-
-          <div :class="{ 'opacity-50 pointer-events-none': !webhookConfig.enabled }">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div>
-                <label class="block text-sm font-medium text-secondary mb-1">Webhook URL</label>
-                <input
-                  v-model="webhookConfig.base_url"
-                  type="text"
-                  placeholder="https://n8n.example.com/webhook/generator"
-                  class="input"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-secondary mb-1">Webhook Secret</label>
-                <input
-                  v-model="webhookConfig.secret"
-                  type="password"
-                  placeholder="Enter secret for X-Webhook-Secret header"
-                  class="input"
-                />
-              </div>
-            </div>
-
-            <h4 class="font-medium text-primary mb-3">Event Types</h4>
-            <p class="text-sm text-muted mb-4">Select which events trigger webhook notifications</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div
-                v-for="event in eventTypes"
-                :key="event.key"
-                class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  :id="event.key"
-                  v-model="webhookConfig.events[event.key]"
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label :for="event.key" class="flex-1 cursor-pointer">
-                  <p class="text-sm font-medium text-primary">{{ event.label }}</p>
-                  <p class="text-xs text-muted">{{ event.description }}</p>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex items-center justify-between mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <button
-              @click="testWebhook"
-              :disabled="!webhookConfig.enabled || !webhookConfig.base_url || testingWebhook"
-              class="btn-secondary"
-            >
-              <BoltIcon v-if="!testingWebhook" class="h-4 w-4 mr-2" />
-              <ArrowPathIcon v-else class="h-4 w-4 mr-2 animate-spin" />
-              Test Webhook
-            </button>
-            <button @click="saveWebhookConfig" :disabled="savingWebhook" class="btn-primary">
-              <CheckIcon class="h-4 w-4 mr-2" />
-              Save Webhook Settings
-            </button>
-          </div>
-        </Card>
-      </div>
-
       <!-- Security Tab -->
       <div v-if="activeTab === 'security'" class="space-y-6">
         <!-- Header Banner -->
@@ -817,6 +663,91 @@ onMounted(() => {
               <KeyIcon class="h-4 w-4 mr-2" />
               Change Password
             </button>
+          </div>
+        </Card>
+      </div>
+
+      <!-- Advanced Tab -->
+      <div v-if="activeTab === 'advanced'" class="space-y-6">
+        <!-- Header Banner -->
+        <div class="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 p-6 text-white shadow-lg">
+          <div class="absolute inset-0 bg-black/10"></div>
+          <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+          <div class="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+          <div class="relative flex items-center gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+              <BugAntIcon class="h-8 w-8" />
+            </div>
+            <div>
+              <h2 class="text-2xl font-bold">Advanced Settings</h2>
+              <p class="text-white/80">Developer and debugging options</p>
+            </div>
+          </div>
+        </div>
+
+        <Card>
+          <div class="space-y-6">
+            <!-- Debug Mode Toggle -->
+            <div class="group relative rounded-xl border border-gray-200 dark:border-gray-700 p-5 transition-all hover:border-amber-300 dark:hover:border-amber-600 hover:shadow-md">
+              <div class="flex items-start gap-4">
+                <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-orange-500/25">
+                  <BugAntIcon class="h-6 w-6" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <h4 class="font-semibold text-primary">Debug Mode</h4>
+                        <span
+                          v-if="debugStore.isEnabled"
+                          class="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+                        >
+                          Enabled
+                        </span>
+                      </div>
+                      <p class="mt-1 text-sm text-muted">Enable verbose logging and debugging features for development and troubleshooting.</p>
+                    </div>
+                    <button
+                      @click="debugStore.toggleDebugMode"
+                      :disabled="debugStore.loading"
+                      :class="[
+                        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2',
+                        debugStore.isEnabled ? 'bg-amber-500' : 'bg-gray-200 dark:bg-gray-700'
+                      ]"
+                    >
+                      <span
+                        :class="[
+                          'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                          debugStore.isEnabled ? 'translate-x-5' : 'translate-x-0'
+                        ]"
+                      />
+                    </button>
+                  </div>
+                  <div v-if="debugStore.isEnabled" class="mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <p class="text-sm text-amber-800 dark:text-amber-300">
+                      Debug mode is active. Additional logging will appear in the browser console and server logs.
+                      A debug indicator will also be shown in the sidebar.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Info Section -->
+            <div class="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+              <div class="flex gap-3">
+                <svg class="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <h5 class="font-medium text-blue-800 dark:text-blue-300">About Advanced Settings</h5>
+                  <p class="mt-1 text-sm text-blue-700 dark:text-blue-400">
+                    These settings are intended for development and troubleshooting purposes.
+                    Enable debug mode when reporting issues or diagnosing problems.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </Card>
       </div>

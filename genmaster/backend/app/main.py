@@ -32,6 +32,7 @@ from app.routers import (
     dev,
     generator,
     health,
+    notifications,
     override,
     schedule,
     settings as settings_router,
@@ -209,6 +210,7 @@ app.include_router(override.router, prefix="/api/override", tags=["Override"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(containers.router, prefix="/api/containers", tags=["Containers"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(dev.router, prefix="/api/dev", tags=["Development"])
 app.include_router(terminal.router, prefix="/api/terminal", tags=["Terminal"])
