@@ -2872,9 +2872,15 @@ deploy_stack() {
 
     cd "$SCRIPT_DIR"
 
-    # Create letsencrypt volume and obtain SSL certificate BEFORE starting stack
+    # Create letsencrypt volume (always needed)
     create_letsencrypt_volume
-    obtain_ssl_certificate
+
+    # Only obtain SSL certificate for fresh installs - reconfigure keeps existing certs
+    if [ "$INSTALL_MODE" != "reconfigure" ]; then
+        obtain_ssl_certificate
+    else
+        print_info "Using existing SSL certificates"
+    fi
 
     print_info "Building and starting containers..."
     $docker_compose_cmd up -d --build
