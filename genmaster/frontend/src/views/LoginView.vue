@@ -1,127 +1,177 @@
 <!--
-  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-  /genmaster/frontend/src/views/LoginView.vue
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/management/frontend/src/views/LoginView.vue
 
-  Part of the "RPi Generator Control" suite
-  Version 1.0.0 - January 15th, 2026
+Part of the "n8n_nginx/n8n_management" suite
+Version 3.0.0 - January 1st, 2026
 
-  Richard J. Sears
-  richardjsears@protonmail.com
-  https://github.com/rjsears
-  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Richard J. Sears
+richard@n8nmanagement.net
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
-
-<template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 px-4">
-    <div class="max-w-md w-full">
-      <!-- Logo -->
-      <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 bg-primary-600 rounded-2xl mb-4">
-          <svg class="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-        </div>
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">GenMaster</h1>
-        <p class="text-gray-600 dark:text-gray-400 mt-2">Generator Control System</p>
-      </div>
-
-      <!-- Login form -->
-      <div class="card">
-        <div class="p-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-6">Sign in to your account</h2>
-
-          <form @submit.prevent="handleLogin">
-            <!-- Error message -->
-            <div
-              v-if="error"
-              class="mb-4 p-3 bg-red-50 dark:bg-red-900/50 border border-red-200 dark:border-red-800 rounded-lg"
-            >
-              <p class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
-            </div>
-
-            <!-- Username -->
-            <div class="mb-4">
-              <Input
-                v-model="username"
-                label="Username"
-                placeholder="Enter your username"
-                required
-                :disabled="loading"
-              />
-            </div>
-
-            <!-- Password -->
-            <div class="mb-6">
-              <Input
-                v-model="password"
-                type="password"
-                label="Password"
-                placeholder="Enter your password"
-                required
-                :disabled="loading"
-              />
-            </div>
-
-            <!-- Submit button -->
-            <Button
-              type="submit"
-              variant="primary"
-              :loading="loading"
-              block
-            >
-              Sign in
-            </Button>
-          </form>
-        </div>
-      </div>
-
-      <!-- Footer -->
-      <div class="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
-        <p>GenMaster v1.0.0</p>
-        <p class="mt-1">Richard J. Sears</p>
-        <p>richardjsears@protonmail.com</p>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import Input from '@/components/common/Input.vue'
-import Button from '@/components/common/Button.vue'
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
+import { useThemeStore } from '../stores/theme'
+import { useNotificationStore } from '../stores/notifications'
+import { LockClosedIcon, UserIcon, EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
-const route = useRoute()
 const authStore = useAuthStore()
+const themeStore = useThemeStore()
+const notificationStore = useNotificationStore()
 
 const username = ref('')
 const password = ref('')
+const showPassword = ref(false)
 const loading = ref(false)
 const error = ref('')
 
-onMounted(() => {
-  authStore.clearError()
-})
+const isValid = computed(() => username.value.length > 0 && password.value.length > 0)
 
 async function handleLogin() {
-  error.value = ''
+  if (!isValid.value) return
+
   loading.value = true
+  error.value = ''
 
-  const success = await authStore.login({
-    username: username.value,
-    password: password.value,
-  })
-
-  loading.value = false
-
-  if (success) {
-    // Redirect to requested page or dashboard
-    const redirect = route.query.redirect || '/'
-    router.push(redirect)
-  } else {
-    error.value = authStore.error || 'Login failed'
+  try {
+    const success = await authStore.login({ username: username.value, password: password.value })
+    if (success) {
+      notificationStore.success('Welcome back!')
+      router.push('/dashboard')
+    } else {
+      // Login failed - authStore sets error internally
+      error.value = authStore.error || 'Invalid credentials'
+      notificationStore.error(error.value)
+    }
+  } catch (err) {
+    error.value = err.response?.data?.detail || 'Login failed'
+    notificationStore.error(error.value)
+  } finally {
+    loading.value = false
   }
 }
 </script>
+
+<template>
+  <div class="min-h-screen flex items-center justify-center bg-background p-4">
+    <div class="w-full max-w-md">
+      <!-- Logo/Title -->
+      <div class="text-center mb-8">
+        <div
+          :class="[
+            'inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4',
+            'bg-blue-500/10'
+          ]"
+        >
+          <LockClosedIcon
+            :class="[
+              'h-8 w-8',
+              'text-blue-500'
+            ]"
+          />
+        </div>
+        <h1
+          :class="[
+            'text-2xl font-bold',
+            'text-primary'
+          ]"
+        >
+          n8n Management
+        </h1>
+        <p class="text-secondary mt-2">Sign in to your account</p>
+      </div>
+
+      <!-- Login Form -->
+      <form
+        @submit.prevent="handleLogin"
+        :class="[
+          'bg-surface rounded-xl border border-gray-400 dark:border-black p-6',
+          ''
+        ]"
+      >
+        <!-- Error Alert -->
+        <div
+          v-if="error"
+          class="mb-4 p-3 bg-red-100 dark:bg-red-500/20 border border-red-200 dark:border-red-500/30 rounded-lg"
+        >
+          <p class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+        </div>
+
+        <!-- Username Field -->
+        <div class="mb-4">
+          <label for="username" class="block text-sm font-medium text-primary mb-1.5">
+            Username
+          </label>
+          <div class="relative">
+            <UserIcon class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" />
+            <input
+              id="username"
+              v-model="username"
+              type="text"
+              autocomplete="username"
+              placeholder="Enter your username"
+              :class="[
+                'input-field pl-10',
+                ''
+              ]"
+            />
+          </div>
+        </div>
+
+        <!-- Password Field -->
+        <div class="mb-6">
+          <label for="password" class="block text-sm font-medium text-primary mb-1.5">
+            Password
+          </label>
+          <div class="relative">
+            <LockClosedIcon class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" />
+            <input
+              id="password"
+              v-model="password"
+              :type="showPassword ? 'text' : 'password'"
+              autocomplete="current-password"
+              placeholder="Enter your password"
+              :class="[
+                'input-field pl-10 pr-10',
+                ''
+              ]"
+            />
+            <button
+              type="button"
+              @click="showPassword = !showPassword"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-secondary"
+            >
+              <EyeSlashIcon v-if="showPassword" class="h-5 w-5" />
+              <EyeIcon v-else class="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <button
+          type="submit"
+          :disabled="!isValid || loading"
+          class="w-full py-2.5 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-blue-500 text-white hover:bg-blue-600"
+        >
+          <span v-if="loading" class="flex items-center justify-center gap-2">
+            <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Signing in...
+          </span>
+          <span v-else>Sign In</span>
+        </button>
+      </form>
+
+      <!-- Footer -->
+      <p class="text-center text-sm text-muted mt-6">
+        n8n Management Console v3.0
+      </p>
+    </div>
+  </div>
+</template>

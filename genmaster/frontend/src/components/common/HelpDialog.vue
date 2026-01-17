@@ -1,153 +1,19 @@
 <!--
-  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-  /genmaster/frontend/src/components/common/HelpDialog.vue
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/genmaster/frontend/src/components/common/HelpDialog.vue
 
-  Part of the "RPi Generator Control" suite
-  Version 1.0.0 - January 17th, 2026
+Part of the "RPi Generator Control" suite
+Version 1.0.0 - January 17th, 2026
 
-  Richard J. Sears
-  richardjsears@protonmail.com
-  https://github.com/rjsears
-  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Richard J. Sears
+richardjsears@protonmail.com
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
-
-<template>
-  <Teleport to="body">
-    <Transition name="fade">
-      <div
-        v-if="open"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-        @click.self="close"
-      >
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
-          <!-- Header -->
-          <header class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-            <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Help</h2>
-            </div>
-            <button
-              class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-              @click="close"
-            >
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </header>
-
-          <!-- Content -->
-          <div class="px-6 py-6 overflow-y-auto flex-1">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <!-- Quick Start -->
-              <div class="space-y-3">
-                <h3 class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                  <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Quick Start
-                </h3>
-                <div class="space-y-2">
-                  <HelpItem title="Start Generator" description="Go to Generator page and click Start" />
-                  <HelpItem title="Stop Generator" description="Click Stop on the Generator page" />
-                  <HelpItem title="Timed Run" description="Set duration and click 'Start for X minutes'" />
-                  <HelpItem title="Emergency Stop" description="Skips cooldown, use only in emergencies" />
-                </div>
-              </div>
-
-              <!-- Navigation -->
-              <div class="space-y-3">
-                <h3 class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                  <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                  Navigation
-                </h3>
-                <div class="space-y-2">
-                  <HelpItem title="Dashboard" description="System overview and quick actions" />
-                  <HelpItem title="Generator" description="Manual control and status" />
-                  <HelpItem title="Schedule" description="Automated run schedules" />
-                  <HelpItem title="History" description="Past generator runs" />
-                </div>
-              </div>
-
-              <!-- System Features -->
-              <div class="space-y-3">
-                <h3 class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                  <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                  </svg>
-                  System Features
-                </h3>
-                <div class="space-y-2">
-                  <HelpItem title="GenSlave" description="Monitor the relay controller Pi" />
-                  <HelpItem title="Notifications" description="Configure alert channels" />
-                  <HelpItem title="Containers" description="Manage Docker containers" />
-                  <HelpItem title="System" description="Health, network, and settings" />
-                </div>
-              </div>
-
-              <!-- Tips -->
-              <div class="space-y-3">
-                <h3 class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                  <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  Tips
-                </h3>
-                <div class="space-y-2">
-                  <HelpItem title="Manual Override" description="Disable Victron auto-start" />
-                  <HelpItem title="Theme" description="Toggle dark/light in Settings" />
-                  <HelpItem title="Heartbeat" description="GenSlave checks in every 60s" />
-                  <HelpItem title="Failsafe" description="GenSlave stops if comms lost" />
-                </div>
-              </div>
-            </div>
-
-            <!-- API Documentation -->
-            <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <h3 class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">
-                <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                </svg>
-                API Documentation
-              </h3>
-              <div class="flex flex-wrap gap-3">
-                <button
-                  class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                  @click="openLink('/api/docs')"
-                >
-                  <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Swagger UI
-                </button>
-                <button
-                  class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                  @click="openLink('/api/redoc')"
-                >
-                  <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                  </svg>
-                  ReDoc
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
-</template>
-
 <script setup>
-import { h } from 'vue'
+import { XMarkIcon, QuestionMarkCircleIcon, ArrowTopRightOnSquareIcon, BookOpenIcon, DocumentTextIcon, CodeBracketIcon, CpuChipIcon, BoltIcon } from '@heroicons/vue/24/outline'
 
-defineProps({
+const props = defineProps({
   open: {
     type: Boolean,
     default: false,
@@ -156,31 +22,148 @@ defineProps({
 
 const emit = defineEmits(['close'])
 
-// HelpItem sub-component
-const HelpItem = (props) => {
-  return h('div', { class: 'p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg' }, [
-    h('p', { class: 'font-medium text-sm text-gray-900 dark:text-white' }, props.title),
-    h('p', { class: 'text-xs text-gray-500 dark:text-gray-400' }, props.description),
-  ])
-}
+// Help links configuration
+const helpLinks = [
+  {
+    category: 'API Documentation',
+    icon: CodeBracketIcon,
+    links: [
+      { name: 'Swagger UI', url: '/api/docs', description: 'Interactive API documentation with try-it-out', external: false },
+      { name: 'ReDoc', url: '/api/redoc', description: 'Clean, readable API reference documentation', external: false },
+      { name: 'OpenAPI Schema', url: '/api/openapi.json', description: 'Raw OpenAPI JSON specification', external: false },
+    ]
+  },
+  {
+    category: 'Generator Control',
+    icon: BoltIcon,
+    links: [
+      { name: 'Generator Controls', url: 'https://github.com/rjsears/pizero_generator_control/blob/main/docs/GENERATOR.md', description: 'Start, stop, and monitor generator operations', external: true },
+      { name: 'Scheduling Guide', url: 'https://github.com/rjsears/pizero_generator_control/blob/main/docs/SCHEDULING.md', description: 'Set up automated generator schedules', external: true },
+      { name: 'GenSlave Setup', url: 'https://github.com/rjsears/pizero_generator_control/blob/main/docs/GENSLAVE.md', description: 'Configure remote GenSlave monitoring', external: true },
+      { name: 'Victron Integration', url: 'https://github.com/rjsears/pizero_generator_control/blob/main/docs/VICTRON.md', description: 'Victron GPIO signal detection', external: true },
+    ]
+  },
+  {
+    category: 'Infrastructure Docs',
+    icon: CpuChipIcon,
+    links: [
+      { name: 'Cloudflare Setup', url: 'https://github.com/rjsears/pizero_generator_control/blob/main/docs/CLOUDFLARE.md', description: 'Cloudflare tunnel and DNS configuration', external: true },
+      { name: 'Tailscale Setup', url: 'https://github.com/rjsears/pizero_generator_control/blob/main/docs/TAILSCALE.md', description: 'Tailscale VPN integration', external: true },
+      { name: 'Notifications', url: 'https://github.com/rjsears/pizero_generator_control/blob/main/docs/NOTIFICATIONS.md', description: 'Email and Apprise notification setup', external: true },
+      { name: 'Troubleshooting', url: 'https://github.com/rjsears/pizero_generator_control/blob/main/docs/TROUBLESHOOTING.md', description: 'Common issues and solutions', external: true },
+    ]
+  },
+  {
+    category: 'Project Resources',
+    icon: DocumentTextIcon,
+    links: [
+      { name: 'GitHub Repository', url: 'https://github.com/rjsears/pizero_generator_control', description: 'Source code and issue tracker', external: true },
+      { name: 'README', url: 'https://github.com/rjsears/pizero_generator_control/blob/main/README.md', description: 'Project overview and quick start', external: true },
+    ]
+  },
+]
 
 function close() {
   emit('close')
 }
 
-function openLink(path) {
-  window.open(path, '_blank')
+function openLink(link) {
+  if (link.external) {
+    window.open(link.url, '_blank', 'noopener,noreferrer')
+  } else {
+    window.open(link.url, '_blank')
+  }
 }
 </script>
 
+<template>
+  <Teleport to="body">
+    <Transition name="modal">
+      <div
+        v-if="open"
+        class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      >
+        <!-- Backdrop -->
+        <div
+          class="absolute inset-0 bg-black/50"
+          @click="close"
+        />
+
+        <!-- Dialog -->
+        <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col border border-gray-400 dark:border-gray-700">
+          <!-- Header -->
+          <div class="flex items-center justify-between px-6 py-4 border-b border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-t-lg">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-full bg-purple-100 dark:bg-purple-500/20">
+                <QuestionMarkCircleIcon class="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <h3 class="text-lg font-semibold text-primary">Help & Documentation</h3>
+            </div>
+            <button
+              @click="close"
+              class="p-1 rounded-lg text-secondary hover:text-primary hover:bg-surface-hover"
+            >
+              <XMarkIcon class="h-5 w-5" />
+            </button>
+          </div>
+
+          <!-- Content -->
+          <div class="px-6 py-4 bg-white dark:bg-gray-800 space-y-6 overflow-y-auto flex-1">
+            <div
+              v-for="section in helpLinks"
+              :key="section.category"
+              class="space-y-3"
+            >
+              <!-- Section Header -->
+              <div class="flex items-center gap-2">
+                <component :is="section.icon" class="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                <h4 class="font-medium text-primary">{{ section.category }}</h4>
+              </div>
+
+              <!-- Links Grid -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  v-for="link in section.links"
+                  :key="link.name"
+                  @click="openLink(link)"
+                  class="flex items-start gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 transition-colors text-left group"
+                >
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1">
+                      <span class="font-medium text-sm text-primary group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate">
+                        {{ link.name }}
+                      </span>
+                      <ArrowTopRightOnSquareIcon v-if="link.external" class="h-3 w-3 text-gray-400 flex-shrink-0" />
+                    </div>
+                    <p class="text-xs text-muted mt-0.5 line-clamp-2">{{ link.description }}</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="flex items-center justify-center px-6 py-4 border-t border-gray-400 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-lg">
+            <button
+              @click="close"
+              class="btn-secondary"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
 <style scoped>
-.fade-enter-active,
-.fade-leave-active {
+.modal-enter-active,
+.modal-leave-active {
   transition: opacity 0.2s ease;
 }
-
-.fade-enter-from,
-.fade-leave-to {
+.modal-enter-from,
+.modal-leave-to {
   opacity: 0;
 }
 </style>

@@ -1,115 +1,19 @@
 <!--
-  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-  /genmaster/frontend/src/components/common/AboutDialog.vue
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/genmaster/frontend/src/components/common/AboutDialog.vue
 
-  Part of the "RPi Generator Control" suite
-  Version 1.0.0 - January 17th, 2026
+Part of the "RPi Generator Control" suite
+Version 1.0.0 - January 17th, 2026
 
-  Richard J. Sears
-  richardjsears@protonmail.com
-  https://github.com/rjsears
-  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Richard J. Sears
+richardjsears@protonmail.com
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
-
-<template>
-  <Teleport to="body">
-    <Transition name="fade">
-      <div
-        v-if="open"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-        @click.self="close"
-      >
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full overflow-hidden">
-          <!-- Header -->
-          <header class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 bg-primary-100 dark:bg-primary-900 rounded-lg flex items-center justify-center">
-                <svg class="w-6 h-6 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">About</h2>
-            </div>
-            <button
-              class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-              @click="close"
-            >
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </header>
-
-          <!-- Content -->
-          <div class="px-6 py-6 space-y-6">
-            <!-- App Info -->
-            <div class="text-center">
-              <div class="w-16 h-16 mx-auto bg-primary-600 rounded-xl flex items-center justify-center mb-4">
-                <svg class="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <h3 class="text-xl font-bold text-gray-900 dark:text-white">GenMaster</h3>
-              <p class="text-gray-500 dark:text-gray-400 mt-1">RPi Generator Control System</p>
-              <div class="mt-3">
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200">
-                  v1.0.0
-                </span>
-                <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">January 2026</span>
-              </div>
-            </div>
-
-            <!-- Divider -->
-            <div class="border-t border-gray-200 dark:border-gray-700"></div>
-
-            <!-- Developer Info -->
-            <div class="space-y-3">
-              <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide">Developer</h4>
-              <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                  <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <div>
-                  <p class="font-medium text-gray-900 dark:text-white">Richard J. Sears</p>
-                  <a
-                    href="mailto:richardjsears@protonmail.com"
-                    class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400"
-                  >
-                    richardjsears@protonmail.com
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            <!-- Links -->
-            <div class="space-y-3">
-              <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide">Resources</h4>
-              <button
-                class="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                @click="openGithub"
-              >
-                <div class="flex items-center space-x-3">
-                  <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                    <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
-                  </svg>
-                  <span class="text-gray-900 dark:text-white">GitHub Repository</span>
-                </div>
-                <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
-</template>
-
 <script setup>
-defineProps({
+import { XMarkIcon, InformationCircleIcon, ArrowTopRightOnSquareIcon } from '@heroicons/vue/24/outline'
+
+const props = defineProps({
   open: {
     type: Boolean,
     default: false,
@@ -118,23 +22,136 @@ defineProps({
 
 const emit = defineEmits(['close'])
 
+// Version info
+const appInfo = {
+  name: 'GenMaster',
+  fullName: 'RPi Generator Control',
+  version: '1.0.0',
+  versionDate: '2026-01-17',
+  author: 'Richard J. Sears',
+  email: 'richardjsears@protonmail.com',
+  githubUrl: 'https://github.com/rjsears/pizero_generator_control',
+}
+
 function close() {
   emit('close')
 }
 
 function openGithub() {
-  window.open('https://github.com/rjsears/pizero_generator_control', '_blank', 'noopener,noreferrer')
+  window.open(appInfo.githubUrl, '_blank', 'noopener,noreferrer')
 }
 </script>
 
+<template>
+  <Teleport to="body">
+    <Transition name="modal">
+      <div
+        v-if="open"
+        class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      >
+        <!-- Backdrop -->
+        <div
+          class="absolute inset-0 bg-black/50"
+          @click="close"
+        />
+
+        <!-- Dialog -->
+        <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-400 dark:border-gray-700">
+          <!-- Header -->
+          <div class="flex items-center justify-between px-6 py-4 border-b border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-full bg-blue-100 dark:bg-blue-500/20">
+                <InformationCircleIcon class="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <h3 class="text-lg font-semibold text-primary">About</h3>
+            </div>
+            <button
+              @click="close"
+              class="p-1 rounded-lg text-secondary hover:text-primary hover:bg-surface-hover"
+            >
+              <XMarkIcon class="h-5 w-5" />
+            </button>
+          </div>
+
+          <!-- Content -->
+          <div class="px-6 py-6 bg-white dark:bg-gray-800 space-y-6">
+            <!-- App name and version -->
+            <div class="text-center">
+              <h2 class="text-2xl font-bold text-primary">{{ appInfo.name }}</h2>
+              <p class="text-sm text-muted mt-1">{{ appInfo.fullName }}</p>
+              <div class="mt-2 flex items-center justify-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-sm font-medium">
+                  v{{ appInfo.version }}
+                </span>
+                <span class="text-sm text-muted">{{ appInfo.versionDate }}</span>
+              </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="border-t border-gray-400 dark:border-gray-700"></div>
+
+            <!-- Description -->
+            <div class="text-center">
+              <p class="text-sm text-secondary">
+                A comprehensive management interface for Raspberry Pi-based generator control systems. Monitor, control, and schedule your generator operations with ease.
+              </p>
+            </div>
+
+            <!-- Divider -->
+            <div class="border-t border-gray-400 dark:border-gray-700"></div>
+
+            <!-- Author info -->
+            <div class="text-center space-y-1">
+              <p class="text-sm text-muted">Developed by</p>
+              <p class="font-medium text-primary">{{ appInfo.author }}</p>
+              <a
+                :href="`mailto:${appInfo.email}`"
+                class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {{ appInfo.email }}
+              </a>
+            </div>
+
+            <!-- Divider -->
+            <div class="border-t border-gray-400 dark:border-gray-700"></div>
+
+            <!-- GitHub link -->
+            <div class="text-center">
+              <button
+                @click="openGithub"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-primary transition-colors"
+              >
+                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
+                </svg>
+                View on GitHub
+                <ArrowTopRightOnSquareIcon class="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="flex items-center justify-center px-6 py-4 border-t border-gray-400 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-lg">
+            <button
+              @click="close"
+              class="btn-secondary"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
 <style scoped>
-.fade-enter-active,
-.fade-leave-active {
+.modal-enter-active,
+.modal-leave-active {
   transition: opacity 0.2s ease;
 }
-
-.fade-enter-from,
-.fade-leave-to {
+.modal-enter-from,
+.modal-leave-to {
   opacity: 0;
 }
 </style>

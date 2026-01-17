@@ -1,13 +1,15 @@
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// /genmaster/frontend/tailwind.config.js
-//
-// Part of the "RPi Generator Control" suite
-// Version 1.0.0 - January 15th, 2026
-//
-// Richard J. Sears
-// richardjsears@protonmail.com
-// https://github.com/rjsears
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/*
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/management/frontend/tailwind.config.js
+
+Part of the "n8n_nginx/n8n_management" suite
+Version 3.0.0 - January 1st, 2026
+
+Richard J. Sears
+richard@n8nmanagement.net
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+*/
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -19,42 +21,42 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Generator states
-        'gen-stopped': '#6b7280',
-        'gen-starting': '#f59e0b',
-        'gen-running': '#22c55e',
-        'gen-stopping': '#f59e0b',
-        'gen-cooldown': '#3b82f6',
-        'gen-error': '#ef4444',
-
-        // Custom brand colors
-        'primary': {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
-          950: '#172554',
+        // Theme-aware colors via CSS custom properties
+        surface: {
+          DEFAULT: 'var(--color-surface)',
+          hover: 'var(--color-surface-hover)',
         },
-
-        // Status colors
-        'success': '#22c55e',
-        'warning': '#f59e0b',
-        'danger': '#ef4444',
-        'info': '#3b82f6',
+        background: {
+          primary: 'var(--color-bg-primary)',
+          secondary: 'var(--color-bg-secondary)',
+          tertiary: 'var(--color-bg-tertiary)',
+        },
       },
-      fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'monospace'],
+      textColor: {
+        primary: 'var(--color-text-primary)',
+        secondary: 'var(--color-text-secondary)',
+        muted: 'var(--color-text-muted)',
+      },
+      borderColor: {
+        DEFAULT: 'var(--color-border)',
+        'dark-theme': '#64748b',
+      },
+      boxShadow: {
+        'glow-cyan': 'var(--glow-cyan)',
+        'glow-fuchsia': 'var(--glow-fuchsia)',
+        'glow-success': 'var(--glow-success)',
+        'glow-warning': 'var(--glow-warning)',
+        'glow-danger': 'var(--glow-danger)',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'spin-slow': 'spin 3s linear infinite',
+        'glow': 'glow 2s ease-in-out infinite alternate',
+      },
+      keyframes: {
+        glow: {
+          '0%': { opacity: 0.5 },
+          '100%': { opacity: 1 },
+        },
       },
     },
   },

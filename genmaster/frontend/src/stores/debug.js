@@ -1,17 +1,19 @@
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// /genmaster/frontend/src/stores/debug.js
-//
-// Part of the "RPi Generator Control" suite
-// Version 1.0.0 - January 17th, 2026
-//
-// Richard J. Sears
-// richardjsears@protonmail.com
-// https://github.com/rjsears
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/*
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/management/frontend/src/stores/debug.js
+
+Part of the "n8n_nginx/n8n_management" suite
+Version 3.0.0 - January 1st, 2026
+
+Richard J. Sears
+richard@n8nmanagement.net
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+*/
 
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import api from '@/services/api'
+import { ref, computed } from 'vue'
+import api from '../services/api'
 
 export const useDebugStore = defineStore('debug', () => {
   const isEnabled = ref(false)
@@ -19,11 +21,10 @@ export const useDebugStore = defineStore('debug', () => {
 
   async function loadDebugMode() {
     try {
-      const response = await api.get('/settings/debug_mode')
-      isEnabled.value = response.data?.value ?? false
-    } catch {
-      // Setting might not exist yet, default to false
-      isEnabled.value = false
+      const response = await api.settings.getDebugMode()
+      isEnabled.value = response.data.enabled
+    } catch (error) {
+      console.error('Failed to load debug mode:', error)
     }
   }
 
@@ -31,28 +32,12 @@ export const useDebugStore = defineStore('debug', () => {
     loading.value = true
     try {
       const newValue = !isEnabled.value
-      await api.put('/settings/debug_mode', {
-        value: newValue,
-        description: 'Enable debug mode for verbose logging',
-      })
+      await api.settings.setDebugMode(newValue)
       isEnabled.value = newValue
+      return true
     } catch (error) {
-      console.error('Failed to toggle debug mode:', error)
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function setDebugMode(enabled) {
-    loading.value = true
-    try {
-      await api.put('/settings/debug_mode', {
-        value: enabled,
-        description: 'Enable debug mode for verbose logging',
-      })
-      isEnabled.value = enabled
-    } catch (error) {
-      console.error('Failed to set debug mode:', error)
+      console.error('Failed to update debug mode:', error)
+      return false
     } finally {
       loading.value = false
     }
@@ -63,6 +48,5 @@ export const useDebugStore = defineStore('debug', () => {
     loading,
     loadDebugMode,
     toggleDebugMode,
-    setDebugMode,
   }
 })

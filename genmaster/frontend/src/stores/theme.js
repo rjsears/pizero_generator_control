@@ -1,21 +1,24 @@
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// /genmaster/frontend/src/stores/theme.js
-//
-// Part of the "RPi Generator Control" suite
-// Version 1.0.0 - January 15th, 2026
-//
-// Richard J. Sears
-// richardjsears@protonmail.com
-// https://github.com/rjsears
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/*
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/management/frontend/src/stores/theme.js
+
+Part of the "n8n_nginx/n8n_management" suite
+Version 3.0.0 - January 1st, 2026
+
+Richard J. Sears
+richard@n8nmanagement.net
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+*/
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import api from '../services/api'
 
 export const useThemeStore = defineStore('theme', () => {
   // Internal state
-  const _colorMode = ref('dark') // 'light' or 'dark'
-  const _layoutMode = ref('sidebar') // 'horizontal' or 'sidebar'
+  const _colorMode = ref('light') // 'light' or 'dark'
+  const _layoutMode = ref('horizontal') // 'horizontal' or 'sidebar'
   const _sidebarCollapsed = ref(false)
 
   // Read-only getters
@@ -23,7 +26,7 @@ export const useThemeStore = defineStore('theme', () => {
   const isSidebar = computed(() => _layoutMode.value === 'sidebar')
   const sidebarCollapsed = computed(() => _sidebarCollapsed.value)
 
-  // For compatibility
+  // For compatibility - maps to the color mode
   const currentPreset = computed(() => {
     return _colorMode.value === 'dark' ? 'modern_dark' : 'modern_light'
   })
@@ -73,17 +76,33 @@ export const useThemeStore = defineStore('theme', () => {
     }
   }
 
+  // Save to server
+  async function saveToServer() {
+    try {
+      await api.put('/settings/appearance', {
+        value: {
+          colorMode: _colorMode.value,
+          layout: _layoutMode.value,
+        }
+      })
+    } catch {
+      // Ignore errors - local storage is fallback
+    }
+  }
+
   // Actions
   function setColorMode(mode) {
     _colorMode.value = mode
     localStorage.setItem('color_mode', mode)
     applyTheme()
+    saveToServer()
   }
 
   function setLayoutMode(mode) {
     _layoutMode.value = mode
     localStorage.setItem('layout_mode', mode)
     applyTheme()
+    saveToServer()
   }
 
   function setPreset(presetName) {
@@ -99,13 +118,24 @@ export const useThemeStore = defineStore('theme', () => {
     setColorMode(_colorMode.value === 'light' ? 'dark' : 'light')
   }
 
-  function toggleTheme() {
-    toggleColorMode()
-  }
-
   function toggleSidebar() {
     _sidebarCollapsed.value = !_sidebarCollapsed.value
     localStorage.setItem('sidebar_collapsed', _sidebarCollapsed.value)
+  }
+
+  async function loadFromServer() {
+    try {
+      const response = await api.get('/settings/appearance')
+      if (response.data?.value) {
+        const settings = response.data.value
+        _colorMode.value = settings.colorMode || 'light'
+        _layoutMode.value = settings.layout || 'horizontal'
+        applyTheme()
+      }
+    } catch {
+      // Use local storage fallback
+      init()
+    }
   }
 
   function init() {
@@ -134,11 +164,6 @@ export const useThemeStore = defineStore('theme', () => {
     applyTheme()
   }
 
-  // Alias for backwards compatibility
-  function initialize() {
-    init()
-  }
-
   return {
     // Read-only state
     currentPreset,
@@ -152,17 +177,15 @@ export const useThemeStore = defineStore('theme', () => {
     layout,
     // Legacy compatibility
     layoutMode: _layoutMode,
-    theme: _colorMode,
     // Actions
     setPreset,
     applyPreset: setPreset,
     setColorMode,
     setLayoutMode,
     toggleColorMode,
-    toggleTheme,
     toggleSidebar,
     applyTheme,
+    loadFromServer,
     init,
-    initialize,
   }
 })

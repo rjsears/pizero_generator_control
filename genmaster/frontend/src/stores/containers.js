@@ -1,25 +1,25 @@
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// /genmaster/frontend/src/stores/containers.js
-//
-// Part of the "RPi Generator Control" suite
-// Version 1.0.0 - January 15th, 2026
-//
-// Richard J. Sears
-// richardjsears@protonmail.com
-// https://github.com/rjsears
-// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/*
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/management/frontend/src/stores/containers.js
+
+Part of the "n8n_nginx/n8n_management" suite
+Version 3.0.0 - January 1st, 2026
+
+Richard J. Sears
+richard@n8nmanagement.net
+https://github.com/rjsears
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+*/
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import api from '@/services/api'
-import { useNotificationStore } from './notifications'
+import api from '../services/api'
 
-export const useContainersStore = defineStore('containers', () => {
+export const useContainerStore = defineStore('containers', () => {
   // State
   const containers = ref([])
   const stats = ref([])
   const loading = ref(false)
-  const actionLoading = ref(false)
   const error = ref(null)
   const lastUpdated = ref(null)
 
@@ -40,23 +40,24 @@ export const useContainersStore = defineStore('containers', () => {
     containerList.value.filter(c => c.health === 'unhealthy').length
   )
 
-  const totalCount = computed(() => containerList.value.length)
+  const allHealthy = computed(() =>
+    containerList.value.length > 0 && containerList.value.every(c =>
+      c.status === 'running' && c.health !== 'unhealthy'
+    )
+  )
 
   // Actions
-  async function fetchContainers(includeAll = true) {
+  async function fetchContainers() {
     loading.value = true
     error.value = null
 
     try {
-      const response = await api.get('/containers/', { params: { all: includeAll } })
+      // Explicitly pass all=true to include stopped containers
+      const response = await api.get('/containers/', { params: { all: true } })
       containers.value = Array.isArray(response.data) ? response.data : []
       lastUpdated.value = new Date()
     } catch (err) {
-      if (err.response?.status === 503) {
-        error.value = 'Docker is not available'
-      } else {
-        error.value = err.response?.data?.detail || 'Failed to fetch containers'
-      }
+      error.value = err.response?.data?.detail || 'Failed to fetch containers'
       containers.value = []
     } finally {
       loading.value = false
@@ -66,108 +67,100 @@ export const useContainersStore = defineStore('containers', () => {
   async function fetchStats() {
     try {
       const response = await api.get('/containers/stats')
-      stats.value = Array.isArray(response.data) ? response.data : []
-    } catch {
-      stats.value = []
-    }
-  }
-
-  async function getContainer(name) {
-    try {
-      const response = await api.get(`/containers/${name}`)
-      return response.data
+      stats.value = response.data
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to get container'
-      return null
+      console.error('Failed to fetch container stats:', err)
     }
   }
 
   async function startContainer(name) {
-    const notifications = useNotificationStore()
-    actionLoading.value = true
-
     try {
       await api.post(`/containers/${name}/start`)
-      notifications.success(`Container ${name} started`)
       await fetchContainers()
       return true
     } catch (err) {
-      notifications.error(`Failed to start ${name}`)
+      error.value = err.response?.data?.detail || 'Failed to start container'
       return false
-    } finally {
-      actionLoading.value = false
     }
   }
 
   async function stopContainer(name) {
-    const notifications = useNotificationStore()
-    actionLoading.value = true
-
     try {
       await api.post(`/containers/${name}/stop`)
-      notifications.success(`Container ${name} stopped`)
       await fetchContainers()
       return true
     } catch (err) {
-      notifications.error(`Failed to stop ${name}`)
+      error.value = err.response?.data?.detail || 'Failed to stop container'
       return false
-    } finally {
-      actionLoading.value = false
     }
   }
 
   async function restartContainer(name) {
-    const notifications = useNotificationStore()
-    actionLoading.value = true
-
     try {
       await api.post(`/containers/${name}/restart`)
-      notifications.success(`Container ${name} restarted`)
       await fetchContainers()
       return true
     } catch (err) {
-      notifications.error(`Failed to restart ${name}`)
+      error.value = err.response?.data?.detail || 'Failed to restart container'
       return false
-    } finally {
-      actionLoading.value = false
     }
   }
 
-  async function getContainerLogs(name, tail = 100) {
+  async function removeContainer(name) {
     try {
-      const response = await api.get(`/containers/${name}/logs`, { params: { tail } })
+      await api.delete(`/containers/${name}`)
+      // Small delay to ensure Docker has fully removed the container
+      await new Promise(resolve => setTimeout(resolve, 500))
+      await fetchContainers()
+      return true
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to remove container'
+      return false
+    }
+  }
+
+  async function recreateContainer(name, pull = false) {
+    try {
+      const response = await api.post(`/containers/${name}/recreate`, null, {
+        params: { pull }
+      })
+      await fetchContainers()
+      return response.data
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to recreate container'
+      throw err
+    }
+  }
+
+  async function getLogs(name, options = {}) {
+    try {
+      const params = {}
+      // Support both 'tail' and 'lines' parameter names
+      if (options.lines !== undefined) {
+        params.tail = options.lines
+      } else if (options.tail !== undefined) {
+        params.tail = options.tail
+      } else {
+        params.tail = 100
+      }
+      // Add since parameter if provided
+      if (options.since) {
+        params.since = options.since
+      }
+      const response = await api.get(`/containers/${name}/logs`, { params })
       return response.data.logs
-    } catch {
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to fetch logs'
       return null
     }
   }
 
-  async function recreateContainer(name, pullImage = true) {
-    const notifications = useNotificationStore()
-    actionLoading.value = true
-
-    try {
-      await api.post(`/containers/${name}/recreate`, null, {
-        params: { pull_image: pullImage }
-      })
-      notifications.success(`Container ${name} recreated successfully`)
-      await fetchContainers()
-      return true
-    } catch (err) {
-      const message = err.response?.data?.detail || `Failed to recreate ${name}`
-      notifications.error(message)
-      return false
-    } finally {
-      actionLoading.value = false
-    }
+  function getContainerByName(name) {
+    return containers.value.find(c => c.name === name)
   }
 
-  function getContainerStats(name) {
-    return stats.value.find(s => s.name === name) || null
-  }
-
-  function clearError() {
-    error.value = null
+  function getStatsByName(name) {
+    return stats.value.find(s => s.name === name)
   }
 
   return {
@@ -175,27 +168,24 @@ export const useContainersStore = defineStore('containers', () => {
     containers,
     stats,
     loading,
-    actionLoading,
     error,
     lastUpdated,
-
     // Getters
-    containerList,
     runningCount,
     stoppedCount,
     unhealthyCount,
-    totalCount,
-
+    allHealthy,
     // Actions
     fetchContainers,
     fetchStats,
-    getContainer,
     startContainer,
     stopContainer,
     restartContainer,
+    removeContainer,
     recreateContainer,
-    getContainerLogs,
-    getContainerStats,
-    clearError,
+    getLogs,
+    getContainerLogs: getLogs,  // Alias for ContainersView compatibility
+    getContainerByName,
+    getStatsByName,
   }
 })
