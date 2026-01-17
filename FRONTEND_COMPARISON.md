@@ -31,12 +31,17 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
 | Phase | Feature | Status |
 |-------|---------|--------|
 | 2 | System Health UI (core services, logs, docker) | PENDING |
-| 4 | Settings Access Control Tab | PENDING |
-| 4 | Settings Environment Tab | PENDING |
-| 4 | Settings Account Tab enhancements | PENDING |
 | 4 | Network Cloudflare Metrics | PENDING |
 | 4 | Network Tailscale Peer Info | PENDING |
 | 5 | System Terminal Tab with xterm.js | PENDING |
+
+### Phase 4 Completed (January 17th, 2026)
+
+| Feature | Status |
+|---------|--------|
+| Settings Access Control Tab | DONE |
+| Settings Environment Tab | DONE |
+| Settings Account Tab enhancements | DONE |
 
 ### Phase 3 Completed (January 17th, 2026)
 
@@ -127,6 +132,22 @@ This document provides a side-by-side comparison of the n8n_nginx management fro
   - Critical containers highlighted with amber border
   - Terminal button for running containers
   - ContainerTerminal modal integration
+
+---
+
+## Files Created/Modified in Phase 4
+
+### Frontend
+- `genmaster/frontend/src/views/SettingsView.vue` - Major enhancements:
+  - Added Access Control tab with IP range management
+  - Quick-add common networks (Tailscale, local networks)
+  - IP range CRUD operations with descriptions
+  - Added Environment tab with environment variable viewing/editing
+  - Sensitive value masking
+  - Restart required indicator
+  - Enhanced Account tab with user profile display
+  - Avatar, username, role, and created date display
+  - New icons: GlobeAltIcon, DocumentTextIcon, PlusIcon, TrashIcon, PencilIcon, XMarkIcon, ExclamationTriangleIcon
 
 ---
 
@@ -356,10 +377,10 @@ These are generator-specific features that are kept:
 14. [x] Critical Container Warnings
 15. [x] Container Terminal Access
 
-### Phase 4: Settings & Network - PENDING
-16. [ ] Settings Access Control Tab
-17. [ ] Settings Environment Tab
-18. [ ] Settings Account Tab enhancements
+### Phase 4: Settings & Network - PARTIAL
+16. [x] Settings Access Control Tab
+17. [x] Settings Environment Tab
+18. [x] Settings Account Tab enhancements
 19. [ ] Network Cloudflare Metrics
 20. [ ] Network Tailscale Peer Info
 
