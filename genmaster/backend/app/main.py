@@ -36,6 +36,7 @@ from app.routers import (
 from app.services.gpio_monitor import GPIOMonitor
 from app.services.heartbeat import HeartbeatService
 from app.services.scheduler import SchedulerService
+from app.services.slave_client import SlaveClient
 from app.services.state_machine import StateMachine
 from app.services.webhook import WebhookService
 
@@ -96,6 +97,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         scheduler_service = SchedulerService(state_machine)
         scheduler_service.start()
         logger.info("Scheduler service started")
+
+        # Attempt to reconcile state with GenSlave
+        logger.info("Attempting state reconciliation with GenSlave...")
+        slave_client = SlaveClient()
+        try:
+            reconcile_result = await state_machine.reconcile_with_slave(slave_client)
+            if reconcile_result["success"]:
+                logger.info(f"Reconciliation: {reconcile_result['message']}")
+            else:
+                logger.warning(
+                    f"Reconciliation incomplete: {reconcile_result['message']} "
+                    "(GenSlave may not be running yet)"
+                )
+        except Exception as e:
+            logger.warning(f"Reconciliation failed: {e} (GenSlave may not be running yet)")
+        finally:
+            await slave_client.close()
 
         # Log startup complete
         await state_machine.log_event(
