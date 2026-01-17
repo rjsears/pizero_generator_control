@@ -2216,7 +2216,7 @@ EOF
     cap_add:
       - NET_ADMIN
     networks:
-      - genmaster-internal
+      - genmaster-external
     profiles:
       - tailscale
 EOF
