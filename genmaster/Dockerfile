@@ -61,16 +61,11 @@ RUN groupadd --gid 1000 genmaster \
     && useradd --uid 1000 --gid genmaster --shell /bin/bash --create-home genmaster
 
 # Install system dependencies
+# Note: GPIO packages (gpiozero, rpi-lgpio) are installed via pip in requirements.txt
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # PostgreSQL client for healthchecks
     postgresql-client \
-    # For GPIO access via gpiozero (uses lgpio backend on Pi 5)
-    python3-gpiozero \
-    python3-lgpio \
-    # Networking tools
     curl \
     iputils-ping \
-    # Cleanup
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
