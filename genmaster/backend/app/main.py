@@ -16,8 +16,11 @@ import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
@@ -226,10 +229,33 @@ async def get_status() -> dict:
     }
 
 
-# Mount static files for frontend (if directory exists)
-try:
-    app.mount("/", StaticFiles(directory="static", html=True), name="static")
-except Exception:
+# Static files directory
+STATIC_DIR = Path("static")
+
+# Mount static assets (js, css, images, etc.)
+if STATIC_DIR.exists():
+    # Mount assets subdirectory for Vite build output
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    # Serve index.html for SPA routes (catch-all)
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve index.html for all non-API routes (SPA routing)."""
+        # Check if it's a static file request
+        file_path = STATIC_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+
+        # For all other routes, serve index.html (SPA)
+        index_path = STATIC_DIR / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
+
+        # Fallback if no frontend built
+        return {"error": "Frontend not built", "path": full_path}
+else:
     logger.warning("Static files directory not found, frontend not served")
 
 

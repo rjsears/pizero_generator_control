@@ -42,6 +42,6 @@ python-dotenv==1.0.1
 psutil==5.9.8
 
 # Docker SDK (for container management)
-# Note: 7.1.0+ fixes urllib3/requests compatibility with unix sockets
-docker>=7.1.0
-requests-unixsocket2>=0.4.0
+# Pin requests<2.32.0 to maintain http+docker scheme support
+docker==7.0.0
+requests<2.32.0
