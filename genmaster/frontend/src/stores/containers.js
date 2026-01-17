@@ -11,7 +11,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import containersService from '@/services/containers'
+import api from '@/services/api'
 import { useNotificationStore } from './notifications'
 
 export const useContainersStore = defineStore('containers', () => {
@@ -21,25 +21,36 @@ export const useContainersStore = defineStore('containers', () => {
   const loading = ref(false)
   const actionLoading = ref(false)
   const error = ref(null)
+  const lastUpdated = ref(null)
 
-  // Getters
+  // Getters - with defensive array checks
+  const containerList = computed(() =>
+    Array.isArray(containers.value) ? containers.value : []
+  )
+
   const runningCount = computed(() =>
-    containers.value.filter(c => c.status === 'running').length
+    containerList.value.filter(c => c.status === 'running').length
   )
 
   const stoppedCount = computed(() =>
-    containers.value.filter(c => c.status !== 'running').length
+    containerList.value.filter(c => c.status !== 'running').length
   )
 
-  const totalCount = computed(() => containers.value.length)
+  const unhealthyCount = computed(() =>
+    containerList.value.filter(c => c.health === 'unhealthy').length
+  )
+
+  const totalCount = computed(() => containerList.value.length)
 
   // Actions
-  async function fetchContainers(includeAll = false) {
+  async function fetchContainers(includeAll = true) {
     loading.value = true
     error.value = null
 
     try {
-      containers.value = await containersService.list(includeAll)
+      const response = await api.get('/containers/', { params: { all: includeAll } })
+      containers.value = Array.isArray(response.data) ? response.data : []
+      lastUpdated.value = new Date()
     } catch (err) {
       if (err.response?.status === 503) {
         error.value = 'Docker is not available'
@@ -54,7 +65,8 @@ export const useContainersStore = defineStore('containers', () => {
 
   async function fetchStats() {
     try {
-      stats.value = await containersService.getStats()
+      const response = await api.get('/containers/stats')
+      stats.value = Array.isArray(response.data) ? response.data : []
     } catch {
       stats.value = []
     }
@@ -62,7 +74,8 @@ export const useContainersStore = defineStore('containers', () => {
 
   async function getContainer(name) {
     try {
-      return await containersService.get(name)
+      const response = await api.get(`/containers/${name}`)
+      return response.data
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to get container'
       return null
@@ -74,7 +87,7 @@ export const useContainersStore = defineStore('containers', () => {
     actionLoading.value = true
 
     try {
-      await containersService.start(name)
+      await api.post(`/containers/${name}/start`)
       notifications.success(`Container ${name} started`)
       await fetchContainers()
       return true
@@ -91,7 +104,7 @@ export const useContainersStore = defineStore('containers', () => {
     actionLoading.value = true
 
     try {
-      await containersService.stop(name)
+      await api.post(`/containers/${name}/stop`)
       notifications.success(`Container ${name} stopped`)
       await fetchContainers()
       return true
@@ -108,7 +121,7 @@ export const useContainersStore = defineStore('containers', () => {
     actionLoading.value = true
 
     try {
-      await containersService.restart(name)
+      await api.post(`/containers/${name}/restart`)
       notifications.success(`Container ${name} restarted`)
       await fetchContainers()
       return true
@@ -122,8 +135,8 @@ export const useContainersStore = defineStore('containers', () => {
 
   async function getContainerLogs(name, tail = 100) {
     try {
-      const result = await containersService.getLogs(name, tail)
-      return result.logs
+      const response = await api.get(`/containers/${name}/logs`, { params: { tail } })
+      return response.data.logs
     } catch {
       return null
     }
@@ -144,10 +157,13 @@ export const useContainersStore = defineStore('containers', () => {
     loading,
     actionLoading,
     error,
+    lastUpdated,
 
     // Getters
+    containerList,
     runningCount,
     stoppedCount,
+    unhealthyCount,
     totalCount,
 
     // Actions
