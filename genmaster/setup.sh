@@ -1769,6 +1769,23 @@ configure_email() {
             continue
         fi
 
+        # Check for placeholder emails
+        if [[ "$email_input" =~ (example\.com|yourdomain\.com|test\.com|domain\.com)$ ]]; then
+            print_warning "This looks like a placeholder email address."
+            if ! confirm_prompt "Are you sure you want to use '$email_input'?" "n"; then
+                continue
+            fi
+        fi
+
+        # Confirm email address
+        echo -ne "${WHITE}  Confirm email address${NC}: "
+        read email_confirm
+
+        if [ "$email_input" != "$email_confirm" ]; then
+            print_error "Email addresses do not match. Please try again."
+            continue
+        fi
+
         LETSENCRYPT_EMAIL="$email_input"
         print_success "Email set to: $LETSENCRYPT_EMAIL"
         break
