@@ -411,7 +411,7 @@ prepare_system() {
 
     # Install system dependencies
     print_step "5" "Installing system dependencies..."
-    if ! apt-get install -y \
+    apt-get install -y \
         python3 \
         python3-pip \
         python3-venv \
@@ -425,9 +425,11 @@ prepare_system() {
         i2c-tools \
         curl \
         jq \
-        openssl 2>&1 | tee /tmp/apt-install.log | grep -E "^(Setting up|Unpacking)" > /dev/null; then
+        openssl
+
+    if [ $? -ne 0 ]; then
         print_error "Failed to install some dependencies"
-        print_info "Check /tmp/apt-install.log for details"
+        exit 1
     fi
     print_success "System dependencies installed"
 
@@ -526,8 +528,9 @@ install_python_environment() {
     print_section "Python Environment Setup"
 
     print_step "1" "Creating Python virtual environment..."
-    python3 -m venv "$INSTALL_DIR/venv"
-    print_success "Virtual environment created"
+    # Use --system-site-packages to access pre-installed RPi.GPIO, smbus, etc.
+    python3 -m venv --system-site-packages "$INSTALL_DIR/venv"
+    print_success "Virtual environment created (with system site-packages)"
 
     print_step "2" "Upgrading pip..."
     "$INSTALL_DIR/venv/bin/pip" install --upgrade pip setuptools wheel > /dev/null 2>&1
