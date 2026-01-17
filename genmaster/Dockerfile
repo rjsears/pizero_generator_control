@@ -15,16 +15,16 @@ FROM node:20-alpine AS frontend-builder
 WORKDIR /build
 
 # Copy package files first for better caching
-COPY frontend/package.json frontend/package-lock.json* ./
+COPY frontend/package.json ./
 
 # Install dependencies
-RUN npm ci --legacy-peer-deps || npm install
+RUN npm install --legacy-peer-deps
 
 # Copy frontend source
 COPY frontend/ .
 
-# Build production assets
-RUN npm run build
+# Build production assets (with error output)
+RUN npm run build 2>&1 || (echo "=== BUILD FAILED ===" && cat /build/npm-debug.log 2>/dev/null || true && exit 1)
 
 # =============================================================================
 # Stage 2: Python Runtime
