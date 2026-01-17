@@ -111,17 +111,14 @@ class HeartbeatService:
 
         # Get current master state to send
         generator_status = await self.state_machine.get_generator_status()
-        master_state = {
-            "generator_running": generator_status.running,
-            "trigger": generator_status.trigger,
-            "timestamp": timestamp,
-        }
+        is_armed = await self.state_machine.is_armed()
 
-        # Send heartbeat
+        # Send heartbeat with armed state
         response = await self._client.heartbeat(
             timestamp=timestamp,
-            master_state=master_state,
-            sequence=self._sequence,
+            generator_running=generator_status.running,
+            armed=is_armed,
+            command="none",  # Commands are sent separately, not via heartbeat
         )
 
         # Build result
@@ -154,17 +151,13 @@ class HeartbeatService:
         timestamp = int(time.time())
 
         generator_status = await self.state_machine.get_generator_status()
-        master_state = {
-            "generator_running": generator_status.running,
-            "trigger": generator_status.trigger,
-            "timestamp": timestamp,
-            "test": True,
-        }
+        is_armed = await self.state_machine.is_armed()
 
         response = await self._client.heartbeat(
             timestamp=timestamp,
-            master_state=master_state,
-            sequence=0,  # Test heartbeats use sequence 0
+            generator_running=generator_status.running,
+            armed=is_armed,
+            command="none",
         )
 
         return HeartbeatResult(

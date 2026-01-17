@@ -157,16 +157,18 @@ class SlaveClient:
     async def heartbeat(
         self,
         timestamp: int,
-        master_state: dict[str, Any],
-        sequence: int,
+        generator_running: bool,
+        armed: bool,
+        command: str = "none",
     ) -> SlaveResponse:
         """
         Send heartbeat to GenSlave.
 
         Args:
             timestamp: Current Unix timestamp
-            master_state: Current GenMaster state
-            sequence: Heartbeat sequence number
+            generator_running: Whether generator is currently running
+            armed: Whether automation is armed
+            command: Command to execute ("start", "stop", or "none")
 
         Returns:
             Response with GenSlave status
@@ -176,8 +178,9 @@ class SlaveClient:
             "/api/heartbeat",
             json={
                 "timestamp": timestamp,
-                "master_state": master_state,
-                "sequence": sequence,
+                "generator_running": generator_running,
+                "command": command,
+                "armed": armed,
             },
         )
 

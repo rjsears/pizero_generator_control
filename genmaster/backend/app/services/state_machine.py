@@ -16,6 +16,7 @@ import time
 from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 from app.database import AsyncSessionLocal
 from app.models import Config, EventLog, GeneratorRun, SystemState
@@ -57,16 +58,170 @@ class StateMachine:
         self._webhook_service = webhook_service
 
     async def initialize(self) -> None:
-        """Initialize state machine from database."""
+        """
+        Initialize state machine from database.
+
+        On boot, we reset certain states for safety:
+        - automation_armed = False (require operator to re-arm)
+        - slave_connection_status = "unknown" (will be updated by heartbeat)
+        - If generator_running was True, mark it as needing reconciliation
+        """
         async with AsyncSessionLocal() as db:
             # Ensure system_state row exists
             state = await SystemState.get_instance(db)
+
+            # Log pre-boot state for debugging
+            logger.info(
+                f"Pre-boot state - "
+                f"generator_running: {state.generator_running}, "
+                f"automation_armed: {state.automation_armed}, "
+                f"slave_status: {state.slave_connection_status}"
+            )
+
+            # Check if we had a running generator before crash/reboot
+            was_running = state.generator_running
+
+            # SAFETY: Always disarm on boot - require operator to re-arm
+            if state.automation_armed:
+                logger.warning(
+                    "Automation was armed before reboot - disarming for safety"
+                )
+                state.automation_armed = False
+                state.automation_armed_at = None
+                state.automation_armed_by = None
+
+            # Reset slave connection status - will be updated by heartbeat
+            state.slave_connection_status = "unknown"
+            state.missed_heartbeat_count = 0
+
+            # If generator was marked as running, we need to reconcile
+            # For now, mark as not running - reconciliation will verify actual state
+            if was_running:
+                logger.warning(
+                    "Generator was marked as running before reboot - "
+                    "marking as stopped until reconciliation with GenSlave"
+                )
+                state.generator_running = False
+                state.run_trigger = "idle"
+                state.generator_start_time = None
+                # Keep current_run_id to close the run record properly
+                if state.current_run_id:
+                    # Mark the run as ended due to power loss
+                    result = await db.execute(
+                        select(GeneratorRun).where(
+                            GeneratorRun.id == state.current_run_id
+                        )
+                    )
+                    run = result.scalar_one_or_none()
+                    if run and not run.end_time:
+                        run.end_time = int(time.time())
+                        run.stop_reason = "power_loss"
+                        run.notes = (run.notes or "") + " [Ended due to power loss/reboot]"
+                        logger.info(f"Closed orphaned run {run.id} due to power loss")
+                state.current_run_id = None
+
+            await db.commit()
+
             logger.info(
                 f"State machine initialized - "
                 f"generator_running: {state.generator_running}, "
+                f"automation_armed: {state.automation_armed}, "
                 f"override: {state.override_enabled}"
             )
+
+            # Log event for reboot
+            await self.log_event(
+                "SYSTEM_BOOT_RESET",
+                {
+                    "was_running": was_running,
+                    "automation_disarmed": True,
+                    "reason": "Safety reset on boot",
+                },
+                severity="WARNING" if was_running else "INFO",
+            )
+
             self._initialized = True
+
+    async def reconcile_with_slave(self, slave_client) -> dict:
+        """
+        Reconcile GenMaster state with GenSlave's actual state.
+
+        Called during startup to ensure state consistency after reboot.
+        This queries GenSlave for its actual relay state and updates
+        our records accordingly.
+
+        Args:
+            slave_client: SlaveClient instance
+
+        Returns:
+            Dict with reconciliation results
+        """
+        result = {
+            "success": False,
+            "slave_reachable": False,
+            "relay_state": None,
+            "slave_armed": None,
+            "message": "",
+        }
+
+        try:
+            # Try to get GenSlave status
+            response = await slave_client.get_relay_state()
+
+            if not response.success:
+                result["message"] = f"Could not reach GenSlave: {response.error}"
+                logger.warning(f"Reconciliation failed: {result['message']}")
+                return result
+
+            result["slave_reachable"] = True
+            result["relay_state"] = response.data.get("relay_state", False)
+            result["slave_armed"] = response.data.get("armed", False)
+
+            async with AsyncSessionLocal() as db:
+                state = await self._get_state(db)
+
+                # Update our record of slave's relay state
+                state.slave_relay_state = result["relay_state"]
+
+                # If slave's relay is ON but we think generator is stopped,
+                # we have a mismatch - log it but don't auto-start
+                if result["relay_state"] and not state.generator_running:
+                    logger.warning(
+                        "Reconciliation: GenSlave relay is ON but GenMaster "
+                        "shows generator stopped - relay may have been left on"
+                    )
+                    result["message"] = (
+                        "WARNING: GenSlave relay is ON but no active run in GenMaster. "
+                        "Manual intervention may be required."
+                    )
+                    await self.log_event(
+                        "RECONCILIATION_MISMATCH",
+                        {
+                            "slave_relay": result["relay_state"],
+                            "master_generator_running": state.generator_running,
+                        },
+                        severity="WARNING",
+                    )
+                else:
+                    result["message"] = "State reconciliation complete"
+
+                # Update connection status since we successfully reached slave
+                state.slave_connection_status = "connected"
+                state.missed_heartbeat_count = 0
+
+                await db.commit()
+
+            result["success"] = True
+            logger.info(
+                f"Reconciliation complete - slave relay: {result['relay_state']}, "
+                f"slave armed: {result['slave_armed']}"
+            )
+
+        except Exception as e:
+            result["message"] = f"Reconciliation error: {e}"
+            logger.error(f"Reconciliation failed: {e}")
+
+        return result
 
     async def _get_state(self, db: AsyncSession) -> SystemState:
         """Get current system state from database."""
