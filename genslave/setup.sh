@@ -528,8 +528,9 @@ install_python_environment() {
     print_section "Python Environment Setup"
 
     print_step "1" "Creating Python virtual environment..."
-    python3 -m venv "$INSTALL_DIR/venv"
-    print_success "Virtual environment created"
+    # Use --system-site-packages to access pre-installed RPi.GPIO, smbus, etc.
+    python3 -m venv --system-site-packages "$INSTALL_DIR/venv"
+    print_success "Virtual environment created (with system site-packages)"
 
     print_step "2" "Upgrading pip..."
     "$INSTALL_DIR/venv/bin/pip" install --upgrade pip setuptools wheel > /dev/null 2>&1
