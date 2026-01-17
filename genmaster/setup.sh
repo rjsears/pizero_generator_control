@@ -1789,68 +1789,136 @@ configure_optional_services() {
 
     # Cloudflare Tunnel
     echo ""
-    if confirm_prompt "Configure Cloudflare Tunnel for secure external access?" "n"; then
-        print_subsection
-        echo -e "${WHITE}  Cloudflare Tunnel Configuration${NC}"
-        echo ""
-        echo -e "  ${GRAY}Cloudflare Tunnel provides secure access to your GenMaster instance${NC}"
-        echo -e "  ${GRAY}without exposing any ports to the public internet.${NC}"
-        echo ""
-        echo -e "  ${GRAY}Requirements:${NC}"
-        echo -e "    • Cloudflare account with your domain"
-        echo -e "    • Cloudflare Tunnel token from Zero Trust dashboard"
-        echo ""
-        echo -e "  ${GRAY}Create a tunnel at: https://one.dash.cloudflare.com${NC}"
-        echo -e "  ${GRAY}Navigate to: Networks → Tunnels → Create a tunnel${NC}"
-        echo ""
+    # Show existing configuration status
+    if [ "$INSTALL_CLOUDFLARE_TUNNEL" = true ] && [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
+        print_info "Cloudflare Tunnel: Currently ENABLED"
+        if confirm_prompt "Reconfigure Cloudflare Tunnel?" "n"; then
+            print_subsection
+            echo -e "${WHITE}  Cloudflare Tunnel Configuration${NC}"
+            echo ""
+            echo -e "  ${GRAY}Cloudflare Tunnel provides secure access to your GenMaster instance${NC}"
+            echo -e "  ${GRAY}without exposing any ports to the public internet.${NC}"
+            echo ""
+            echo -e "  ${YELLOW}Leave blank to keep existing token${NC}"
+            echo ""
 
-        echo -ne "${WHITE}  Enter your Cloudflare Tunnel token${NC}: "
-        read_masked_token
-        CLOUDFLARE_TUNNEL_TOKEN="$MASKED_INPUT"
+            echo -ne "${WHITE}  Enter your Cloudflare Tunnel token${NC}: "
+            read_masked_token
+            # Only update if new value provided
+            if [ -n "$MASKED_INPUT" ]; then
+                CLOUDFLARE_TUNNEL_TOKEN="$MASKED_INPUT"
+                print_success "Cloudflare Tunnel token updated"
+            else
+                print_info "Keeping existing token"
+            fi
+        fi
+        # If they said no to reconfigure, existing values are preserved
+    else
+        if confirm_prompt "Configure Cloudflare Tunnel for secure external access?" "n"; then
+            print_subsection
+            echo -e "${WHITE}  Cloudflare Tunnel Configuration${NC}"
+            echo ""
+            echo -e "  ${GRAY}Cloudflare Tunnel provides secure access to your GenMaster instance${NC}"
+            echo -e "  ${GRAY}without exposing any ports to the public internet.${NC}"
+            echo ""
+            echo -e "  ${GRAY}Requirements:${NC}"
+            echo -e "    • Cloudflare account with your domain"
+            echo -e "    • Cloudflare Tunnel token from Zero Trust dashboard"
+            echo ""
+            echo -e "  ${GRAY}Create a tunnel at: https://one.dash.cloudflare.com${NC}"
+            echo -e "  ${GRAY}Navigate to: Networks → Tunnels → Create a tunnel${NC}"
+            echo ""
 
-        if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
-            INSTALL_CLOUDFLARE_TUNNEL=true
-            print_success "Cloudflare Tunnel configured"
-        else
-            print_warning "No token provided - Cloudflare Tunnel disabled"
-            INSTALL_CLOUDFLARE_TUNNEL=false
+            echo -ne "${WHITE}  Enter your Cloudflare Tunnel token${NC}: "
+            read_masked_token
+            CLOUDFLARE_TUNNEL_TOKEN="$MASKED_INPUT"
+
+            if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
+                INSTALL_CLOUDFLARE_TUNNEL=true
+                print_success "Cloudflare Tunnel configured"
+            else
+                print_warning "No token provided - Cloudflare Tunnel disabled"
+                INSTALL_CLOUDFLARE_TUNNEL=false
+            fi
         fi
     fi
 
     # Tailscale
     echo ""
-    if confirm_prompt "Configure Tailscale for private VPN access?" "n"; then
-        print_subsection
-        echo -e "${WHITE}  Tailscale Configuration${NC}"
-        echo ""
-        echo -e "  ${GRAY}Tailscale provides private access to your GenMaster instance${NC}"
-        echo -e "  ${GRAY}over a secure mesh VPN network.${NC}"
-        echo ""
-        echo -e "  ${GRAY}Requirements:${NC}"
-        echo -e "    • Tailscale account"
-        echo -e "    • Auth key from: https://login.tailscale.com/admin/settings/keys${NC}"
-        echo ""
-
-        echo -ne "${WHITE}  Enter your Tailscale auth key${NC}: "
-        read_masked_token
-        TAILSCALE_AUTH_KEY="$MASKED_INPUT"
-
-        if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-            INSTALL_TAILSCALE=true
-            print_success "Auth key accepted"
-
-            # Optional hostname
+    # Show existing configuration status
+    if [ "$INSTALL_TAILSCALE" = true ] && [ -n "$TAILSCALE_AUTH_KEY" ]; then
+        print_info "Tailscale: Currently ENABLED (hostname: ${TAILSCALE_HOSTNAME:-genmaster})"
+        if confirm_prompt "Reconfigure Tailscale?" "n"; then
+            print_subsection
+            echo -e "${WHITE}  Tailscale Configuration${NC}"
             echo ""
-            echo -ne "${WHITE}  Tailscale hostname [genmaster]${NC}: "
+            echo -e "  ${GRAY}Tailscale provides private access to your GenMaster instance${NC}"
+            echo -e "  ${GRAY}over a secure mesh VPN network.${NC}"
+            echo ""
+            echo -e "  ${GRAY}Requirements:${NC}"
+            echo -e "    • Tailscale account"
+            echo -e "    • Auth key from: https://login.tailscale.com/admin/settings/keys${NC}"
+            echo ""
+            echo -e "  ${YELLOW}Leave blank to keep existing auth key${NC}"
+            echo ""
+
+            echo -ne "${WHITE}  Enter your Tailscale auth key${NC}: "
+            read_masked_token
+            # Only update if new value provided
+            if [ -n "$MASKED_INPUT" ]; then
+                TAILSCALE_AUTH_KEY="$MASKED_INPUT"
+                print_success "Auth key updated"
+            else
+                print_info "Keeping existing auth key"
+            fi
+
+            # Hostname - show current default
+            echo ""
+            echo -ne "${WHITE}  Tailscale hostname [${TAILSCALE_HOSTNAME:-genmaster}]${NC}: "
             read ts_hostname
-            TAILSCALE_HOSTNAME=${ts_hostname:-genmaster}
+            if [ -n "$ts_hostname" ]; then
+                TAILSCALE_HOSTNAME="$ts_hostname"
+            fi
 
             print_success "Tailscale configured"
             echo ""
             print_info "Your GenMaster instance will be accessible at: ${TAILSCALE_HOSTNAME}.your-tailnet.ts.net"
-        else
-            print_warning "No auth key provided - Tailscale disabled"
-            INSTALL_TAILSCALE=false
+        fi
+        # If they said no to reconfigure, existing values are preserved (no else needed)
+    else
+        if confirm_prompt "Configure Tailscale for private VPN access?" "n"; then
+            print_subsection
+            echo -e "${WHITE}  Tailscale Configuration${NC}"
+            echo ""
+            echo -e "  ${GRAY}Tailscale provides private access to your GenMaster instance${NC}"
+            echo -e "  ${GRAY}over a secure mesh VPN network.${NC}"
+            echo ""
+            echo -e "  ${GRAY}Requirements:${NC}"
+            echo -e "    • Tailscale account"
+            echo -e "    • Auth key from: https://login.tailscale.com/admin/settings/keys${NC}"
+            echo ""
+
+            echo -ne "${WHITE}  Enter your Tailscale auth key${NC}: "
+            read_masked_token
+            TAILSCALE_AUTH_KEY="$MASKED_INPUT"
+
+            if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+                INSTALL_TAILSCALE=true
+                print_success "Auth key accepted"
+
+                # Optional hostname
+                echo ""
+                echo -ne "${WHITE}  Tailscale hostname [genmaster]${NC}: "
+                read ts_hostname
+                TAILSCALE_HOSTNAME=${ts_hostname:-genmaster}
+
+                print_success "Tailscale configured"
+                echo ""
+                print_info "Your GenMaster instance will be accessible at: ${TAILSCALE_HOSTNAME}.your-tailnet.ts.net"
+            else
+                print_warning "No auth key provided - Tailscale disabled"
+                INSTALL_TAILSCALE=false
+            fi
         fi
     fi
 
@@ -2000,15 +2068,19 @@ EOF
 
     # Add Tailscale if enabled
     if [ "$INSTALL_TAILSCALE" = true ]; then
-        # Auto-detect host IP for Tailscale routes
+        # Preserve existing TAILSCALE_ROUTES or auto-detect
+        local tailscale_routes="${TAILSCALE_ROUTES:-}"
         local primary_ip=$(get_local_ips | head -1)
-        local tailscale_routes=""
-        if [ -n "$primary_ip" ]; then
+
+        if [ -z "$tailscale_routes" ] && [ -n "$primary_ip" ]; then
+            # No existing routes - auto-detect
             tailscale_routes="${primary_ip}/32"
             echo ""
             print_info "Docker host IP detected: ${primary_ip}"
             print_info "Tailscale route configured: ${tailscale_routes}"
             print_info "To expose your full subnet, change TAILSCALE_ROUTES in .env to ${primary_ip%.*}.0/24"
+        elif [ -n "$tailscale_routes" ]; then
+            print_info "Preserving existing Tailscale routes: ${tailscale_routes}"
         fi
 
         cat >> "${SCRIPT_DIR}/.env" << EOF
@@ -2016,7 +2088,7 @@ EOF
 # Tailscale VPN
 # Get auth key from: https://login.tailscale.com/admin/settings/keys
 TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY}
-TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME}
+TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME:-genmaster}
 # Advertise routes in CIDR notation
 # Single host: ${primary_ip:-192.168.1.10}/32 (Docker host only)
 # Full subnet: ${primary_ip%.*:-192.168.1}.0/24 (entire local network)
@@ -2881,8 +2953,19 @@ main() {
             SECRET_KEY="${SECRET_KEY:-$(openssl rand -hex 32)}"
             WEBHOOK_SECRET="${WEBHOOK_SECRET:-$(openssl rand -hex 32)}"
             # Set optional services flags based on existing config
+            # Check both token presence and ENABLED flags from config file
             [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ] && INSTALL_CLOUDFLARE_TUNNEL=true
+            [ "$CLOUDFLARE_ENABLED" = "true" ] && INSTALL_CLOUDFLARE_TUNNEL=true
             [ -n "$TAILSCALE_AUTH_KEY" ] && INSTALL_TAILSCALE=true
+            [ "$TAILSCALE_ENABLED" = "true" ] && INSTALL_TAILSCALE=true
+
+            # Debug: show what was loaded
+            if [ -n "$TAILSCALE_AUTH_KEY" ] || [ "$TAILSCALE_ENABLED" = "true" ]; then
+                print_info "Tailscale config detected (AUTH_KEY: ${TAILSCALE_AUTH_KEY:+set}, ENABLED: ${TAILSCALE_ENABLED:-not set})"
+            fi
+            if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ] || [ "$CLOUDFLARE_ENABLED" = "true" ]; then
+                print_info "Cloudflare config detected (TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:+set}, ENABLED: ${CLOUDFLARE_ENABLED:-not set})"
+            fi
             # Check if portainer is in docker-compose
             grep -q "portainer:" "${SCRIPT_DIR}/docker-compose.yaml" 2>/dev/null && INSTALL_PORTAINER=true
             # Set DNS certbot flags based on provider
