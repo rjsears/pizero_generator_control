@@ -66,12 +66,27 @@
       <!-- GenSlave Settings -->
       <Card title="GenSlave Connection">
         <div class="space-y-4">
-          <Input
-            v-model="config.slave_url"
-            label="GenSlave URL"
-            placeholder="http://genslave.local:8001"
-            hint="URL of the GenSlave API"
-          />
+          <div class="flex gap-3 items-end">
+            <div class="flex-1">
+              <Input
+                v-model="config.slave_url"
+                label="GenSlave URL"
+                placeholder="http://genslave.local:8001"
+                hint="URL of the GenSlave API"
+              />
+            </div>
+            <Button
+              variant="secondary"
+              @click="testConnection"
+              :loading="testingConnection"
+              :disabled="testingConnection"
+            >
+              <svg v-if="!testingConnection" class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Test
+            </Button>
+          </div>
           <Input
             v-model.number="config.heartbeat_interval_seconds"
             type="number"
@@ -195,6 +210,7 @@ import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
 import configService from '@/services/config'
+import systemService from '@/services/system'
 import MainLayout from '@/components/layout/MainLayout.vue'
 import Card from '@/components/common/Card.vue'
 import Button from '@/components/common/Button.vue'
@@ -229,6 +245,7 @@ const config = ref({
   heartbeat_interval_seconds: 30,
 })
 const savingConfig = ref(false)
+const testingConnection = ref(false)
 
 // Webhook state
 const webhookConfig = ref({
@@ -285,6 +302,22 @@ async function saveConfig() {
     notifications.error('Failed to save settings')
   } finally {
     savingConfig.value = false
+  }
+}
+
+async function testConnection() {
+  testingConnection.value = true
+  try {
+    const result = await systemService.testSlave()
+    if (result.success) {
+      notifications.success(`Connection successful (${result.latency_ms || 0}ms)`)
+    } else {
+      notifications.error(`Connection failed: ${result.error || 'Unknown error'}`)
+    }
+  } catch (err) {
+    notifications.error(`Connection failed: ${err.response?.data?.detail || err.message}`)
+  } finally {
+    testingConnection.value = false
   }
 }
 
