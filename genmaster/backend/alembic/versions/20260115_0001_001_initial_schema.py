@@ -138,6 +138,11 @@ def upgrade() -> None:
         sa.Column(
             "generator_running", sa.Boolean(), nullable=False, server_default="false"
         ),
+        sa.Column(
+            "automation_armed", sa.Boolean(), nullable=False, server_default="false"
+        ),
+        sa.Column("automation_armed_at", sa.BigInteger(), nullable=True),
+        sa.Column("automation_armed_by", sa.String(length=50), nullable=True),
         sa.Column("generator_start_time", sa.BigInteger(), nullable=True),
         sa.Column("current_run_id", sa.Integer(), nullable=True),
         sa.Column(
