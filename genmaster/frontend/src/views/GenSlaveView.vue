@@ -15,8 +15,7 @@
 -->
 
 <template>
-  <MainLayout>
-    <div class="space-y-6">
+  <div class="space-y-6">
       <!-- Page header with refresh button -->
       <div class="flex items-center justify-between">
         <div>
@@ -371,15 +370,13 @@
           </div>
         </Card>
       </template>
-    </div>
-  </MainLayout>
+  </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSystemStore } from '@/stores/system'
 import { useNotificationStore } from '@/stores/notifications'
-import MainLayout from '@/components/layout/MainLayout.vue'
 import Card from '@/components/common/Card.vue'
 import Button from '@/components/common/Button.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'

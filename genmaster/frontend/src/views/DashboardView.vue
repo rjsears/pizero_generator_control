@@ -12,8 +12,7 @@
 -->
 
 <template>
-  <MainLayout>
-    <div class="space-y-6">
+  <div class="space-y-6">
       <!-- Page header -->
       <div>
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
@@ -230,8 +229,7 @@
           </div>
         </Card>
       </div>
-    </div>
-  </MainLayout>
+  </div>
 </template>
 
 <script setup>
@@ -239,7 +237,6 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGeneratorStore } from '@/stores/generator'
 import { useSystemStore } from '@/stores/system'
-import MainLayout from '@/components/layout/MainLayout.vue'
 import Card from '@/components/common/Card.vue'
 import Button from '@/components/common/Button.vue'
 

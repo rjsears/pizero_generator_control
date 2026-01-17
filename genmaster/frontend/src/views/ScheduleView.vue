@@ -12,8 +12,7 @@
 -->
 
 <template>
-  <MainLayout>
-    <div class="space-y-6">
+  <div class="space-y-6">
       <!-- Page header -->
       <div class="flex items-center justify-between">
         <div>
@@ -162,14 +161,13 @@
         <Button variant="danger" @click="deleteSchedule" :loading="deleting">Delete</Button>
       </template>
     </Modal>
-  </MainLayout>
+  </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import scheduleService from '@/services/schedule'
 import { useNotificationStore } from '@/stores/notifications'
-import MainLayout from '@/components/layout/MainLayout.vue'
 import Card from '@/components/common/Card.vue'
 import Button from '@/components/common/Button.vue'
 import Input from '@/components/common/Input.vue'
