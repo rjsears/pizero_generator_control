@@ -12,7 +12,9 @@
 # https://github.com/rjsears
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-FROM python:3.11-slim-bookworm
+# Use Debian base with SYSTEM Python so apt packages work properly
+# This is how Pimoroni installs their libraries on the Pi
+FROM debian:bookworm-slim
 
 LABEL maintainer="Richard J. Sears <richardjsears@protonmail.com>"
 LABEL description="GenSlave - Generator relay control for Raspberry Pi Zero 2W"
@@ -25,11 +27,19 @@ ENV PYTHONUNBUFFERED=1
 # Set working directory
 WORKDIR /opt/genslave
 
-# Install build dependencies for Python packages that need compilation
+# Install Python and all dependencies via apt (pre-compiled for ARM)
+# This avoids pip trying to compile numpy/PIL from source
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-dev \
+    python3-numpy \
+    python3-pil \
+    python3-spidev \
+    python3-smbus \
     gcc \
     g++ \
-    python3-dev \
+    make \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -43,11 +53,17 @@ RUN useradd --create-home --shell /bin/bash genslave
 # Copy requirements first for better layer caching
 COPY requirements.txt .
 
-# Install Python dependencies
-# Using --prefer-binary to avoid compilation where possible
-# rpi-lgpio provides GPIO access (modern replacement for RPi.GPIO)
-RUN pip install --no-cache-dir --prefer-binary -r requirements.txt \
-    && pip install --no-cache-dir --prefer-binary rpi-lgpio automationhat
+# Install Python dependencies using --break-system-packages since we're using system Python
+# Use --prefer-binary to avoid compiling when possible
+RUN pip install --no-cache-dir --prefer-binary --break-system-packages -r requirements.txt
+
+# Install automationhat - numpy/PIL/spidev/smbus already installed via apt
+# Tell pip to use existing packages and not reinstall numpy
+RUN pip install --no-cache-dir --prefer-binary --break-system-packages \
+    --no-deps st7735 \
+    && pip install --no-cache-dir --prefer-binary --break-system-packages \
+    RPi.GPIO \
+    automationhat
 
 # Copy application code
 COPY app/ ./app/
@@ -61,7 +77,7 @@ EXPOSE 8001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:8001/health', timeout=5)" || exit 1
+    CMD python3 -c "import httpx; httpx.get('http://localhost:8001/health', timeout=5)" || exit 1
 
 # Default environment variables
 ENV HOST=0.0.0.0
@@ -74,4 +90,4 @@ ENV MOCK_HAT_MODE=false
 # For production, consider using --device=/dev/gpiomem and running as genslave user
 
 # Start the application
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

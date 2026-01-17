@@ -1,12 +1,12 @@
 <!--
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-/management/frontend/src/views/SystemView.vue
+/genmaster/frontend/src/views/SystemView.vue
 
-Part of the "n8n_nginx/n8n_management" suite
-Version 3.0.0 - January 1st, 2026
+Part of the "RPi Generator Control" suite
+Version 1.0.0 - January 17th, 2026
 
 Richard J. Sears
-richard@n8nmanagement.net
+richardjsears@protonmail.com
 https://github.com/rjsears
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
@@ -25,7 +25,6 @@ import LoadingSpinner from '../components/common/LoadingSpinner.vue'
 import HeartbeatLoader from '../components/common/HeartbeatLoader.vue'
 import DnaHelixLoader from '../components/common/DnaHelixLoader.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
-import FileBrowserView from './FileBrowserView.vue'
 import {
   CpuChipIcon,
   CircleStackIcon,
@@ -59,7 +58,6 @@ import {
   Cog6ToothIcon,
   EyeIcon,
   EyeSlashIcon,
-  FolderIcon,
 } from '@heroicons/vue/24/outline'
 import { Line } from 'vue-chartjs'
 import {
@@ -93,22 +91,13 @@ const notificationStore = useNotificationStore()
 
 const loading = ref(true)
 const activeTab = ref('health')
-const isFileBrowserEnabled = ref(false)
 
 // Tab definitions - Overview tab moved to Dashboard
-const tabs = computed(() => {
-  const t = [
-    { id: 'health', name: 'Health', icon: SignalIcon, iconColor: 'text-emerald-500', bgActive: 'bg-emerald-500/15 dark:bg-emerald-500/20', textActive: 'text-emerald-700 dark:text-emerald-400', borderActive: 'border-emerald-500/30' },
-    { id: 'network', name: 'Network', icon: GlobeAltIcon, iconColor: 'text-purple-500', bgActive: 'bg-purple-500/15 dark:bg-purple-500/20', textActive: 'text-purple-700 dark:text-purple-400', borderActive: 'border-purple-500/30' },
-    { id: 'terminal', name: 'Terminal', icon: CommandLineIcon, iconColor: 'text-amber-500', bgActive: 'bg-amber-500/15 dark:bg-amber-500/20', textActive: 'text-amber-700 dark:text-amber-400', borderActive: 'border-amber-500/30' },
-  ]
-
-  if (isFileBrowserEnabled.value) {
-    t.push({ id: 'files', name: 'Files', icon: FolderIcon, iconColor: 'text-orange-500', bgActive: 'bg-orange-500/15 dark:bg-orange-500/20', textActive: 'text-orange-700 dark:text-orange-400', borderActive: 'border-orange-500/30' })
-  }
-
-  return t
-})
+const tabs = computed(() => [
+  { id: 'health', name: 'Health', icon: SignalIcon, iconColor: 'text-emerald-500', bgActive: 'bg-emerald-500/15 dark:bg-emerald-500/20', textActive: 'text-emerald-700 dark:text-emerald-400', borderActive: 'border-emerald-500/30' },
+  { id: 'network', name: 'Network', icon: GlobeAltIcon, iconColor: 'text-purple-500', bgActive: 'bg-purple-500/15 dark:bg-purple-500/20', textActive: 'text-purple-700 dark:text-purple-400', borderActive: 'border-purple-500/30' },
+  { id: 'terminal', name: 'Terminal', icon: CommandLineIcon, iconColor: 'text-amber-500', bgActive: 'bg-amber-500/15 dark:bg-amber-500/20', textActive: 'text-amber-700 dark:text-amber-400', borderActive: 'border-amber-500/30' },
+])
 
 // System info state
 const systemInfo = ref({
@@ -2199,16 +2188,6 @@ onUnmounted(() => {
           </div>
         </div>
       </Card>
-    </template>
-
-    <!-- Files Tab -->
-    <template v-if="activeTab === 'files'">
-      <FileBrowserView />
-    </template>
-
-    <!-- Files Tab -->
-    <template v-if="activeTab === 'files'">
-      <FileBrowserView />
     </template>
 
     <!-- Cloudflare Token Modal -->

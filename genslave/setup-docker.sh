@@ -8,7 +8,7 @@
 # This script sets up GenSlave using a pre-built Docker image
 # No local compilation required - just pull and run!
 #
-# Usage: curl -fsSL https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/genslave/setup-docker.sh | bash
+# Self-contained: No GitHub downloads required
 #
 # Richard J. Sears
 # richardjsears@protonmail.com
@@ -20,7 +20,6 @@ set -e
 # Configuration
 IMAGE_NAME="rjsears/pizero_generator_control:genslave"
 INSTALL_DIR="/opt/genslave"
-COMPOSE_URL="https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/genslave/docker-compose.yaml"
 
 # Colors
 RED='\033[0;31m'
@@ -60,7 +59,7 @@ check_pi() {
         return
     fi
 
-    PI_MODEL=$(cat /proc/device-tree/model)
+    PI_MODEL=$(tr -d '\0' < /proc/device-tree/model)
     log_info "Detected: $PI_MODEL"
 
     if [[ "$PI_MODEL" != *"Zero"* ]]; then
@@ -80,10 +79,12 @@ install_docker() {
         return
     fi
 
-    log_info "Installing Docker..."
+    log_info "Installing Docker from Debian repos..."
 
-    # Install Docker using convenience script
-    curl -fsSL https://get.docker.com | sh
+    # Install Docker from Debian's official repos
+    # (Docker's repos don't support trixie yet)
+    apt-get update
+    apt-get install -y docker.io
 
     # Add current user to docker group (if not root)
     if [[ -n "$SUDO_USER" ]]; then
@@ -98,19 +99,17 @@ install_docker() {
     log_success "Docker installed successfully"
 }
 
-# Install Docker Compose plugin
+# Install Docker Compose
 install_compose() {
-    if docker compose version &>/dev/null; then
-        log_info "Docker Compose already installed: $(docker compose version)"
+    if docker-compose version &>/dev/null; then
+        log_info "Docker Compose already installed: $(docker-compose version)"
         return
     fi
 
-    log_info "Installing Docker Compose plugin..."
+    log_info "Installing Docker Compose..."
 
-    # Docker Compose is included with modern Docker installations
-    # If not, install the plugin
-    apt-get update
-    apt-get install -y docker-compose-plugin
+    # Install docker-compose from Debian repos
+    apt-get install -y docker-compose
 
     log_success "Docker Compose installed"
 }
@@ -125,13 +124,82 @@ setup_directories() {
     log_success "Created $INSTALL_DIR"
 }
 
-# Download docker-compose.yaml
-download_compose() {
-    log_info "Downloading docker-compose.yaml..."
+# Create docker-compose.yaml (embedded - no download needed)
+create_compose_file() {
+    log_info "Creating docker-compose.yaml..."
 
-    curl -fsSL "$COMPOSE_URL" -o "$INSTALL_DIR/docker-compose.yaml"
+    cat > "$INSTALL_DIR/docker-compose.yaml" << 'COMPOSE_EOF'
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# GenSlave Docker Compose
+#
+# Part of the "RPi Generator Control" suite
+# Version 1.0.0 - January 17th, 2026
+#
+# Run on Pi Zero: docker-compose up -d
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-    log_success "Downloaded docker-compose.yaml"
+version: "3.8"
+
+services:
+  genslave:
+    image: rjsears/pizero_generator_control:genslave
+    container_name: genslave
+    restart: unless-stopped
+
+    # Privileged mode required for GPIO access
+    # Alternatively, use device mappings below
+    privileged: true
+
+    # Device mappings for GPIO (alternative to privileged)
+    # devices:
+    #   - /dev/gpiomem:/dev/gpiomem
+    #   - /dev/mem:/dev/mem
+    #   - /dev/i2c-1:/dev/i2c-1
+
+    # Use host network for easy access and Tailscale compatibility
+    network_mode: host
+
+    # Environment variables
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8001
+      - LOG_LEVEL=INFO
+      - FAILSAFE_TIMEOUT_SECONDS=30
+      - MOCK_HAT_MODE=false
+      - GENSLAVE_API_SECRET=${GENSLAVE_API_SECRET:-}
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+
+    # Persist data and logs
+    volumes:
+      - genslave_data:/opt/genslave/data
+      - genslave_logs:/opt/genslave/logs
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  genslave_data:
+  genslave_logs:
+COMPOSE_EOF
+
+    log_success "Created docker-compose.yaml"
 }
 
 # Create .env file for configuration
@@ -180,23 +248,26 @@ start_container() {
     log_info "Starting GenSlave container..."
 
     cd "$INSTALL_DIR"
-    docker compose up -d
+    docker-compose up -d
 
     # Wait for container to start
     sleep 5
 
-    # Check if running
-    if docker compose ps | grep -q "running"; then
+    # Check if running (works with various docker-compose versions)
+    if docker ps --filter "name=genslave" --format "{{.Status}}" | grep -qi "up"; then
         log_success "GenSlave container started successfully"
     else
-        log_error "Container failed to start. Check logs with: docker compose logs"
-        exit 1
+        log_warn "Container may still be starting. Check status with: docker ps"
+        log_info "View logs with: docker-compose logs -f"
     fi
 }
 
 # Setup systemd service for auto-start
 setup_systemd() {
     log_info "Setting up systemd service for auto-start..."
+
+    # Find docker-compose path
+    COMPOSE_PATH=$(which docker-compose)
 
     cat > /etc/systemd/system/genslave.service << EOF
 [Unit]
@@ -208,8 +279,8 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
+ExecStart=$COMPOSE_PATH up -d
+ExecStop=$COMPOSE_PATH down
 TimeoutStartSec=300
 
 [Install]
@@ -222,27 +293,67 @@ EOF
     log_success "Systemd service created and enabled"
 }
 
-# Install Tailscale (optional)
+# Install and configure Tailscale (optional)
 install_tailscale() {
-    if command -v tailscale &>/dev/null; then
-        log_info "Tailscale already installed"
-        return
-    fi
-
     echo ""
-    read -p "Install Tailscale for remote access? (Y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Nn]$ ]]; then
-        log_info "Skipping Tailscale installation"
-        return
+
+    # Check if already installed and connected
+    if command -v tailscale &>/dev/null; then
+        # Ensure tailscaled service is enabled and running
+        systemctl enable tailscaled 2>/dev/null || true
+        systemctl start tailscaled 2>/dev/null || true
+
+        if tailscale status &>/dev/null; then
+            log_info "Tailscale already installed and connected"
+            TS_IP=$(tailscale ip -4 2>/dev/null || echo "unknown")
+            log_info "Tailscale IP: $TS_IP"
+            return
+        else
+            log_info "Tailscale installed but not connected"
+        fi
+    else
+        # Not installed - ask if they want it
+        read -p "Install Tailscale for remote access? (Y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Nn]$ ]]; then
+            log_info "Skipping Tailscale installation"
+            return
+        fi
+
+        log_info "Installing Tailscale..."
+        curl -fsSL https://tailscale.com/install.sh | sh
+
+        # Enable and start the tailscaled service
+        systemctl enable tailscaled
+        systemctl start tailscaled
+
+        log_success "Tailscale installed and service enabled"
     fi
 
-    log_info "Installing Tailscale..."
+    # Ask for auth key to configure
+    echo ""
+    log_info "To connect Tailscale, you need an auth key from:"
+    log_info "  https://login.tailscale.com/admin/settings/keys"
+    echo ""
+    read -p "Enter Tailscale auth key (or press Enter to skip): " TS_AUTHKEY
 
-    curl -fsSL https://tailscale.com/install.sh | sh
+    if [[ -n "$TS_AUTHKEY" ]]; then
+        log_info "Connecting to Tailscale..."
+        tailscale up --authkey="$TS_AUTHKEY"
 
-    log_success "Tailscale installed"
-    log_info "Run 'sudo tailscale up' to connect to your Tailnet"
+        # Wait a moment for connection
+        sleep 3
+
+        if tailscale status &>/dev/null; then
+            TS_IP=$(tailscale ip -4 2>/dev/null || echo "unknown")
+            log_success "Tailscale connected! IP: $TS_IP"
+        else
+            log_warn "Tailscale may still be connecting. Check with: tailscale status"
+        fi
+    else
+        log_info "Skipping Tailscale configuration"
+        log_info "Run 'sudo tailscale up' later to connect"
+    fi
 }
 
 # Print final instructions
@@ -256,9 +367,9 @@ print_success() {
     echo ""
     echo -e "${CYAN}Useful Commands:${NC}"
     echo "  cd $INSTALL_DIR"
-    echo "  docker compose logs -f        # View logs"
-    echo "  docker compose restart        # Restart container"
-    echo "  docker compose pull && docker compose up -d  # Update to latest"
+    echo "  docker-compose logs -f        # View logs"
+    echo "  docker-compose restart        # Restart container"
+    echo "  docker-compose pull && docker-compose up -d  # Update to latest"
     echo ""
     echo -e "${CYAN}API Endpoint:${NC}"
     echo "  http://$(hostname -I | awk '{print $1}'):8001"
@@ -276,7 +387,7 @@ print_success() {
 
     echo -e "${YELLOW}Next Steps:${NC}"
     echo "  1. Edit $INSTALL_DIR/.env to set GENSLAVE_API_SECRET"
-    echo "  2. Restart: docker compose restart"
+    echo "  2. Restart: docker-compose restart"
     echo "  3. Configure GenMaster to connect to this GenSlave"
     echo ""
 }
@@ -293,7 +404,7 @@ main() {
     install_docker
     install_compose
     setup_directories
-    download_compose
+    create_compose_file
     create_env_file
     pull_image
     start_container
