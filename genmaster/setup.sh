@@ -2157,8 +2157,9 @@ services:
     volumes:
       - letsencrypt:/etc/letsencrypt
       - certbot_data:/var/www/certbot
-      - ./certbot:/etc/letsencrypt/credentials:ro
-    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --deploy-hook 'wget -q -O /dev/null http://nginx:80/reload || true' || true; sleep 12h & wait $${!}; done;"
+      - ./${DNS_CREDENTIALS_FILE:-cloudflare.ini}:/credentials.ini:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew \${DNS_CERTBOT_FLAGS:-} --deploy-hook 'docker exec genmaster_nginx nginx -s reload' || true; sleep 12h & wait $${!}; done;"
     networks:
       - genmaster-internal
 EOF
@@ -2173,7 +2174,7 @@ EOF
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: genmaster_cloudflared
-    restart: unless-stopped
+    restart: always
     command: tunnel run
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
