@@ -1325,10 +1325,55 @@ configure_genslave() {
     if confirm_prompt "Enable GenSlave communication?" "y"; then
         GENSLAVE_ENABLED=true
 
-        # Get GenSlave URL
+        # Get GenSlave hostname and IP for /etc/hosts entry
+        echo ""
+        echo -e "  ${WHITE}GenSlave Host Configuration${NC}"
+        echo -e "  ${GRAY}Adding a hosts entry ensures reliable hostname resolution.${NC}"
+        echo ""
+
+        local genslave_hostname=""
+        local genslave_ip=""
+
+        echo -ne "${WHITE}  GenSlave hostname (e.g., genslave)${NC}: "
+        read genslave_hostname
+        genslave_hostname="${genslave_hostname:-genslave}"
+
+        echo -ne "${WHITE}  GenSlave IP address (e.g., 192.168.1.100 or Tailscale IP)${NC}: "
+        read genslave_ip
+
+        if [ -n "$genslave_ip" ] && [ -n "$genslave_hostname" ]; then
+            # Check if entry already exists
+            if grep -q "^[^#]*${genslave_hostname}$\|^[^#]*${genslave_hostname} \|^[^#]* ${genslave_hostname}$" /etc/hosts 2>/dev/null; then
+                print_warning "Host entry for '${genslave_hostname}' already exists in /etc/hosts"
+                if confirm_prompt "Update the existing entry?" "y"; then
+                    # Remove old entry and add new one
+                    run_privileged sed -i "/[[:space:]]${genslave_hostname}$/d; /[[:space:]]${genslave_hostname}[[:space:]]/d" /etc/hosts
+                    echo "${genslave_ip}    ${genslave_hostname}" | run_privileged tee -a /etc/hosts > /dev/null
+                    print_success "Updated /etc/hosts: ${genslave_ip} -> ${genslave_hostname}"
+                fi
+            else
+                echo "${genslave_ip}    ${genslave_hostname}" | run_privileged tee -a /etc/hosts > /dev/null
+                print_success "Added to /etc/hosts: ${genslave_ip} -> ${genslave_hostname}"
+            fi
+
+            # Set default URL based on hostname
+            GENSLAVE_API_URL="http://${genslave_hostname}:8001"
+            print_info "Default GenSlave URL set to: ${GENSLAVE_API_URL}"
+        else
+            print_warning "Skipping /etc/hosts entry (hostname or IP not provided)"
+        fi
+
+        echo ""
+
+        # Get GenSlave URL (with default from above if set)
         while true; do
-            echo -ne "${WHITE}  GenSlave API URL (e.g., http://genslave.local:8001)${NC}: "
-            read GENSLAVE_API_URL
+            if [ -n "$GENSLAVE_API_URL" ]; then
+                echo -ne "${WHITE}  GenSlave API URL [${GENSLAVE_API_URL}]${NC}: "
+            else
+                echo -ne "${WHITE}  GenSlave API URL (e.g., http://genslave.local:8001)${NC}: "
+            fi
+            read input_url
+            GENSLAVE_API_URL="${input_url:-$GENSLAVE_API_URL}"
 
             if [ -n "$GENSLAVE_API_URL" ]; then
                 # Validate URL format
