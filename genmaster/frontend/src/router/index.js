@@ -18,6 +18,7 @@ const GeneratorView = () => import('@/views/GeneratorView.vue')
 const GenSlaveView = () => import('@/views/GenSlaveView.vue')
 const ScheduleView = () => import('@/views/ScheduleView.vue')
 const HistoryView = () => import('@/views/HistoryView.vue')
+const NotificationsView = () => import('@/views/NotificationsView.vue')
 const ContainersView = () => import('@/views/ContainersView.vue')
 const SystemView = () => import('@/views/SystemView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
@@ -59,6 +60,12 @@ const routes = [
     name: 'history',
     component: HistoryView,
     meta: { requiresAuth: true, title: 'Run History' },
+  },
+  {
+    path: '/notifications',
+    name: 'notifications',
+    component: NotificationsView,
+    meta: { requiresAuth: true, title: 'Notifications' },
   },
   {
     path: '/containers',

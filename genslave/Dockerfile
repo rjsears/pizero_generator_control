@@ -25,13 +25,16 @@ ENV PYTHONUNBUFFERED=1
 # Set working directory
 WORKDIR /opt/genslave
 
-# Install system dependencies
-# - lgpio for GPIO access on Pi Zero 2W (replaces RPi.GPIO)
-# - No compilation needed - using pre-built wheels
+# Install build dependencies for Python packages that need compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    lgpio \
+    gcc \
+    g++ \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Note: GPIO access is provided via device mappings (/dev/gpiomem, /dev/mem)
+# and the Python rpi-lgpio library installed via pip
 
 # Create non-root user for running the app
 # But we'll run as root for GPIO access (or use device mapping)
@@ -42,8 +45,9 @@ COPY requirements.txt .
 
 # Install Python dependencies
 # Using --prefer-binary to avoid compilation where possible
+# rpi-lgpio provides GPIO access (modern replacement for RPi.GPIO)
 RUN pip install --no-cache-dir --prefer-binary -r requirements.txt \
-    && pip install --no-cache-dir --prefer-binary automationhat
+    && pip install --no-cache-dir --prefer-binary rpi-lgpio automationhat
 
 # Copy application code
 COPY app/ ./app/

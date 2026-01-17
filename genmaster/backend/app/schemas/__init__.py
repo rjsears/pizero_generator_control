@@ -36,6 +36,21 @@ from app.schemas.health import (
     SlaveHealth,
     WebhookTestResponse,
 )
+from app.schemas.notifications import (
+    ChannelType,
+    NotificationChannelCreate,
+    NotificationChannelResponse,
+    NotificationChannelUpdate,
+    NotificationEvent,
+    NotificationGroupCreate,
+    NotificationGroupResponse,
+    NotificationGroupUpdate,
+    NotificationHistoryResponse,
+    SendNotificationRequest,
+    SendNotificationResponse,
+    TestChannelRequest,
+    TestChannelResponse,
+)
 from app.schemas.override import (
     OverrideDisableResponse,
     OverrideEnableRequest,
@@ -105,4 +120,18 @@ __all__ = [
     "WebhookPayload",
     "WebhookEvent",
     "WebhookConfig",
+    # Notifications
+    "ChannelType",
+    "NotificationEvent",
+    "NotificationChannelCreate",
+    "NotificationChannelUpdate",
+    "NotificationChannelResponse",
+    "NotificationGroupCreate",
+    "NotificationGroupUpdate",
+    "NotificationGroupResponse",
+    "NotificationHistoryResponse",
+    "SendNotificationRequest",
+    "SendNotificationResponse",
+    "TestChannelRequest",
+    "TestChannelResponse",
 ]
