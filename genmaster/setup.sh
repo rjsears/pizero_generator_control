@@ -2168,19 +2168,20 @@ EOF
 
         # Create Tailscale Serve configuration
         # ${TS_CERT_DOMAIN} is expanded by Tailscale automatically
-        cat > "${SCRIPT_DIR}/tailscale-serve.json" << 'EOF'
+        # Proxy to the actual HTTPS domain (not internal docker)
+        cat > "${SCRIPT_DIR}/tailscale-serve.json" << EOF
 {
   "TCP": { "443": { "HTTPS": true } },
   "Web": {
-    "${TS_CERT_DOMAIN}:443": {
+    "\${TS_CERT_DOMAIN}:443": {
       "Handlers": {
-        "/": { "Proxy": "http://nginx:80" }
+        "/": { "Proxy": "https://${DOMAIN}:443" }
       }
     }
   }
 }
 EOF
-        log_info "Created tailscale-serve.json"
+        log_info "Created tailscale-serve.json (proxy to https://${DOMAIN}:443)"
     fi
 
     # Add Portainer if enabled
