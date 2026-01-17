@@ -24,7 +24,7 @@ RUN npm install --legacy-peer-deps
 COPY frontend/ .
 
 # Build production assets
-RUN set -ex && npm run build
+RUN npm run build
 
 # =============================================================================
 # Stage 2: Python Runtime
