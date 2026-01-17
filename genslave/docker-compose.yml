@@ -1,0 +1,66 @@
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# GenSlave Docker Compose
+#
+# Part of the "RPi Generator Control" suite
+# Version 1.0.0 - January 17th, 2026
+#
+# Run on Pi Zero: docker compose up -d
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+services:
+  genslave:
+    image: rjsears/pizero_generator_control:genslave
+    container_name: genslave
+    restart: unless-stopped
+
+    # Privileged mode required for GPIO access
+    # Alternatively, use device mappings below
+    privileged: true
+
+    # Device mappings for GPIO (alternative to privileged)
+    # devices:
+    #   - /dev/gpiomem:/dev/gpiomem
+    #   - /dev/mem:/dev/mem
+    #   - /dev/i2c-1:/dev/i2c-1
+
+    # Use host network for easy access and Tailscale compatibility
+    network_mode: host
+
+    # Environment variables
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8001
+      - LOG_LEVEL=INFO
+      - FAILSAFE_TIMEOUT_SECONDS=30
+      - MOCK_HAT_MODE=false
+      - GENSLAVE_API_SECRET=${GENSLAVE_API_SECRET:-}
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+
+    # Persist data and logs
+    volumes:
+      - genslave_data:/opt/genslave/data
+      - genslave_logs:/opt/genslave/logs
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  genslave_data:
+  genslave_logs:
