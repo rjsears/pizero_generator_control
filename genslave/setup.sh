@@ -16,6 +16,7 @@
 # Usage:
 #   Interactive:  ./setup.sh
 #   Preconfig:    ./setup.sh --preconfig /path/to/preconfig.conf
+#   Set API key:  ./setup.sh --setmasterapi YOUR_API_SECRET
 #
 # Author: rjsears
 # License: MIT
@@ -1114,15 +1115,55 @@ main() {
                 DEBUG_MODE=true
                 shift
                 ;;
+            --setmasterapi)
+                if [ -z "$2" ]; then
+                    echo -e "${RED}Error: --setmasterapi requires an API secret${NC}"
+                    echo "Usage: $0 --setmasterapi YOUR_API_SECRET"
+                    exit 1
+                fi
+                local new_secret="$2"
+                local env_file="${INSTALL_DIR}/.env"
+
+                if [ ! -f "$env_file" ]; then
+                    echo -e "${RED}Error: ${env_file} not found. Run setup first.${NC}"
+                    exit 1
+                fi
+
+                echo -e "${CYAN}Updating API secret in ${env_file}...${NC}"
+
+                if grep -q "^API_SECRET=" "$env_file"; then
+                    sed -i "s|^API_SECRET=.*|API_SECRET=${new_secret}|" "$env_file"
+                else
+                    echo "API_SECRET=${new_secret}" >> "$env_file"
+                fi
+
+                echo -e "${GREEN}✓${NC} API secret updated"
+
+                # Restart service if running
+                if systemctl is-active --quiet genslave 2>/dev/null; then
+                    echo -e "${CYAN}Restarting genslave service...${NC}"
+                    systemctl restart genslave
+                    echo -e "${GREEN}✓${NC} Service restarted"
+                else
+                    echo -e "${YELLOW}Note: genslave service is not running${NC}"
+                fi
+
+                exit 0
+                ;;
             --help|-h)
                 echo "GenSlave Setup Script"
                 echo ""
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
                 echo "Options:"
-                echo "  --preconfig FILE    Use preconfig file"
-                echo "  --debug             Enable debug mode"
-                echo "  --help              Show this help message"
+                echo "  --preconfig FILE       Use preconfig file"
+                echo "  --setmasterapi SECRET  Set/update the API secret from GenMaster"
+                echo "  --debug                Enable debug mode"
+                echo "  --help                 Show this help message"
+                echo ""
+                echo "Examples:"
+                echo "  $0                              # Interactive setup"
+                echo "  $0 --setmasterapi abc123xyz     # Update API secret"
                 exit 0
                 ;;
             *)
