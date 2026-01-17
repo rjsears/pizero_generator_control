@@ -42,6 +42,6 @@ python-dotenv==1.0.1
 psutil==5.9.8
 
 # Docker SDK (for container management)
-# Pin requests<2.32.0 to maintain http+docker scheme support
-docker==7.0.0
-requests<2.32.0
+# Version 7.1.0 fixes requests 2.32+ compatibility (http+docker scheme)
+# See: https://github.com/docker/docker-py/pull/3257
+docker==7.1.0
