@@ -49,13 +49,13 @@ def get_webhook_service():
 
 async def get_slave_client():
     """Create a SlaveClient with config from database."""
-    from app.database import async_session
+    from app.database import AsyncSessionLocal
     from app.models import Config
     from app.services.slave_client import SlaveClient
     from sqlalchemy.future import select
 
     # Load config from database to get current URL and secret
-    async with async_session() as db:
+    async with AsyncSessionLocal() as db:
         result = await db.execute(select(Config).where(Config.id == 1))
         config = result.scalar_one_or_none()
 
@@ -314,12 +314,12 @@ async def rotate_api_key(
         )
 
     # Step 2: Update GenMaster's database with the new key
-    from app.database import async_session
+    from app.database import AsyncSessionLocal
     from app.models import Config
     from sqlalchemy.future import select
 
     try:
-        async with async_session() as db:
+        async with AsyncSessionLocal() as db:
             result = await db.execute(select(Config).where(Config.id == 1))
             config = result.scalar_one_or_none()
             if config:
