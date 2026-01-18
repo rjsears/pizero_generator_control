@@ -19,6 +19,7 @@ from typing import Optional
 import httpx
 
 from app.config import settings
+from app.services.notification import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -171,11 +172,18 @@ class FailsafeMonitor:
             success = self._relay_service.relay_off(force=True)
             logger.info(f"Failsafe relay OFF: {'success' if success else 'failed'}")
 
-        # Send backup webhook notification
+        # Send notifications via Apprise (primary method)
+        await notification_service.send_failsafe_alert(settings.FAILSAFE_TIMEOUT_SECONDS)
+
+        # Send legacy webhook notification (if configured)
         await self._send_failsafe_webhook()
 
     async def _send_failsafe_webhook(self) -> None:
-        """Send backup webhook notification about failsafe trigger."""
+        """Send legacy webhook notification about failsafe trigger.
+
+        This is kept for backwards compatibility. New installations
+        should use Apprise notifications instead.
+        """
         if not settings.WEBHOOK_URL:
             logger.debug("No webhook URL configured for failsafe notification")
             return

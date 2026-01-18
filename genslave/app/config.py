@@ -44,9 +44,14 @@ class Settings:
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     LOG_PATH: str = os.getenv("LOG_PATH", "/opt/genslave/logs")
 
-    # Webhook (backup notification if GenMaster is down)
+    # Webhook (legacy - replaced by Apprise)
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "")
     WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET", "")
+
+    # Apprise notifications (comma-separated URLs)
+    # Supports 80+ services: Telegram, Slack, Twilio, Discord, Email, etc.
+    # Example: tgram://bottoken/chatid,slack://token/channel
+    APPRISE_URLS: str = os.getenv("APPRISE_URLS", "")
 
     # Server
     HOST: str = os.getenv("HOST", "0.0.0.0")
