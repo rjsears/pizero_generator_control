@@ -423,31 +423,6 @@
             </p>
           </div>
 
-          <!-- URL and Connection Section -->
-          <div class="flex gap-3 items-end flex-wrap">
-            <div class="flex-1 min-w-[250px]">
-              <label class="block text-sm font-medium text-secondary mb-1">GenSlave URL</label>
-              <input
-                v-model="slaveConfig.slave_api_url"
-                type="text"
-                placeholder="http://genslave:8001"
-                class="input"
-                @focus="isEditingConfig = true"
-                @blur="isEditingConfig = false"
-              />
-              <p class="text-xs text-muted mt-1">Full URL to GenSlave API (uses hostname above)</p>
-            </div>
-            <button
-              @click="testSlaveConnection"
-              :disabled="testingConnection"
-              class="btn-secondary flex items-center gap-2"
-            >
-              <BoltIcon v-if="!testingConnection" class="h-4 w-4" />
-              <ArrowPathIcon v-else class="h-4 w-4 animate-spin" />
-              Test
-            </button>
-          </div>
-
           <!-- Heartbeat Section -->
           <div>
             <label class="block text-sm font-medium text-secondary mb-1">Heartbeat Interval (seconds)</label>
@@ -552,7 +527,6 @@ const armingRelay = ref(false)
 
 // GenSlave connection settings
 const slaveConfig = ref({
-  slave_api_url: 'http://genslave:8001',
   heartbeat_interval_seconds: 30,
   genslave_ip: '',
   genslave_hostname: 'genslave',
@@ -579,7 +553,6 @@ async function loadSlaveInfo() {
       try {
         const configRes = await configApi.get()
         if (configRes.data) {
-          slaveConfig.value.slave_api_url = configRes.data.slave_api_url || slaveConfig.value.slave_api_url
           slaveConfig.value.heartbeat_interval_seconds = configRes.data.heartbeat_interval_seconds || 30
           slaveConfig.value.genslave_ip = configRes.data.genslave_ip || ''
           slaveConfig.value.genslave_hostname = configRes.data.genslave_hostname || 'genslave'
@@ -701,8 +674,10 @@ async function toggleRelayArm() {
 async function saveSlaveConfig() {
   savingSlaveConfig.value = true
   try {
+    // Compute the URL from the hostname (always http://<hostname>:8001)
+    const computedUrl = `http://${slaveConfig.value.genslave_hostname}:8001`
     await configApi.update({
-      slave_api_url: slaveConfig.value.slave_api_url,
+      slave_api_url: computedUrl,
       heartbeat_interval_seconds: slaveConfig.value.heartbeat_interval_seconds,
       genslave_ip: slaveConfig.value.genslave_ip,
       genslave_hostname: slaveConfig.value.genslave_hostname,
