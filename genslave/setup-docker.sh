@@ -209,12 +209,46 @@ create_env_file() {
 
     log_info "Creating environment configuration..."
 
-    cat > "$INSTALL_DIR/.env" << 'EOF'
+    # Prompt for API secret (required)
+    echo ""
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║              API Secret Configuration                     ║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}The API secret is required for secure communication with GenMaster.${NC}"
+    echo -e "${YELLOW}You must copy this value from your GenMaster configuration.${NC}"
+    echo ""
+    echo -e "In GenMaster, find the value of ${CYAN}SLAVE_API_SECRET${NC} in your .env file"
+    echo -e "or generate a new key in GenMaster's Settings > GenSlave Configuration."
+    echo ""
+
+    while true; do
+        read -p "Enter the API secret from GenMaster: " API_SECRET_INPUT
+
+        # Validate minimum length (16 characters)
+        if [[ ${#API_SECRET_INPUT} -lt 16 ]]; then
+            log_error "API secret must be at least 16 characters long"
+            continue
+        fi
+
+        # Confirm the key
+        echo ""
+        echo -e "API Secret: ${CYAN}${API_SECRET_INPUT}${NC}"
+        read -p "Is this correct? (Y/n) " -n 1 -r
+        echo ""
+
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            break
+        fi
+    done
+
+    cat > "$INSTALL_DIR/.env" << EOF
 # GenSlave Environment Configuration
-# Edit these values as needed
+# Created during setup - $(date)
 
 # API Secret (shared with GenMaster for authentication)
-GENSLAVE_API_SECRET=
+# This key must match the SLAVE_API_SECRET in GenMaster
+GENSLAVE_API_SECRET=${API_SECRET_INPUT}
 
 # Failsafe timeout in seconds (relay turns off if no heartbeat received)
 FAILSAFE_TIMEOUT_SECONDS=30
@@ -228,7 +262,7 @@ LOG_LEVEL=INFO
 EOF
 
     log_success "Created .env file at $INSTALL_DIR/.env"
-    log_warn "Edit $INSTALL_DIR/.env to configure your settings"
+    log_success "API secret configured successfully"
 }
 
 # Pull the Docker image
