@@ -1697,38 +1697,38 @@ onMounted(async () => {
             <div v-if="slaveSystemInfo?.network_interfaces?.length" class="space-y-4">
               <div
                 v-for="iface in slaveSystemInfo.network_interfaces"
-                :key="iface.name"
+                :key="iface.interface"
                 class="p-3 rounded-lg bg-surface-hover"
               >
                 <div class="flex items-center justify-between mb-2">
                   <div class="flex items-center gap-2">
-                    <WifiIcon v-if="iface.name === 'wlan0'" class="h-4 w-4 text-blue-500" />
+                    <WifiIcon v-if="iface.is_wifi" class="h-4 w-4 text-blue-500" />
                     <GlobeAltIcon v-else class="h-4 w-4 text-emerald-500" />
-                    <span class="font-medium text-primary">{{ iface.name }}</span>
+                    <span class="font-medium text-primary">{{ iface.interface }}</span>
                   </div>
-                  <span v-if="iface.ip" class="font-mono text-sm text-secondary">{{ iface.ip }}</span>
+                  <span v-if="iface.ip_address" class="font-mono text-sm text-secondary">{{ iface.ip_address }}</span>
                 </div>
                 <!-- WiFi Signal if available -->
-                <div v-if="iface.name === 'wlan0' && slaveSystemInfo.wifi_signal" class="mt-2">
+                <div v-if="iface.is_wifi && iface.wifi_ssid" class="mt-2">
                   <div class="flex justify-between items-center text-sm mb-1">
                     <span class="text-muted">WiFi Signal</span>
-                    <span class="font-medium text-primary">{{ slaveSystemInfo.wifi_signal.ssid || 'Unknown' }}</span>
+                    <span class="font-medium text-primary">{{ iface.wifi_ssid }}</span>
                   </div>
                   <div class="flex items-center gap-2">
                     <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                       <div
                         :class="[
                           'h-full rounded-full transition-all',
-                          (slaveSystemInfo.wifi_signal.quality || 0) >= 75 ? 'bg-emerald-500' :
-                          (slaveSystemInfo.wifi_signal.quality || 0) >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                          (iface.wifi_signal_percent || 0) >= 75 ? 'bg-emerald-500' :
+                          (iface.wifi_signal_percent || 0) >= 50 ? 'bg-amber-500' : 'bg-red-500'
                         ]"
-                        :style="{ width: `${slaveSystemInfo.wifi_signal.quality || 0}%` }"
+                        :style="{ width: `${iface.wifi_signal_percent || 0}%` }"
                       ></div>
                     </div>
-                    <span class="text-xs text-muted w-12 text-right">{{ slaveSystemInfo.wifi_signal.quality || 0 }}%</span>
+                    <span class="text-xs text-muted w-12 text-right">{{ iface.wifi_signal_percent || 0 }}%</span>
                   </div>
-                  <div v-if="slaveSystemInfo.wifi_signal.signal_dbm" class="text-xs text-muted mt-1">
-                    {{ slaveSystemInfo.wifi_signal.signal_dbm }} dBm
+                  <div v-if="iface.wifi_signal_dbm" class="text-xs text-muted mt-1">
+                    {{ iface.wifi_signal_dbm }} dBm
                   </div>
                 </div>
               </div>

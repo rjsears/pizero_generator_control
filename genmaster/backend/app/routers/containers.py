@@ -31,6 +31,117 @@ def get_docker_client():
         return None
 
 
+@router.get("/stats")
+async def get_container_stats() -> List[dict]:
+    """
+    Get resource usage stats for all running containers.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        containers = client.containers.list()
+        stats = []
+
+        for container in containers:
+            try:
+                stat = container.stats(stream=False)
+                # Calculate CPU percentage
+                cpu_delta = (
+                    stat["cpu_stats"]["cpu_usage"]["total_usage"]
+                    - stat["precpu_stats"]["cpu_usage"]["total_usage"]
+                )
+                system_delta = (
+                    stat["cpu_stats"]["system_cpu_usage"]
+                    - stat["precpu_stats"]["system_cpu_usage"]
+                )
+                cpu_percent = 0.0
+                if system_delta > 0:
+                    cpu_percent = (cpu_delta / system_delta) * 100.0
+
+                # Calculate memory
+                mem_usage = stat["memory_stats"].get("usage", 0)
+                mem_limit = stat["memory_stats"].get("limit", 1)
+                mem_percent = (mem_usage / mem_limit) * 100
+
+                # Calculate network
+                networks = stat.get("networks", {})
+                network_rx = sum(n.get("rx_bytes", 0) for n in networks.values())
+                network_tx = sum(n.get("tx_bytes", 0) for n in networks.values())
+
+                stats.append({
+                    "name": container.name,
+                    "cpu_percent": round(cpu_percent, 2),
+                    "memory_usage": mem_usage,
+                    "memory_limit": mem_limit,
+                    "memory_usage_mb": round(mem_usage / (1024 * 1024), 2),
+                    "memory_limit_mb": round(mem_limit / (1024 * 1024), 2),
+                    "memory_percent": round(mem_percent, 2),
+                    "network_rx": network_rx,
+                    "network_tx": network_tx,
+                })
+            except Exception:
+                continue
+
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.get("/health")
+async def get_containers_health() -> dict:
+    """
+    Get overall container health status.
+
+    Returns count of running, stopped, and unhealthy containers.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        containers = client.containers.list(all=True)
+
+        running = 0
+        stopped = 0
+        unhealthy = 0
+
+        for c in containers:
+            if c.status == "running":
+                running += 1
+                # Check health status if available
+                health = c.attrs.get("State", {}).get("Health", {})
+                if health.get("Status") == "unhealthy":
+                    unhealthy += 1
+            else:
+                stopped += 1
+
+        overall = "healthy"
+        if unhealthy > 0:
+            overall = "unhealthy"
+        elif stopped > running:
+            overall = "warning"
+
+        return {
+            "status": overall,
+            "total": len(containers),
+            "running": running,
+            "stopped": stopped,
+            "unhealthy": unhealthy,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
 @router.get("")
 @router.get("/")
 async def list_containers(
@@ -55,6 +166,7 @@ async def list_containers(
                 "name": c.name,
                 "image": c.image.tags[0] if c.image.tags else c.image.short_id,
                 "status": c.status,
+                "health": c.attrs.get("State", {}).get("Health", {}).get("Status"),
                 "created": c.attrs.get("Created"),
                 "ports": c.ports,
             }
@@ -95,59 +207,6 @@ async def get_container(name: str) -> dict:
     except Exception as e:
         if "404" in str(e):
             raise HTTPException(status_code=404, detail="Container not found")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        client.close()
-
-
-@router.get("/stats")
-async def get_container_stats() -> List[dict]:
-    """
-    Get resource usage stats for all running containers.
-    """
-    client = get_docker_client()
-    if not client:
-        raise HTTPException(
-            status_code=503, detail="Docker is not available"
-        )
-
-    try:
-        containers = client.containers.list()
-        stats = []
-
-        for container in containers:
-            try:
-                stat = container.stats(stream=False)
-                # Calculate CPU percentage
-                cpu_delta = (
-                    stat["cpu_stats"]["cpu_usage"]["total_usage"]
-                    - stat["precpu_stats"]["cpu_usage"]["total_usage"]
-                )
-                system_delta = (
-                    stat["cpu_stats"]["system_cpu_usage"]
-                    - stat["precpu_stats"]["system_cpu_usage"]
-                )
-                cpu_percent = 0.0
-                if system_delta > 0:
-                    cpu_percent = (cpu_delta / system_delta) * 100.0
-
-                # Calculate memory
-                mem_usage = stat["memory_stats"].get("usage", 0)
-                mem_limit = stat["memory_stats"].get("limit", 1)
-                mem_percent = (mem_usage / mem_limit) * 100
-
-                stats.append({
-                    "name": container.name,
-                    "cpu_percent": round(cpu_percent, 2),
-                    "memory_usage_mb": round(mem_usage / (1024 * 1024), 2),
-                    "memory_limit_mb": round(mem_limit / (1024 * 1024), 2),
-                    "memory_percent": round(mem_percent, 2),
-                })
-            except Exception:
-                continue
-
-        return stats
-    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         client.close()
@@ -357,55 +416,6 @@ async def recreate_container(
     except Exception as e:
         if "404" in str(e):
             raise HTTPException(status_code=404, detail="Container not found")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        client.close()
-
-
-@router.get("/health")
-async def get_containers_health() -> dict:
-    """
-    Get overall container health status.
-
-    Returns count of running, stopped, and unhealthy containers.
-    """
-    client = get_docker_client()
-    if not client:
-        raise HTTPException(
-            status_code=503, detail="Docker is not available"
-        )
-
-    try:
-        containers = client.containers.list(all=True)
-
-        running = 0
-        stopped = 0
-        unhealthy = 0
-
-        for c in containers:
-            if c.status == "running":
-                running += 1
-                # Check health status if available
-                health = c.attrs.get("State", {}).get("Health", {})
-                if health.get("Status") == "unhealthy":
-                    unhealthy += 1
-            else:
-                stopped += 1
-
-        overall = "healthy"
-        if unhealthy > 0:
-            overall = "unhealthy"
-        elif stopped > running:
-            overall = "warning"
-
-        return {
-            "status": overall,
-            "total": len(containers),
-            "running": running,
-            "stopped": stopped,
-            "unhealthy": unhealthy,
-        }
-    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         client.close()
