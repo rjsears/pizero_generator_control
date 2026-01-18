@@ -217,3 +217,15 @@ class SlaveClient:
             Response indicating success/failure
         """
         return await self._request("POST", "/api/config", json=config)
+
+    async def rotate_api_key(self, new_key: str) -> SlaveResponse:
+        """
+        Rotate the API key on GenSlave.
+
+        Args:
+            new_key: New API key (minimum 16 characters)
+
+        Returns:
+            Response indicating success/failure
+        """
+        return await self._request("POST", "/api/system/rotate-key", json={"new_key": new_key})
