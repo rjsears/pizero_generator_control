@@ -337,39 +337,6 @@
         </Card>
       </div>
 
-      <!-- Quick Actions -->
-      <Card title="Quick Actions">
-        <div class="flex flex-wrap gap-3">
-          <Button
-            :variant="generatorStore.canStart ? 'success' : 'secondary'"
-            :disabled="!generatorStore.canStart || generatorStore.actionLoading"
-            :loading="generatorStore.actionLoading"
-            @click="startGenerator"
-          >
-            Start Generator
-          </Button>
-          <Button
-            :variant="generatorStore.canStop ? 'danger' : 'secondary'"
-            :disabled="!generatorStore.canStop || generatorStore.actionLoading"
-            :loading="generatorStore.actionLoading"
-            @click="stopGenerator"
-          >
-            Stop Generator
-          </Button>
-          <Button
-            variant="secondary"
-            @click="router.push('/schedule')"
-          >
-            View Schedule
-          </Button>
-          <Button
-            variant="secondary"
-            @click="router.push('/history')"
-          >
-            View History
-          </Button>
-        </div>
-      </Card>
     </template>
   </div>
 </template>

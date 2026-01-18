@@ -24,12 +24,21 @@ export const useGeneratorStore = defineStore('generator', () => {
   const error = ref(null)
 
   // Getters
-  const currentState = computed(() => state.value?.state || 'unknown')
-  const isRunning = computed(() => ['starting', 'running', 'warmup'].includes(currentState.value))
-  const isStopped = computed(() => currentState.value === 'stopped')
-  const canStart = computed(() => ['stopped', 'cooldown'].includes(currentState.value))
-  const canStop = computed(() => ['starting', 'running', 'warmup'].includes(currentState.value))
-  const runTimeMinutes = computed(() => state.value?.run_time_minutes || 0)
+  // Backend returns { running: bool, trigger: string, runtime_seconds: int }
+  // Map to state names expected by UI
+  const currentState = computed(() => {
+    if (!state.value) return 'unknown'
+    if (state.value.running) return 'running'
+    return 'stopped'
+  })
+  const isRunning = computed(() => state.value?.running || false)
+  const isStopped = computed(() => !state.value?.running)
+  const canStart = computed(() => state.value && !state.value.running)
+  const canStop = computed(() => state.value?.running || false)
+  const runTimeMinutes = computed(() => {
+    if (!state.value?.runtime_seconds) return 0
+    return Math.floor(state.value.runtime_seconds / 60)
+  })
   const lastRun = computed(() => state.value?.last_run_end || null)
 
   // State color mapping
@@ -52,7 +61,8 @@ export const useGeneratorStore = defineStore('generator', () => {
     error.value = null
 
     try {
-      state.value = await generatorService.getState()
+      const response = await generatorService.getState()
+      state.value = response.data
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to fetch generator state'
     } finally {
@@ -66,8 +76,8 @@ export const useGeneratorStore = defineStore('generator', () => {
 
     try {
       const response = await generatorService.getHistory(params)
-      history.value = response.runs || []
-      return response
+      history.value = response.data?.runs || []
+      return response.data
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to fetch history'
       return { runs: [], total: 0 }
@@ -78,7 +88,8 @@ export const useGeneratorStore = defineStore('generator', () => {
 
   async function fetchStats() {
     try {
-      stats.value = await generatorService.getStats()
+      const response = await generatorService.getStats()
+      stats.value = response.data
     } catch {
       // Stats are non-critical, silently fail
     }

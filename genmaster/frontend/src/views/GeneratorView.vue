@@ -409,6 +409,7 @@ const stateColorBg = computed(() => {
 // Lifecycle
 onMounted(async () => {
   await Promise.all([
+    generatorStore.fetchState(),
     generatorStore.fetchStats(),
     fetchRelayState(),
   ])
