@@ -37,6 +37,7 @@ export const useMetricsStore = defineStore('metrics', () => {
 
   const containersRunning = computed(() => containerSummary.value?.running || 0)
   const containersStopped = computed(() => containerSummary.value?.stopped || 0)
+  const containersHealthy = computed(() => containerSummary.value?.healthy || 0)
   const containersUnhealthy = computed(() => containerSummary.value?.unhealthy || 0)
   const containersTotal = computed(() => containerSummary.value?.total || 0)
 
@@ -179,6 +180,7 @@ export const useMetricsStore = defineStore('metrics', () => {
     currentNetworkRecv,
     containersRunning,
     containersStopped,
+    containersHealthy,
     containersUnhealthy,
     containersTotal,
     allServicesHealthy,
