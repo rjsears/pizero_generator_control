@@ -20,6 +20,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision: str = "003"
@@ -47,12 +48,13 @@ def upgrade() -> None:
     )
 
     # Update the default slave_api_url to use port 8001 instead of 8000
+    # Using text() to avoid SQLAlchemy interpreting :8000/:8001 as bind parameters
     op.execute(
-        """
-        UPDATE config
-        SET slave_api_url = REPLACE(slave_api_url, ':8000', ':8001')
-        WHERE slave_api_url LIKE '%:8000%'
-        """
+        text(
+            "UPDATE config "
+            "SET slave_api_url = REPLACE(slave_api_url, ':8000', ':8001') "
+            "WHERE slave_api_url LIKE '%:8000%'"
+        )
     )
 
 
@@ -63,9 +65,9 @@ def downgrade() -> None:
 
     # Revert the slave_api_url port change
     op.execute(
-        """
-        UPDATE config
-        SET slave_api_url = REPLACE(slave_api_url, ':8001', ':8000')
-        WHERE slave_api_url LIKE '%:8001%'
-        """
+        text(
+            "UPDATE config "
+            "SET slave_api_url = REPLACE(slave_api_url, ':8001', ':8000') "
+            "WHERE slave_api_url LIKE '%:8001%'"
+        )
     )
