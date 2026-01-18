@@ -47,11 +47,30 @@ def get_webhook_service():
     return webhook_service
 
 
-def get_slave_client():
-    """Get slave client from app state."""
-    from app.main import slave_client
+async def get_slave_client():
+    """Create a SlaveClient with config from database."""
+    from app.database import async_session
+    from app.models import Config
+    from app.services.slave_client import SlaveClient
+    from sqlalchemy.future import select
 
-    return slave_client
+    # Load config from database to get current URL and secret
+    async with async_session() as db:
+        result = await db.execute(select(Config).where(Config.id == 1))
+        config = result.scalar_one_or_none()
+
+    if config:
+        return SlaveClient(
+            base_url=config.slave_api_url,
+            secret=config.slave_api_secret,
+        )
+    else:
+        # Fallback to settings if no config in database
+        from app.config import settings
+        return SlaveClient(
+            base_url=settings.slave_api_url,
+            secret=settings.slave_api_secret,
+        )
 
 
 @router.get("", response_model=HealthCheck)
