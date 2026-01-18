@@ -392,34 +392,41 @@
           <!-- Host Resolution Section -->
           <div class="p-4 rounded-lg bg-surface-hover">
             <h4 class="text-sm font-medium text-primary mb-3">Host Resolution (Container /etc/hosts)</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <!-- Current Configuration Display -->
+            <div class="mb-4 p-3 rounded bg-gray-100 dark:bg-gray-800">
+              <p class="text-xs text-muted mb-1">Current Configuration</p>
+              <p class="font-mono text-sm text-primary">
+                genslave → {{ currentConfiguredIp || 'Not configured' }}
+              </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label class="block text-sm font-medium text-secondary mb-1">GenSlave Hostname</label>
-                <input
-                  v-model="slaveConfig.genslave_hostname"
-                  type="text"
-                  placeholder="genslave"
-                  class="input"
-                  @focus="isEditingConfig = true"
-                  @blur="isEditingConfig = false"
-                />
-                <p class="text-xs text-muted mt-1">Hostname used in URL (e.g., genslave)</p>
+                <label class="block text-sm font-medium text-secondary mb-1">Hostname</label>
+                <div class="input bg-gray-100 dark:bg-gray-800 text-primary font-mono">genslave</div>
+                <p class="text-xs text-muted mt-1">Fixed hostname</p>
               </div>
               <div>
-                <label class="block text-sm font-medium text-secondary mb-1">GenSlave IP Address</label>
+                <label class="block text-sm font-medium text-secondary mb-1">New IP Address</label>
                 <input
                   v-model="slaveConfig.genslave_ip"
                   type="text"
-                  placeholder="192.168.1.100"
+                  :placeholder="currentConfiguredIp || '192.168.1.100'"
                   class="input"
                   @focus="isEditingConfig = true"
                   @blur="isEditingConfig = false"
                 />
-                <p class="text-xs text-muted mt-1">IP address for hostname resolution</p>
+                <p class="text-xs text-muted mt-1">Enter new IP to update</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-secondary mb-1">API URL</label>
+                <div class="input bg-gray-100 dark:bg-gray-800 text-primary font-mono text-sm">http://genslave:8001</div>
+                <p class="text-xs text-muted mt-1">Auto-configured</p>
               </div>
             </div>
             <p class="text-xs text-amber-600 dark:text-amber-400 mt-3">
-              Note: Changes to hostname/IP require a container restart to update /etc/hosts
+              Note: IP changes require a container restart to update /etc/hosts
             </p>
           </div>
 
@@ -529,8 +536,8 @@ const armingRelay = ref(false)
 const slaveConfig = ref({
   heartbeat_interval_seconds: 30,
   genslave_ip: '',
-  genslave_hostname: 'genslave',
 })
+const currentConfiguredIp = ref('')  // Current IP from database (for display)
 const savingSlaveConfig = ref(false)
 const isEditingConfig = ref(false)  // Prevent polling from overwriting user input
 
@@ -555,7 +562,7 @@ async function loadSlaveInfo() {
         if (configRes.data) {
           slaveConfig.value.heartbeat_interval_seconds = configRes.data.heartbeat_interval_seconds || 30
           slaveConfig.value.genslave_ip = configRes.data.genslave_ip || ''
-          slaveConfig.value.genslave_hostname = configRes.data.genslave_hostname || 'genslave'
+          currentConfiguredIp.value = configRes.data.genslave_ip || ''
         }
       } catch (e) {
         console.warn('Failed to load config for GenSlave:', e)
@@ -674,14 +681,15 @@ async function toggleRelayArm() {
 async function saveSlaveConfig() {
   savingSlaveConfig.value = true
   try {
-    // Compute the URL from the hostname (always http://<hostname>:8001)
-    const computedUrl = `http://${slaveConfig.value.genslave_hostname}:8001`
+    // Hostname is always "genslave", URL is always http://genslave:8001
     await configApi.update({
-      slave_api_url: computedUrl,
+      slave_api_url: 'http://genslave:8001',
       heartbeat_interval_seconds: slaveConfig.value.heartbeat_interval_seconds,
       genslave_ip: slaveConfig.value.genslave_ip,
-      genslave_hostname: slaveConfig.value.genslave_hostname,
+      genslave_hostname: 'genslave',
     })
+    // Update the displayed current IP
+    currentConfiguredIp.value = slaveConfig.value.genslave_ip
     notificationStore.success('GenSlave settings saved')
     notificationStore.warning('Note: IP changes require container restart to update /etc/hosts')
   } catch (error) {
