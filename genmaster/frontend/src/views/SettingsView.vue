@@ -1,35 +1,29 @@
 <!--
--=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-/management/frontend/src/views/SettingsView.vue
+  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  /genmaster/frontend/src/views/SettingsView.vue
 
-Part of the "n8n_nginx/n8n_management" suite
-Version 3.0.0 - January 1st, 2026
+  Part of the "RPi Generator Control" suite
+  Version 1.0.0 - January 15th, 2026
 
-Richard J. Sears
-richard@n8nmanagement.net
-https://github.com/rjsears
--=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  Richard J. Sears
+  richardjsears@protonmail.com
+  https://github.com/rjsears
+  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useThemeStore } from '../stores/theme'
 import { useAuthStore } from '../stores/auth'
 import { useNotificationStore } from '../stores/notifications'
 import { useDebugStore } from '../stores/debug'
-import api, { settingsApi, authApi, systemApi } from '../services/api'
+import { settingsApi, authApi } from '../services/api'
 import Card from '../components/common/Card.vue'
 import LoadingSpinner from '../components/common/LoadingSpinner.vue'
-import ConfirmDialog from '../components/common/ConfirmDialog.vue'
-import SystemNotificationsSettings from '../components/settings/SystemNotificationsSettings.vue'
-import EnvironmentSettings from '../components/settings/EnvironmentSettings.vue'
 import {
   Cog6ToothIcon,
   PaintBrushIcon,
   ShieldCheckIcon,
-  BellIcon,
-  BellAlertIcon,
-  CircleStackIcon,
   UserIcon,
   KeyIcon,
   EyeIcon,
@@ -37,29 +31,19 @@ import {
   CheckIcon,
   SunIcon,
   MoonIcon,
-  BugAntIcon,
   Bars3Icon,
   ViewColumnsIcon,
+  ArrowPathIcon,
+  BoltIcon,
+  LockClosedIcon,
+  BugAntIcon,
   GlobeAltIcon,
+  DocumentTextIcon,
   PlusIcon,
   TrashIcon,
-  ArrowPathIcon,
-  LockClosedIcon,
-  LockOpenIcon,
-  CubeIcon,
-  DocumentTextIcon,
-  ChartBarIcon,
-  FireIcon,
-  HeartIcon,
-  BoltIcon,
-  LinkIcon,
-  BeakerIcon,
-  ServerIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   PencilIcon,
   XMarkIcon,
-  CommandLineIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/vue/24/outline'
 
 const route = useRoute()
@@ -77,178 +61,97 @@ watch(() => route.query.tab, (newTab) => {
   if (newTab) activeTab.value = newTab
 })
 
-// Password change
-const passwordForm = ref({
-  current: '',
-  new: '',
-  confirm: '',
-})
-const showPasswords = ref({
-  current: false,
-  new: false,
-  confirm: false,
-})
-const changingPassword = ref(false)
-
-// Debug mode - use store (local refs for backward compatibility in template)
-const debugMode = computed(() => debugStore.isEnabled)
-const debugModeLoading = computed(() => debugStore.loading)
-
-// n8n API Key state
-const n8nApiKey = ref('')
-const n8nApiKeyMasked = ref('')
-const n8nApiKeyIsSet = ref(false)
-const n8nApiKeyLoading = ref(false)
-const showN8nApiKey = ref(false)
-const n8nApiKeyEditing = ref(false)
-
-// Settings
-const settings = ref({
-  notifications: {
-    backup_success: true,
-    backup_failure: true,
-    container_unhealthy: true,
-    disk_space_warning: true,
-    disk_space_threshold: 80,
-  },
-  security: {
-    session_timeout: 60,
-    max_login_attempts: 5,
-    lockout_duration: 15,
-  },
-})
-
-// Access Control state
-const accessControl = ref({
-  enabled: false,
-  ip_ranges: [],
-  nginx_config_path: '',
-  last_updated: null,
-})
-const accessControlLoading = ref(false)
-const reloadingNginx = ref(false)
-const addingIpRange = ref(false)
-const newIpRange = ref({
-  cidr: '',
-  description: '',
-  access_level: 'internal',
-})
-const defaultIpRanges = ref([])
-const showDeleteConfirm = ref(false)
-const ipRangeToDelete = ref(null)
-const cloudflareInstalled = ref(false)
-const cloudflareRunning = ref(false)
-
-// External Routes state
-const externalRoutes = ref({
-  routes: [],
-  domain: null,
-  last_updated: null,
-})
-const externalRoutesLoading = ref(false)
-const addingExternalRoute = ref(false)
-const newExternalRoute = ref({
-  path: '',
-  description: '',
-  upstream: 'n8n',
-  upstream_port: null,
-  is_public: true,
-})
-const showDeleteRouteConfirm = ref(false)
-const routeToDelete = ref(null)
-
-// IP Range editing state
-const editingIpRangeIndex = ref(null)
-const editingIpRangeDescription = ref('')
-const savingIpRangeDescription = ref(false)
-
-// Collapsible state for sections and individual items
-const routesSectionExpanded = ref(false)
-const ipRangesSectionExpanded = ref(false)
-const expandedRoutes = ref(new Set())
-const expandedIpRanges = ref(new Set())
-
-function toggleRoutesSection() {
-  routesSectionExpanded.value = !routesSectionExpanded.value
-}
-
-function toggleIpRangesSection() {
-  ipRangesSectionExpanded.value = !ipRangesSectionExpanded.value
-}
-
-function toggleRouteExpanded(index) {
-  if (expandedRoutes.value.has(index)) {
-    expandedRoutes.value.delete(index)
-  } else {
-    expandedRoutes.value.add(index)
-  }
-  // Force reactivity
-  expandedRoutes.value = new Set(expandedRoutes.value)
-}
-
-function toggleIpRangeExpanded(index) {
-  if (expandedIpRanges.value.has(index)) {
-    expandedIpRanges.value.delete(index)
-  } else {
-    expandedIpRanges.value.add(index)
-  }
-  // Force reactivity
-  expandedIpRanges.value = new Set(expandedIpRanges.value)
-}
-
-function expandAllRoutes() {
-  externalRoutes.value.routes.forEach((_, index) => expandedRoutes.value.add(index))
-  expandedRoutes.value = new Set(expandedRoutes.value)
-}
-
-function collapseAllRoutes() {
-  expandedRoutes.value.clear()
-  expandedRoutes.value = new Set(expandedRoutes.value)
-}
-
-function expandAllIpRanges() {
-  accessControl.value.ip_ranges.forEach((_, index) => expandedIpRanges.value.add(index))
-  expandedIpRanges.value = new Set(expandedIpRanges.value)
-}
-
-function collapseAllIpRanges() {
-  expandedIpRanges.value.clear()
-  expandedIpRanges.value = new Set(expandedIpRanges.value)
-}
-
-// Filter out already-configured ranges from the defaults list
-const availableDefaultRanges = computed(() => {
-  const configuredCidrs = accessControl.value.ip_ranges.map(r => r.cidr)
-  return defaultIpRanges.value.filter(d => !configuredCidrs.includes(d.cidr))
-})
-
-// No longer using theme presets - removed in favor of simpler light/dark toggle
-
+// Tab definitions
 const tabs = [
   { id: 'appearance', name: 'Appearance', icon: PaintBrushIcon, iconColor: 'text-pink-500', bgActive: 'bg-pink-500/15 dark:bg-pink-500/20', textActive: 'text-pink-700 dark:text-pink-400', borderActive: 'border-pink-500/30' },
-  { id: 'notifications', name: 'System Notifications', icon: BellIcon, iconColor: 'text-amber-500', bgActive: 'bg-amber-500/15 dark:bg-amber-500/20', textActive: 'text-amber-700 dark:text-amber-400', borderActive: 'border-amber-500/30' },
+  { id: 'generator', name: 'Generator', icon: BoltIcon, iconColor: 'text-emerald-500', bgActive: 'bg-emerald-500/15 dark:bg-emerald-500/20', textActive: 'text-emerald-700 dark:text-emerald-400', borderActive: 'border-emerald-500/30' },
   { id: 'security', name: 'Security', icon: ShieldCheckIcon, iconColor: 'text-red-500', bgActive: 'bg-red-500/15 dark:bg-red-500/20', textActive: 'text-red-700 dark:text-red-400', borderActive: 'border-red-500/30' },
-  { id: 'access-control', name: 'Access Control', icon: GlobeAltIcon, iconColor: 'text-blue-500', bgActive: 'bg-blue-500/15 dark:bg-blue-500/20', textActive: 'text-blue-700 dark:text-blue-400', borderActive: 'border-blue-500/30' },
-  { id: 'environment', name: 'Environment', icon: CommandLineIcon, iconColor: 'text-green-500', bgActive: 'bg-green-500/15 dark:bg-green-500/20', textActive: 'text-green-700 dark:text-green-400', borderActive: 'border-green-500/30' },
+  { id: 'access', name: 'Access Control', icon: GlobeAltIcon, iconColor: 'text-cyan-500', bgActive: 'bg-cyan-500/15 dark:bg-cyan-500/20', textActive: 'text-cyan-700 dark:text-cyan-400', borderActive: 'border-cyan-500/30' },
+  { id: 'environment', name: 'Environment', icon: DocumentTextIcon, iconColor: 'text-indigo-500', bgActive: 'bg-indigo-500/15 dark:bg-indigo-500/20', textActive: 'text-indigo-700 dark:text-indigo-400', borderActive: 'border-indigo-500/30' },
   { id: 'account', name: 'Account', icon: UserIcon, iconColor: 'text-purple-500', bgActive: 'bg-purple-500/15 dark:bg-purple-500/20', textActive: 'text-purple-700 dark:text-purple-400', borderActive: 'border-purple-500/30' },
-  { id: 'api-debug', name: 'n8n API / Debug', icon: BugAntIcon, iconColor: 'text-cyan-500', bgActive: 'bg-cyan-500/15 dark:bg-cyan-500/20', textActive: 'text-cyan-700 dark:text-cyan-400', borderActive: 'border-cyan-500/30' },
+  { id: 'advanced', name: 'Advanced', icon: BugAntIcon, iconColor: 'text-amber-500', bgActive: 'bg-amber-500/15 dark:bg-amber-500/20', textActive: 'text-amber-700 dark:text-amber-400', borderActive: 'border-amber-500/30' },
 ]
 
+// Generator config state
+const config = ref({
+  warmup_seconds: 30,
+  cooldown_seconds: 60,
+  min_run_minutes: 5,
+  max_run_minutes: 480,
+  slave_url: 'http://genslave.local:8001',
+  heartbeat_interval_seconds: 30,
+})
+const savingConfig = ref(false)
+const testingConnection = ref(false)
+
+// Security settings
+const securitySettings = ref({
+  session_timeout: 60,
+  max_login_attempts: 5,
+  lockout_duration: 15,
+})
+const savingSecurity = ref(false)
+
+// Password state
+const passwordForm = ref({ current: '', new: '', confirm: '' })
+const showPasswords = ref({ current: false, new: false, confirm: false })
+const changingPassword = ref(false)
+
+// Access Control state
+const ipRanges = ref([])
+const loadingIpRanges = ref(false)
+const savingIpRanges = ref(false)
+const newIpRange = ref({ ip_range: '', description: '' })
+const editingIpRange = ref(null)
+const commonNetworks = [
+  { name: 'Tailscale', range: '100.64.0.0/10', description: 'Tailscale VPN network' },
+  { name: 'Local (192.168.x.x)', range: '192.168.0.0/16', description: 'Local network' },
+  { name: 'Local (10.x.x.x)', range: '10.0.0.0/8', description: 'Local network' },
+]
+
+// Environment variables state
+const envVars = ref([])
+const loadingEnvVars = ref(false)
+const savingEnvVars = ref(false)
+const envRestartRequired = ref(false)
+const editingEnvVar = ref(null)
+
+// User profile state
+const userProfile = ref(null)
+const loadingProfile = ref(false)
+
+// Theme selection
+function selectTheme(mode) {
+  themeStore.setColorMode(mode)
+  const modeNames = { light: 'Light', dark: 'Dark' }
+  notificationStore.success(`Theme changed to ${modeNames[mode] || mode} mode`)
+}
+
+// Load settings
 async function loadSettings() {
   loading.value = true
   try {
-    const response = await settingsApi.getAll()
-    if (response.data) {
-      settings.value = { ...settings.value, ...response.data }
+    // Load generator config
+    try {
+      const configRes = await settingsApi.getConfig()
+      if (configRes.data) {
+        Object.assign(config.value, configRes.data)
+      }
+    } catch {
+      // Use defaults
     }
 
-    // Load n8n API key status
+    // Load debug mode
+    await debugStore.loadDebugMode()
+
+    // Load security settings
     try {
-      const apiKeyRes = await settingsApi.getEnvVariable('N8N_API_KEY')
-      n8nApiKeyIsSet.value = apiKeyRes.data.is_set
-      n8nApiKeyMasked.value = apiKeyRes.data.masked_value || ''
-    } catch (e) {
-      console.error('Failed to load n8n API key status:', e)
+      const securityRes = await settingsApi.get('security')
+      if (securityRes.data?.value) {
+        Object.assign(securitySettings.value, securityRes.data.value)
+      }
+    } catch {
+      // Use defaults
     }
   } catch (error) {
     console.error('Failed to load settings:', error)
@@ -257,22 +160,63 @@ async function loadSettings() {
   }
 }
 
-async function saveSettings(section) {
-  saving.value = true
+// Save generator config
+async function saveConfig() {
+  savingConfig.value = true
   try {
-    // Backend expects {value: data} format per SettingUpdate schema
-    await settingsApi.update(section, { value: settings.value[section] })
-    notificationStore.success('Settings saved successfully')
-  } catch (error) {
-    console.error('Failed to save settings:', error)
-    notificationStore.error('Failed to save settings')
+    await settingsApi.updateConfig(config.value)
+    notificationStore.success('Generator settings saved')
+  } catch {
+    notificationStore.error('Failed to save generator settings')
   } finally {
-    saving.value = false
+    savingConfig.value = false
   }
 }
 
+// Test GenSlave connection
+async function testConnection() {
+  testingConnection.value = true
+  try {
+    const response = await fetch('/api/health/test-slave', { method: 'POST' })
+    const result = await response.json()
+    if (result.success) {
+      notificationStore.success(`Connection successful (${result.latency_ms || 0}ms)`)
+    } else {
+      notificationStore.error(`Connection failed: ${result.error || 'Unknown error'}`)
+    }
+  } catch (err) {
+    notificationStore.error(`Connection failed: ${err.message}`)
+  } finally {
+    testingConnection.value = false
+  }
+}
+
+// Save security settings
+async function saveSecuritySettings() {
+  savingSecurity.value = true
+  try {
+    await settingsApi.update('security', { value: securitySettings.value })
+    notificationStore.success('Security settings saved')
+  } catch {
+    notificationStore.error('Failed to save security settings')
+  } finally {
+    savingSecurity.value = false
+  }
+}
+
+// Change password
 async function changePassword() {
-  passwordLoading.value = true
+  if (passwordForm.value.new !== passwordForm.value.confirm) {
+    notificationStore.error('Passwords do not match')
+    return
+  }
+
+  if (passwordForm.value.new.length < 8) {
+    notificationStore.error('Password must be at least 8 characters')
+    return
+  }
+
+  changingPassword.value = true
   try {
     await authApi.changePassword({
       current_password: passwordForm.value.current,
@@ -287,322 +231,165 @@ async function changePassword() {
   }
 }
 
-// Theme selection with notification feedback
-function selectTheme(mode) {
-  themeStore.setColorMode(mode)
-  const modeNames = { light: 'Light', dark: 'Dark' }
-  notificationStore.success(`Theme changed to ${modeNames[mode] || mode} mode`)
-}
-
-async function toggleDebugMode() {
-  const success = await debugStore.toggleDebugMode()
-  if (success) {
-    notificationStore.success(`Debug mode ${debugStore.isEnabled ? 'enabled' : 'disabled'}`)
-  } else {
-    notificationStore.error('Failed to update debug mode')
-  }
-}
-
-function startEditN8nApiKey() {
-  n8nApiKeyEditing.value = true
-  n8nApiKey.value = ''
-}
-
-function cancelEditN8nApiKey() {
-  n8nApiKeyEditing.value = false
-  n8nApiKey.value = ''
-}
-
-async function saveN8nApiKey() {
-  if (!n8nApiKey.value.trim()) {
-    notificationStore.error('API key cannot be empty')
-    return
-  }
-
-  n8nApiKeyLoading.value = true
+// Load IP ranges for Access Control
+async function loadIpRanges() {
+  loadingIpRanges.value = true
   try {
-    await settingsApi.updateEnvVariable('N8N_API_KEY', n8nApiKey.value.trim())
-    n8nApiKeyIsSet.value = true
-    n8nApiKeyMasked.value = n8nApiKey.value.length > 8
-      ? `${n8nApiKey.value.slice(0, 4)}...${n8nApiKey.value.slice(-4)}`
-      : '*'.repeat(n8nApiKey.value.length)
-    n8nApiKeyEditing.value = false
-    n8nApiKey.value = ''
-    notificationStore.success('n8n API key updated successfully')
-  } catch (error) {
-    console.error('Failed to update API key:', error)
-    notificationStore.error('Failed to update n8n API key')
+    const response = await settingsApi.get('ip_ranges')
+    ipRanges.value = response.data?.value || []
+  } catch {
+    ipRanges.value = []
   } finally {
-    n8nApiKeyLoading.value = false
+    loadingIpRanges.value = false
   }
 }
 
-// Access Control functions
-async function loadAccessControl() {
-  accessControlLoading.value = true
-  try {
-    // Load defaults first - this should always work
-    try {
-      const defaultsResponse = await settingsApi.getDefaultIpRanges()
-      defaultIpRanges.value = defaultsResponse.data
-    } catch (e) {
-      console.error('Failed to load default IP ranges:', e)
-    }
-
-    // Load current config - may fail if nginx config doesn't exist
-    try {
-      const configResponse = await settingsApi.getAccessControl()
-      accessControl.value = configResponse.data
-    } catch (e) {
-      console.error('Failed to load access control config:', e)
-      // Set defaults if config load fails
-      accessControl.value = {
-        enabled: false,
-        ip_ranges: [],
-        nginx_config_path: '',
-        last_updated: null,
-      }
-    }
-
-    // Check if Cloudflare tunnel is installed/running
-    try {
-      const cfResponse = await systemApi.cloudflare()
-      cloudflareInstalled.value = cfResponse.data?.installed || false
-      cloudflareRunning.value = cfResponse.data?.running || false
-    } catch (e) {
-      cloudflareInstalled.value = false
-      cloudflareRunning.value = false
-    }
-
-    // Also load external routes
-    loadExternalRoutes()
-  } catch (error) {
-    console.error('Failed to load access control:', error)
-  } finally {
-    accessControlLoading.value = false
-  }
-}
-
+// Add new IP range
 async function addIpRange() {
-  if (!newIpRange.value.cidr) {
-    notificationStore.error('Please enter a CIDR address')
+  if (!newIpRange.value.ip_range) {
+    notificationStore.error('IP range is required')
     return
   }
 
-  addingIpRange.value = true
-  try {
-    await settingsApi.addIpRange(newIpRange.value)
-    notificationStore.success(`IP range ${newIpRange.value.cidr} added`)
-    newIpRange.value = { cidr: '', description: '', access_level: 'internal' }
-    await loadAccessControl()
-  } catch (error) {
-    notificationStore.error(error.response?.data?.detail || 'Failed to add IP range')
-  } finally {
-    addingIpRange.value = false
-  }
-}
-
-function confirmDeleteIpRange(ipRange) {
-  ipRangeToDelete.value = ipRange
-  showDeleteConfirm.value = true
-}
-
-async function deleteIpRange() {
-  if (!ipRangeToDelete.value) return
-  loading.value = true
-  try {
-    await settingsApi.deleteIpRange(ipRangeToDelete.value.cidr)
-    deleteIpRangeDialog.value = false
-    ipRangeToDelete.value = null
-    await loadAccessControl()
-  } catch (error) {
-    notificationStore.error(error.response?.data?.detail || 'Failed to delete IP range')
-    showDeleteConfirm.value = false
-  }
-}
-
-async function reloadNginx() {
-  reloadingNginx.value = true
-  try {
-    await settingsApi.reloadNginx()
-    notificationStore.success('Nginx reloaded successfully')
-  } catch (error) {
-    notificationStore.error(error.response?.data?.detail || 'Failed to reload nginx')
-  } finally {
-    reloadingNginx.value = false
-  }
-}
-
-function addDefaultRange(defaultRange) {
-  const exists = accessControl.value.ip_ranges.some(r => r.cidr === defaultRange.cidr)
-  if (exists) {
-    notificationStore.warning(`${defaultRange.cidr} is already configured`)
-    return
-  }
-  newIpRange.value = {
-    cidr: defaultRange.cidr,
-    description: defaultRange.description,
-    access_level: defaultRange.access_level,
-  }
-}
-
-function startEditIpRangeDescription(index, currentDescription) {
-  editingIpRangeIndex.value = index
-  editingIpRangeDescription.value = currentDescription || ''
-}
-
-function cancelEditIpRangeDescription() {
-  editingIpRangeIndex.value = null
-  editingIpRangeDescription.value = ''
-}
-
-async function saveIpRangeDescription(cidr) {
-  savingIpRangeDescription.value = true
-  try {
-    await settingsApi.updateIpRange(cidr, editingIpRangeDescription.value)
-    notificationStore.success('Description updated successfully')
-    editingIpRangeIndex.value = null
-    editingIpRangeDescription.value = ''
-    await loadAccessControl()
-  } catch (error) {
-    notificationStore.error(error.response?.data?.detail || 'Failed to update description')
-  } finally {
-    savingIpRangeDescription.value = false
-  }
-}
-
-// External Routes functions
-async function loadExternalRoutes() {
-  externalRoutesLoading.value = true
-  try {
-    const response = await settingsApi.getExternalRoutes()
-    externalRoutes.value = response.data
-  } catch (error) {
-    console.error('Failed to load external routes:', error)
-    externalRoutes.value = { routes: [], domain: null, last_updated: null }
-  } finally {
-    externalRoutesLoading.value = false
-  }
-}
-
-async function addExternalRoute() {
-  if (!newExternalRoute.value.path) {
-    notificationStore.error('Please enter a path')
+  // Basic CIDR validation
+  const cidrPattern = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/
+  if (!cidrPattern.test(newIpRange.value.ip_range)) {
+    notificationStore.error('Invalid CIDR format (e.g., 192.168.1.0/24)')
     return
   }
 
-  // Validate upstream port if provided
-  if (newExternalRoute.value.upstream_port && (newExternalRoute.value.upstream_port < 1 || newExternalRoute.value.upstream_port > 65535)) {
-    notificationStore.error('Port must be between 1 and 65535')
+  savingIpRanges.value = true
+  try {
+    const updatedRanges = [...ipRanges.value, { ...newIpRange.value }]
+    await settingsApi.update('ip_ranges', { value: updatedRanges })
+    ipRanges.value = updatedRanges
+    newIpRange.value = { ip_range: '', description: '' }
+    notificationStore.success('IP range added')
+  } catch (error) {
+    notificationStore.error('Failed to add IP range')
+  } finally {
+    savingIpRanges.value = false
+  }
+}
+
+// Add common network
+async function addCommonNetwork(network) {
+  // Check if already exists
+  if (ipRanges.value.some(r => r.ip_range === network.range)) {
+    notificationStore.warning('This network is already added')
     return
   }
 
-  addingExternalRoute.value = true
+  savingIpRanges.value = true
   try {
-    await settingsApi.addExternalRoute(newExternalRoute.value)
-    const accessType = newExternalRoute.value.is_public ? 'public' : 'restricted'
-    notificationStore.success(`External route ${newExternalRoute.value.path} added (${accessType}). Reload nginx to apply.`)
-    newExternalRoute.value = { path: '', description: '', upstream: 'n8n', upstream_port: null, is_public: true }
-    await loadExternalRoutes()
-  } catch (error) {
-    notificationStore.error(error.response?.data?.detail || 'Failed to add external route')
+    const updatedRanges = [...ipRanges.value, { ip_range: network.range, description: network.description }]
+    await settingsApi.update('ip_ranges', { value: updatedRanges })
+    ipRanges.value = updatedRanges
+    notificationStore.success(`${network.name} network added`)
+  } catch {
+    notificationStore.error('Failed to add network')
   } finally {
-    addingExternalRoute.value = false
+    savingIpRanges.value = false
   }
 }
 
-function confirmDeleteRoute(route) {
-  routeToDelete.value = route
-  showDeleteRouteConfirm.value = true
-}
-
-async function deleteExternalRoute() {
-  if (!routeToDelete.value) return
-  loading.value = true
+// Remove IP range
+async function removeIpRange(index) {
+  savingIpRanges.value = true
   try {
-    await settingsApi.deleteExternalRoute(routeToDelete.value.path)
-    deleteRouteDialog.value = false
-    routeToDelete.value = null
-    await loadExternalRoutes()
-  } catch (error) {
-    notificationStore.error(error.response?.data?.detail || 'Failed to delete external route')
-    showDeleteRouteConfirm.value = false
+    const updatedRanges = ipRanges.value.filter((_, i) => i !== index)
+    await settingsApi.update('ip_ranges', { value: updatedRanges })
+    ipRanges.value = updatedRanges
+    notificationStore.success('IP range removed')
+  } catch {
+    notificationStore.error('Failed to remove IP range')
+  } finally {
+    savingIpRanges.value = false
   }
 }
 
-// Icon mapping for routes
-const iconMap = {
-  'webhook': BoltIcon,
-  'flask': BeakerIcon,
-  'cube': CubeIcon,
-  'database': CircleStackIcon,
-  'document-text': DocumentTextIcon,
-  'chart-bar': ChartBarIcon,
-  'fire': FireIcon,
-  'cog': Cog6ToothIcon,
-  'heart': HeartIcon,
-  'bolt': BoltIcon,
-  'link': LinkIcon,
-  'server': ServerIcon,
-  'bell': BellAlertIcon,
+// Update IP range description
+async function updateIpRangeDescription(index) {
+  savingIpRanges.value = true
+  try {
+    await settingsApi.update('ip_ranges', { value: ipRanges.value })
+    editingIpRange.value = null
+    notificationStore.success('Description updated')
+  } catch {
+    notificationStore.error('Failed to update description')
+  } finally {
+    savingIpRanges.value = false
+  }
 }
 
-// Color mapping for background
-const colorBgMap = {
-  'green': 'rgba(34, 197, 94, 0.15)',
-  'amber': 'rgba(245, 158, 11, 0.15)',
-  'blue': 'rgba(59, 130, 246, 0.15)',
-  'purple': 'rgba(168, 85, 247, 0.15)',
-  'emerald': 'rgba(16, 185, 129, 0.15)',
-  'orange': 'rgba(249, 115, 22, 0.15)',
-  'red': 'rgba(239, 68, 68, 0.15)',
-  'cyan': 'rgba(6, 182, 212, 0.15)',
-  'rose': 'rgba(244, 63, 94, 0.15)',
-  'gray': 'rgba(107, 114, 128, 0.15)',
+// Load environment variables
+async function loadEnvVars() {
+  loadingEnvVars.value = true
+  try {
+    const response = await settingsApi.get('environment')
+    envVars.value = response.data?.value || []
+    envRestartRequired.value = false
+  } catch {
+    // Default environment variables if not configured
+    envVars.value = [
+      { key: 'APP_DEBUG', value: 'false', description: 'Enable debug mode', sensitive: false },
+      { key: 'DATABASE_URL', value: '***', description: 'Database connection string', sensitive: true },
+      { key: 'SECRET_KEY', value: '***', description: 'Application secret key', sensitive: true },
+    ]
+  } finally {
+    loadingEnvVars.value = false
+  }
 }
 
-// Color mapping for icon
-const colorIconMap = {
-  'green': '#22c55e',
-  'amber': '#f59e0b',
-  'blue': '#3b82f6',
-  'purple': '#a855f7',
-  'emerald': '#10b981',
-  'orange': '#f97316',
-  'red': '#ef4444',
-  'cyan': '#06b6d4',
-  'rose': '#f43f5e',
-  'gray': '#6b7280',
+// Update environment variable
+async function updateEnvVar(index) {
+  if (envVars.value[index].sensitive && envVars.value[index].value === '***') {
+    editingEnvVar.value = null
+    return
+  }
+
+  savingEnvVars.value = true
+  try {
+    await settingsApi.update('environment', { value: envVars.value })
+    envRestartRequired.value = true
+    editingEnvVar.value = null
+    notificationStore.success('Environment variable updated')
+  } catch {
+    notificationStore.error('Failed to update environment variable')
+  } finally {
+    savingEnvVars.value = false
+  }
 }
 
-function getRouteIcon(iconName) {
-  return iconMap[iconName] || LinkIcon
+// Load user profile
+async function loadUserProfile() {
+  loadingProfile.value = true
+  try {
+    const response = await authApi.getProfile()
+    userProfile.value = response.data
+  } catch {
+    userProfile.value = {
+      username: authStore.user?.username || 'admin',
+      role: authStore.user?.role || 'admin',
+      created_at: null,
+    }
+  } finally {
+    loadingProfile.value = false
+  }
 }
 
-function getRouteIconBg(color) {
-  return colorBgMap[color] || colorBgMap['gray']
-}
-
-function getRouteIconColor(color) {
-  return colorIconMap[color] || colorIconMap['gray']
-}
-
-function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    notificationStore.success('URL copied to clipboard')
-  }).catch(() => {
-    notificationStore.error('Failed to copy to clipboard')
-  })
-}
-
-onMounted(async () => {
-  await loadSettings()
+onMounted(() => {
+  loadSettings()
 })
 
-// Watch for tab changes to load access control data
-watch(activeTab, (newTab) => {
-  if (newTab === 'access-control' && defaultIpRanges.value.length === 0) {
-    loadAccessControl()
+// Watch for tab changes to load data
+watch(activeTab, (tab) => {
+  if (tab === 'access' && ipRanges.value.length === 0) {
+    loadIpRanges()
+  } else if (tab === 'environment' && envVars.value.length === 0) {
+    loadEnvVars()
+  } else if (tab === 'account' && !userProfile.value) {
+    loadUserProfile()
   }
 })
 </script>
@@ -611,30 +398,21 @@ watch(activeTab, (newTab) => {
   <div class="space-y-6">
     <!-- Page Header -->
     <div>
-      <h1 class="text-2xl font-bold text-primary">
-        Settings
-      </h1>
-      <p class="text-secondary mt-1">Configure your management console</p>
+      <h1 class="text-2xl font-bold text-primary">Settings</h1>
+      <p class="text-secondary mt-1">Configure your generator control system</p>
     </div>
 
-    <!-- Settings Loading Animation -->
+    <!-- Loading Animation -->
     <div v-if="loading" class="py-16 flex flex-col items-center justify-center">
       <div class="relative flex items-center gap-2">
-        <!-- Main Gear -->
-        <div class="settings-gear">
-          <Cog6ToothIcon class="h-14 w-14 text-blue-500" />
-        </div>
-        <!-- Small Gear -->
-        <div class="settings-gear-small">
-          <Cog6ToothIcon class="h-8 w-8 text-indigo-400" />
-        </div>
+        <Cog6ToothIcon class="h-14 w-14 text-blue-500 animate-spin" style="animation-duration: 3s;" />
+        <Cog6ToothIcon class="h-8 w-8 text-indigo-400 animate-spin" style="animation-duration: 2s; animation-direction: reverse;" />
       </div>
       <p class="mt-6 text-sm font-medium text-secondary">Loading settings...</p>
-      <p class="mt-1 text-xs text-muted">Fetching configuration options</p>
     </div>
 
     <template v-else>
-      <!-- Tabs - Matching style with colored icons -->
+      <!-- Tabs -->
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-400 dark:border-gray-700 p-1.5 flex gap-1.5 overflow-x-auto">
         <button
           v-for="tab in tabs"
@@ -656,7 +434,7 @@ watch(activeTab, (newTab) => {
       <div v-if="activeTab === 'appearance'" class="space-y-6">
         <Card title="Theme" subtitle="Choose your preferred color scheme and navigation layout">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Modern Light Theme Card -->
+            <!-- Light Theme Card -->
             <div
               :class="[
                 'relative rounded-xl border-2 overflow-hidden transition-all cursor-pointer',
@@ -666,7 +444,6 @@ watch(activeTab, (newTab) => {
               ]"
               @click="selectTheme('light')"
             >
-              <!-- Preview Area -->
               <div class="bg-white p-4 border-b border-gray-400">
                 <div class="flex items-center gap-3 mb-3">
                   <div class="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-300 to-orange-400 flex items-center justify-center">
@@ -676,19 +453,14 @@ watch(activeTab, (newTab) => {
                     <p class="font-semibold text-gray-900">Modern Light</p>
                     <p class="text-xs text-gray-500">Clean and bright interface</p>
                   </div>
-                  <CheckIcon
-                    v-if="themeStore.colorMode === 'light'"
-                    class="h-6 w-6 text-blue-500 ml-auto"
-                  />
+                  <CheckIcon v-if="themeStore.colorMode === 'light'" class="h-6 w-6 text-blue-500 ml-auto" />
                 </div>
-                <!-- Mini preview -->
                 <div class="bg-gray-50 rounded-lg p-2 space-y-1">
                   <div class="h-2 w-3/4 bg-gray-200 rounded"></div>
                   <div class="h-2 w-1/2 bg-gray-200 rounded"></div>
                   <div class="h-2 w-2/3 bg-gray-200 rounded"></div>
                 </div>
               </div>
-              <!-- Layout Toggle -->
               <div class="bg-gray-50 p-3" @click.stop>
                 <div class="flex items-center justify-between">
                   <span class="text-sm font-medium text-gray-700">Navigation</span>
@@ -697,9 +469,7 @@ watch(activeTab, (newTab) => {
                       @click="themeStore.setLayoutMode('horizontal')"
                       :class="[
                         'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all',
-                        themeStore.layout === 'horizontal'
-                          ? 'bg-blue-500 text-white'
-                          : 'text-gray-600 hover:bg-gray-100'
+                        themeStore.layout === 'horizontal' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'
                       ]"
                     >
                       <Bars3Icon class="h-4 w-4" />
@@ -709,9 +479,7 @@ watch(activeTab, (newTab) => {
                       @click="themeStore.setLayoutMode('sidebar')"
                       :class="[
                         'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all',
-                        themeStore.layout === 'sidebar'
-                          ? 'bg-blue-500 text-white'
-                          : 'text-gray-600 hover:bg-gray-100'
+                        themeStore.layout === 'sidebar' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'
                       ]"
                     >
                       <ViewColumnsIcon class="h-4 w-4" />
@@ -722,7 +490,7 @@ watch(activeTab, (newTab) => {
               </div>
             </div>
 
-            <!-- Modern Dark Theme Card -->
+            <!-- Dark Theme Card -->
             <div
               :class="[
                 'relative rounded-xl border-2 overflow-hidden transition-all cursor-pointer',
@@ -732,7 +500,6 @@ watch(activeTab, (newTab) => {
               ]"
               @click="selectTheme('dark')"
             >
-              <!-- Preview Area -->
               <div class="bg-slate-900 p-4 border-b border-slate-700">
                 <div class="flex items-center gap-3 mb-3">
                   <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
@@ -742,19 +509,14 @@ watch(activeTab, (newTab) => {
                     <p class="font-semibold text-white">Modern Dark</p>
                     <p class="text-xs text-slate-400">Easy on the eyes at night</p>
                   </div>
-                  <CheckIcon
-                    v-if="themeStore.colorMode === 'dark'"
-                    class="h-6 w-6 text-blue-400 ml-auto"
-                  />
+                  <CheckIcon v-if="themeStore.colorMode === 'dark'" class="h-6 w-6 text-blue-400 ml-auto" />
                 </div>
-                <!-- Mini preview -->
                 <div class="bg-slate-800 rounded-lg p-2 space-y-1">
                   <div class="h-2 w-3/4 bg-slate-700 rounded"></div>
                   <div class="h-2 w-1/2 bg-slate-700 rounded"></div>
                   <div class="h-2 w-2/3 bg-slate-700 rounded"></div>
                 </div>
               </div>
-              <!-- Layout Toggle -->
               <div class="bg-slate-800 p-3" @click.stop>
                 <div class="flex items-center justify-between">
                   <span class="text-sm font-medium text-slate-300">Navigation</span>
@@ -763,9 +525,7 @@ watch(activeTab, (newTab) => {
                       @click="themeStore.setLayoutMode('horizontal')"
                       :class="[
                         'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all',
-                        themeStore.layout === 'horizontal'
-                          ? 'bg-blue-500 text-white'
-                          : 'text-slate-400 hover:bg-slate-800'
+                        themeStore.layout === 'horizontal' ? 'bg-blue-500 text-white' : 'text-slate-400 hover:bg-slate-800'
                       ]"
                     >
                       <Bars3Icon class="h-4 w-4" />
@@ -775,9 +535,7 @@ watch(activeTab, (newTab) => {
                       @click="themeStore.setLayoutMode('sidebar')"
                       :class="[
                         'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all',
-                        themeStore.layout === 'sidebar'
-                          ? 'bg-blue-500 text-white'
-                          : 'text-slate-400 hover:bg-slate-800'
+                        themeStore.layout === 'sidebar' ? 'bg-blue-500 text-white' : 'text-slate-400 hover:bg-slate-800'
                       ]"
                     >
                       <ViewColumnsIcon class="h-4 w-4" />
@@ -791,9 +549,105 @@ watch(activeTab, (newTab) => {
         </Card>
       </div>
 
-      <!-- Notifications Tab -->
-      <div v-if="activeTab === 'notifications'">
-        <SystemNotificationsSettings />
+      <!-- Generator Tab -->
+      <div v-if="activeTab === 'generator'" class="space-y-6">
+        <Card title="Generator Settings" subtitle="Configure generator timing and behavior">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-medium text-secondary mb-1">Warmup Duration (seconds)</label>
+              <input
+                v-model.number="config.warmup_seconds"
+                type="number"
+                min="0"
+                max="300"
+                class="input"
+              />
+              <p class="text-xs text-muted mt-1">Time to wait after starting before considering 'running'</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-secondary mb-1">Cooldown Duration (seconds)</label>
+              <input
+                v-model.number="config.cooldown_seconds"
+                type="number"
+                min="0"
+                max="600"
+                class="input"
+              />
+              <p class="text-xs text-muted mt-1">Time to run unloaded after stopping</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-secondary mb-1">Minimum Run Time (minutes)</label>
+              <input
+                v-model.number="config.min_run_minutes"
+                type="number"
+                min="1"
+                max="120"
+                class="input"
+              />
+              <p class="text-xs text-muted mt-1">Minimum duration for each generator run</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-secondary mb-1">Maximum Run Time (minutes)</label>
+              <input
+                v-model.number="config.max_run_minutes"
+                type="number"
+                min="30"
+                max="1440"
+                class="input"
+              />
+              <p class="text-xs text-muted mt-1">Maximum duration before automatic shutdown</p>
+            </div>
+          </div>
+          <div class="flex justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <button @click="saveConfig" :disabled="savingConfig" class="btn-primary">
+              <ArrowPathIcon v-if="savingConfig" class="h-4 w-4 mr-2 animate-spin" />
+              <CheckIcon v-else class="h-4 w-4 mr-2" />
+              Save Settings
+            </button>
+          </div>
+        </Card>
+
+        <Card title="GenSlave Connection" subtitle="Configure GenSlave communication">
+          <div class="space-y-4">
+            <div class="flex gap-3 items-end">
+              <div class="flex-1">
+                <label class="block text-sm font-medium text-secondary mb-1">GenSlave URL</label>
+                <input
+                  v-model="config.slave_url"
+                  type="text"
+                  placeholder="http://genslave.local:8001"
+                  class="input"
+                />
+              </div>
+              <button
+                @click="testConnection"
+                :disabled="testingConnection"
+                class="btn-secondary"
+              >
+                <BoltIcon v-if="!testingConnection" class="h-4 w-4 mr-2" />
+                <ArrowPathIcon v-else class="h-4 w-4 mr-2 animate-spin" />
+                Test
+              </button>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-secondary mb-1">Heartbeat Interval (seconds)</label>
+              <input
+                v-model.number="config.heartbeat_interval_seconds"
+                type="number"
+                min="5"
+                max="60"
+                class="input w-48"
+              />
+              <p class="text-xs text-muted mt-1">How often to check GenSlave connectivity</p>
+            </div>
+          </div>
+          <div class="flex justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <button @click="saveConfig" :disabled="savingConfig" class="btn-primary">
+              <CheckIcon class="h-4 w-4 mr-2" />
+              Save Settings
+            </button>
+          </div>
+        </Card>
       </div>
 
       <!-- Security Tab -->
@@ -814,23 +668,8 @@ watch(activeTab, (newTab) => {
           </div>
         </div>
 
-        <!-- Session Settings Card -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-          <!-- Card Header -->
-          <div class="bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-800 dark:to-gray-800 border-b border-gray-100 dark:border-gray-700 px-6 py-4">
-            <div class="flex items-center gap-3">
-              <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-500/20">
-                <Cog6ToothIcon class="h-5 w-5 text-violet-600 dark:text-violet-400" />
-              </div>
-              <div>
-                <h3 class="font-semibold text-gray-900 dark:text-white">Session Configuration</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400">Control session behavior and security policies</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Settings Grid -->
-          <div class="p-6 space-y-6">
+        <Card>
+          <div class="space-y-6">
             <!-- Session Timeout -->
             <div class="group relative rounded-xl border border-gray-200 dark:border-gray-700 p-5 transition-all hover:border-violet-300 dark:hover:border-violet-600 hover:shadow-md">
               <div class="flex items-start gap-4">
@@ -841,33 +680,29 @@ watch(activeTab, (newTab) => {
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <h4 class="font-semibold text-gray-900 dark:text-white">Session Timeout</h4>
+                    <h4 class="font-semibold text-primary">Session Timeout</h4>
                     <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
-                      {{ settings.security.session_timeout }} min
+                      {{ securitySettings.session_timeout }} min
                     </span>
                   </div>
-                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Automatically log out users after this period of inactivity. Recommended: 30-60 minutes for security.
-                  </p>
+                  <p class="mt-1 text-sm text-muted">Automatically log out users after this period of inactivity.</p>
                   <div class="mt-4 flex items-center gap-4">
                     <input
                       type="range"
-                      v-model.number="settings.security.session_timeout"
+                      v-model.number="securitySettings.session_timeout"
                       min="5"
                       max="480"
                       step="5"
                       class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                     />
-                    <div class="flex items-center gap-2">
-                      <input
-                        type="number"
-                        v-model.number="settings.security.session_timeout"
-                        min="5"
-                        max="480"
-                        class="w-20 px-3 py-2 text-center font-mono text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      <span class="text-sm text-gray-500 dark:text-gray-400 w-10">min</span>
-                    </div>
+                    <input
+                      type="number"
+                      v-model.number="securitySettings.session_timeout"
+                      min="5"
+                      max="480"
+                      class="w-20 px-3 py-2 text-center font-mono text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-primary"
+                    />
+                    <span class="text-sm text-muted w-10">min</span>
                   </div>
                 </div>
               </div>
@@ -881,39 +716,26 @@ watch(activeTab, (newTab) => {
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <h4 class="font-semibold text-gray-900 dark:text-white">Max Login Attempts</h4>
+                    <h4 class="font-semibold text-primary">Max Login Attempts</h4>
                     <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">
-                      {{ settings.security.max_login_attempts }} attempts
+                      {{ securitySettings.max_login_attempts }} attempts
                     </span>
                   </div>
-                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Number of failed login attempts before the account is temporarily locked. Protects against brute force attacks.
-                  </p>
-                  <div class="mt-4 flex items-center gap-4">
-                    <div class="flex-1 flex items-center gap-2">
-                      <button
-                        v-for="n in [3, 5, 7, 10]"
-                        :key="n"
-                        @click="settings.security.max_login_attempts = n"
-                        :class="[
-                          'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                          settings.security.max_login_attempts === n
-                            ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                        ]"
-                      >
-                        {{ n }}
-                      </button>
-                    </div>
-                    <div class="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-4">
-                      <input
-                        type="number"
-                        v-model.number="settings.security.max_login_attempts"
-                        min="3"
-                        max="10"
-                        class="w-16 px-3 py-2 text-center font-mono text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                      />
-                    </div>
+                  <p class="mt-1 text-sm text-muted">Number of failed login attempts before account lockout.</p>
+                  <div class="mt-4 flex items-center gap-2">
+                    <button
+                      v-for="n in [3, 5, 7, 10]"
+                      :key="n"
+                      @click="securitySettings.max_login_attempts = n"
+                      :class="[
+                        'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                        securitySettings.max_login_attempts === n
+                          ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      ]"
+                    >
+                      {{ n }}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -929,1067 +751,474 @@ watch(activeTab, (newTab) => {
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <h4 class="font-semibold text-gray-900 dark:text-white">Lockout Duration</h4>
+                    <h4 class="font-semibold text-primary">Lockout Duration</h4>
                     <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400">
-                      {{ settings.security.lockout_duration }} min
+                      {{ securitySettings.lockout_duration }} min
                     </span>
                   </div>
-                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    How long to lock an account after exceeding the maximum login attempts. Longer durations provide better security.
-                  </p>
+                  <p class="mt-1 text-sm text-muted">How long to lock an account after exceeding login attempts.</p>
                   <div class="mt-4 flex items-center gap-4">
                     <input
                       type="range"
-                      v-model.number="settings.security.lockout_duration"
+                      v-model.number="securitySettings.lockout_duration"
                       min="5"
                       max="60"
                       step="5"
                       class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500"
                     />
-                    <div class="flex items-center gap-2">
-                      <input
-                        type="number"
-                        v-model.number="settings.security.lockout_duration"
-                        min="5"
-                        max="60"
-                        class="w-20 px-3 py-2 text-center font-mono text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      />
-                      <span class="text-sm text-gray-500 dark:text-gray-400 w-10">min</span>
-                    </div>
+                    <input
+                      type="number"
+                      v-model.number="securitySettings.lockout_duration"
+                      min="5"
+                      max="60"
+                      class="w-20 px-3 py-2 text-center font-mono text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-primary"
+                    />
+                    <span class="text-sm text-muted w-10">min</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Card Footer -->
-          <div class="bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 px-6 py-4">
-            <div class="flex items-center justify-between">
-              <p class="text-sm text-gray-500 dark:text-gray-400">
-                <span class="inline-flex items-center gap-1.5">
-                  <ShieldCheckIcon class="h-4 w-4 text-green-500" />
-                  All sessions are encrypted and secure
-                </span>
-              </p>
-              <button
-                @click="saveSettings('security')"
-                :disabled="saving"
-                class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-violet-500 to-purple-600 text-white font-medium shadow-lg shadow-violet-500/25 hover:shadow-xl hover:shadow-violet-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <CheckIcon v-if="!saving" class="h-4 w-4" />
-                <ArrowPathIcon v-else class="h-4 w-4 animate-spin" />
-                {{ saving ? 'Saving...' : 'Save Changes' }}
-              </button>
-            </div>
+          <div class="flex justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <button @click="saveSecuritySettings" :disabled="savingSecurity" class="btn-primary">
+              <CheckIcon class="h-4 w-4 mr-2" />
+              Save Security Settings
+            </button>
           </div>
-        </div>
-
-        <!-- Security Tips Card -->
-        <div class="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 rounded-xl border border-violet-200 dark:border-violet-800 p-5">
-          <div class="flex gap-4">
-            <div class="flex-shrink-0">
-              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-500/20">
-                <BoltIcon class="h-5 w-5 text-violet-600 dark:text-violet-400" />
-              </div>
-            </div>
-            <div>
-              <h4 class="font-semibold text-violet-900 dark:text-violet-100">Security Best Practices</h4>
-              <ul class="mt-2 space-y-1.5 text-sm text-violet-700 dark:text-violet-300">
-                <li class="flex items-center gap-2">
-                  <CheckIcon class="h-4 w-4 text-violet-500" />
-                  Set session timeout to 30-60 minutes for optimal security
-                </li>
-                <li class="flex items-center gap-2">
-                  <CheckIcon class="h-4 w-4 text-violet-500" />
-                  Use 5 or fewer login attempts to prevent brute force attacks
-                </li>
-                <li class="flex items-center gap-2">
-                  <CheckIcon class="h-4 w-4 text-violet-500" />
-                  Set lockout duration to at least 15 minutes
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        </Card>
       </div>
 
       <!-- Access Control Tab -->
-      <div v-if="activeTab === 'access-control'" class="space-y-6">
-        <!-- Access Control Loading Animation -->
-        <div v-if="accessControlLoading" class="py-16 flex flex-col items-center justify-center">
-          <div class="relative">
-            <div class="settings-shield">
-              <ShieldCheckIcon class="h-14 w-14 text-emerald-500" />
+      <div v-if="activeTab === 'access'" class="space-y-6">
+        <!-- Header Banner -->
+        <div class="relative overflow-hidden rounded-xl bg-gradient-to-br from-cyan-500 via-teal-500 to-emerald-500 p-6 text-white shadow-lg">
+          <div class="absolute inset-0 bg-black/10"></div>
+          <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+          <div class="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+          <div class="relative flex items-center gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+              <GlobeAltIcon class="h-8 w-8" />
             </div>
-            <div class="absolute inset-0 settings-shield-pulse">
-              <ShieldCheckIcon class="h-14 w-14 text-emerald-300 dark:text-emerald-700" />
+            <div>
+              <h2 class="text-2xl font-bold">Access Control</h2>
+              <p class="text-white/80">Manage IP ranges and network access</p>
             </div>
           </div>
-          <p class="mt-6 text-sm font-medium text-secondary">Loading access control...</p>
-          <p class="mt-1 text-xs text-muted">Fetching security settings</p>
         </div>
 
-        <template v-else>
-          <!-- External Access Info (show if Cloudflare tunnel is configured) -->
-          <div
-            v-if="cloudflareInstalled"
-            :class="[
-              'rounded-lg p-4 border',
-              cloudflareRunning
-                ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30'
-                : 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30'
-            ]"
-          >
-            <div class="flex gap-3">
-              <GlobeAltIcon :class="['h-5 w-5 flex-shrink-0 mt-0.5', cloudflareRunning ? 'text-green-500' : 'text-red-500']" />
-              <div>
-                <p :class="['font-medium', cloudflareRunning ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400']">
-                  External Access via Cloudflare Tunnel
-                  <span v-if="!cloudflareRunning" class="ml-2 text-xs font-normal px-2 py-0.5 bg-red-100 dark:bg-red-500/20 rounded">
-                    DOWN
-                  </span>
-                </p>
-                <p v-if="cloudflareRunning" class="text-sm text-green-600 dark:text-green-300 mt-1">
-                  External users access your services through Cloudflare Tunnel. Traffic arrives from the internal Docker network,
-                  bypassing IP-based restrictions. The IP ranges below control direct network access only.
-                </p>
-                <p v-else class="text-sm text-red-600 dark:text-red-300 mt-1">
-                  Cloudflare Tunnel is configured but currently not running. External access may be unavailable.
-                  Check the System page for tunnel status.
-                </p>
+        <Card title="Allowed IP Ranges" subtitle="Configure which networks can access the system">
+          <LoadingSpinner v-if="loadingIpRanges" size="sm" text="Loading IP ranges..." />
+          <template v-else>
+            <!-- Quick Add Common Networks -->
+            <div class="mb-6">
+              <h4 class="text-sm font-medium text-secondary mb-2">Quick Add Common Networks</h4>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="network in commonNetworks"
+                  :key="network.range"
+                  @click="addCommonNetwork(network)"
+                  :disabled="savingIpRanges || ipRanges.some(r => r.ip_range === network.range)"
+                  :class="[
+                    'px-3 py-1.5 text-sm rounded-lg border transition-colors',
+                    ipRanges.some(r => r.ip_range === network.range)
+                      ? 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 cursor-not-allowed'
+                      : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                  ]"
+                >
+                  <CheckIcon v-if="ipRanges.some(r => r.ip_range === network.range)" class="h-4 w-4 inline mr-1" />
+                  <PlusIcon v-else class="h-4 w-4 inline mr-1" />
+                  {{ network.name }}
+                </button>
               </div>
             </div>
-          </div>
 
-          <!-- Nginx Routes Section - Collapsible Card -->
-          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-400 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden">
-            <!-- Section Header (clickable) -->
-            <div
-              @click="toggleRoutesSection"
-              class="flex items-center gap-4 p-5 cursor-pointer"
-            >
-              <!-- Icon -->
-              <div class="flex-shrink-0 w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
-                <ServerIcon class="h-6 w-6 text-emerald-500" />
-              </div>
-
-              <!-- Title and Description -->
-              <div class="flex-1 min-w-0">
-                <p class="font-semibold text-gray-900 dark:text-white text-lg">Nginx Routes</p>
-                <p class="text-sm text-gray-500 dark:text-gray-400">All configured routes and their access levels</p>
-              </div>
-
-              <!-- Count Badge -->
-              <span class="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                {{ externalRoutes.routes.length }} routes
-              </span>
-
-              <!-- Chevron -->
-              <ChevronRightIcon
-                :class="[
-                  'h-5 w-5 text-gray-400 transition-transform duration-200',
-                  routesSectionExpanded ? 'rotate-90' : ''
-                ]"
-              />
-            </div>
-
-            <!-- Expanded Content -->
-            <Transition name="section-expand">
-              <div v-if="routesSectionExpanded" class="border-t border-gray-100 dark:border-gray-700">
-                <div class="p-5">
-                  <LoadingSpinner v-if="externalRoutesLoading" size="sm" text="Loading routes..." class="py-4" />
-
-                  <template v-else>
-                    <!-- Domain Info -->
-                    <div v-if="externalRoutes.domain" class="mb-4 p-3 rounded-lg bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border border-blue-200 dark:border-blue-800">
-                      <div class="flex items-center gap-2">
-                        <GlobeAltIcon class="h-5 w-5 text-blue-500" />
-                        <span class="text-sm text-secondary">Domain:</span>
-                        <span class="font-mono text-primary font-medium">{{ externalRoutes.domain }}</span>
-                      </div>
-                    </div>
-
-                    <!-- Legend -->
-                    <div class="flex flex-wrap gap-4 mb-4 text-xs">
-                      <div class="flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-green-500"></span>
-                        <span class="text-secondary">Public (No Auth)</span>
-                      </div>
-                      <div class="flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                        <span class="text-secondary">SSO Protected</span>
-                      </div>
-                      <div class="flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-red-500"></span>
-                        <span class="text-secondary">IP Restricted</span>
-                      </div>
-                    </div>
-
-                    <div v-if="externalRoutes.routes.length === 0" class="text-center py-6 text-secondary">
-                      No routes found in nginx configuration.
-                    </div>
-
-                    <!-- Routes List -->
-                    <div v-else class="space-y-2 mb-4">
-                      <div
-                        v-for="(route, index) in externalRoutes.routes"
-                        :key="index"
-                        class="bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-400 dark:border-gray-700 overflow-hidden"
-                      >
-                        <!-- Route Header -->
-                        <div
-                          @click="toggleRouteExpanded(index)"
-                          class="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                        >
-                          <!-- Icon -->
-                          <div
-                            class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center"
-                            :style="{ backgroundColor: getRouteIconBg(route.color) }"
-                          >
-                            <component
-                              :is="getRouteIcon(route.icon)"
-                              class="h-4 w-4"
-                              :style="{ color: getRouteIconColor(route.color) }"
-                            />
-                          </div>
-
-                          <!-- Path -->
-                          <div class="flex-1 min-w-0 flex items-center gap-2">
-                            <p class="font-medium text-gray-900 dark:text-white font-mono text-sm">{{ route.path }}</p>
-                            <span
-                              v-if="route.protected"
-                              class="text-xs px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded"
-                            >
-                              System
-                            </span>
-                          </div>
-
-                          <!-- Status Badge -->
-                          <span
-                            :class="[
-                              'flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium',
-                              route.is_public
-                                ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
-                                : route.has_auth
-                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
-                                  : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
-                            ]"
-                          >
-                            {{ route.is_public ? 'Public' : route.has_auth ? 'SSO' : 'Restricted' }}
-                          </span>
-
-                          <!-- Chevron -->
-                          <ChevronRightIcon
-                            :class="[
-                              'h-4 w-4 text-gray-400 transition-transform duration-200',
-                              expandedRoutes.has(index) ? 'rotate-90' : ''
-                            ]"
-                          />
-                        </div>
-
-                        <!-- Route Details -->
-                        <Transition name="expand">
-                          <div v-if="expandedRoutes.has(index)" class="px-3 pb-3 pt-1 border-t border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800">
-                            <div class="space-y-2 text-sm">
-                              <p class="text-gray-600 dark:text-gray-300">{{ route.description }}</p>
-
-                              <div v-if="externalRoutes.domain" class="flex items-center gap-2 flex-wrap">
-                                <span class="text-gray-500 dark:text-gray-400">URL:</span>
-                                <code class="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded font-mono text-xs">
-                                  https://{{ externalRoutes.domain }}{{ route.path }}
-                                </code>
-                                <button
-                                  @click.stop="copyToClipboard(`https://${externalRoutes.domain}${route.path}`)"
-                                  class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded transition-colors"
-                                  title="Copy URL"
-                                >
-                                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                  </svg>
-                                </button>
-                              </div>
-
-                              <div class="flex items-center gap-2">
-                                <span class="text-gray-500 dark:text-gray-400">Upstream:</span>
-                                <span class="font-mono text-gray-900 dark:text-white">
-                                  {{ route.proxy_target }}{{ route.proxy_port ? `:${route.proxy_port}` : '' }}
-                                </span>
-                              </div>
-
-                              <div v-if="route.manageable && !route.protected" class="pt-1">
-                                <button
-                                  @click.stop="confirmDeleteRoute(route)"
-                                  class="text-xs text-red-500 hover:text-red-600 flex items-center gap-1"
-                                >
-                                  <TrashIcon class="h-3 w-3" />
-                                  Remove route
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </Transition>
-                      </div>
-                    </div>
-
-                    <!-- Add Route Form -->
-                    <div class="border-t border-gray-400 dark:border-gray-700 pt-4 mt-4">
-                      <div class="flex items-center gap-2 mb-3">
-                        <PlusIcon class="h-5 w-5 text-green-500" />
-                        <p class="text-sm font-medium text-primary">Add New Route</p>
-                      </div>
-                      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div>
-                          <label class="block text-sm text-secondary mb-1.5">Path *</label>
-                          <input
-                            type="text"
-                            v-model="newExternalRoute.path"
-                            placeholder="/ntfy/, /myservice/"
-                            class="input-field w-full font-mono"
-                            @click.stop
-                          />
-                          <p class="text-xs text-muted mt-1">Any path except /api, /admin, /config</p>
-                        </div>
-                        <div>
-                          <label class="block text-sm text-secondary mb-1.5">Upstream Server</label>
-                          <input
-                            type="text"
-                            v-model="newExternalRoute.upstream"
-                            placeholder="n8n"
-                            class="input-field w-full font-mono"
-                            @click.stop
-                          />
-                          <p class="text-xs text-muted mt-1">Service name (e.g., n8n, n8n_ntfy)</p>
-                        </div>
-                        <div>
-                          <label class="block text-sm text-secondary mb-1.5">Upstream Port</label>
-                          <input
-                            type="number"
-                            v-model.number="newExternalRoute.upstream_port"
-                            placeholder="Optional (e.g., 8085)"
-                            class="input-field w-full font-mono"
-                            min="1"
-                            max="65535"
-                            @click.stop
-                          />
-                          <p class="text-xs text-muted mt-1">Leave empty to use upstream name</p>
-                        </div>
-                        <div class="md:col-span-2 lg:col-span-2">
-                          <label class="block text-sm text-secondary mb-1.5">Description</label>
-                          <input
-                            type="text"
-                            v-model="newExternalRoute.description"
-                            placeholder="NTFY push notification server"
-                            class="input-field w-full"
-                            @click.stop
-                          />
-                        </div>
-                        <div>
-                          <label class="block text-sm text-secondary mb-1.5">Access Level</label>
-                          <div class="flex gap-4 mt-2">
-                            <label class="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="radio"
-                                v-model="newExternalRoute.is_public"
-                                :value="true"
-                                class="w-4 h-4 text-green-500 focus:ring-green-500"
-                                @click.stop
-                              />
-                              <span class="text-sm text-primary flex items-center gap-1">
-                                <LockOpenIcon class="h-4 w-4 text-green-500" />
-                                Public
-                              </span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="radio"
-                                v-model="newExternalRoute.is_public"
-                                :value="false"
-                                class="w-4 h-4 text-red-500 focus:ring-red-500"
-                                @click.stop
-                              />
-                              <span class="text-sm text-primary flex items-center gap-1">
-                                <LockClosedIcon class="h-4 w-4 text-red-500" />
-                                Restricted (IP check)
-                              </span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="flex justify-end mt-4">
-                        <button
-                          @click.stop="addExternalRoute"
-                          :disabled="addingExternalRoute || !newExternalRoute.path"
-                          class="btn-primary flex items-center gap-2"
-                        >
-                          <PlusIcon class="h-4 w-4" />
-                          {{ addingExternalRoute ? 'Adding...' : 'Add Route' }}
-                        </button>
-                      </div>
-                    </div>
-                  </template>
-                </div>
-              </div>
-            </Transition>
-          </div>
-
-          <!-- Configured IP Ranges - Collapsible Card -->
-          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-400 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden">
-            <!-- Section Header (clickable) -->
-            <div
-              @click="toggleIpRangesSection"
-              class="flex items-center gap-4 p-5 cursor-pointer"
-            >
-              <!-- Icon -->
-              <div class="flex-shrink-0 w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center">
-                <GlobeAltIcon class="h-6 w-6 text-blue-500" />
-              </div>
-
-              <!-- Title and Description -->
-              <div class="flex-1 min-w-0">
-                <p class="font-semibold text-gray-900 dark:text-white text-lg">IP Ranges (Direct Access)</p>
-                <p class="text-sm text-gray-500 dark:text-gray-400">Networks allowed to bypass IP restrictions</p>
-              </div>
-
-              <!-- Status Badge -->
-              <span
-                :class="[
-                  'flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium',
-                  accessControl.enabled
-                    ? 'bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400'
-                    : 'bg-gray-50 text-gray-600 dark:bg-gray-500/10 dark:text-gray-400'
-                ]"
+            <!-- Current IP Ranges -->
+            <div class="space-y-3 mb-6">
+              <div
+                v-for="(range, index) in ipRanges"
+                :key="index"
+                class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700"
               >
-                {{ accessControl.enabled ? 'Active' : 'Not Configured' }}
-              </span>
-
-              <!-- Count Badge -->
-              <span class="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                {{ accessControl.ip_ranges.length }} ranges
-              </span>
-
-              <!-- Chevron -->
-              <ChevronRightIcon
-                :class="[
-                  'h-5 w-5 text-gray-400 transition-transform duration-200',
-                  ipRangesSectionExpanded ? 'rotate-90' : ''
-                ]"
-              />
-            </div>
-
-            <!-- Expanded Content -->
-            <Transition name="section-expand">
-              <div v-if="ipRangesSectionExpanded" class="border-t border-gray-100 dark:border-gray-700">
-                <div class="p-5">
-                  <!-- Status Info and Reload Button -->
-                  <div class="flex items-center justify-between mb-4 pb-4 border-b border-gray-400 dark:border-gray-700">
-                    <div class="text-sm text-gray-500 dark:text-gray-400">
-                      <span v-if="accessControl.last_updated">
-                        Last updated: {{ new Date(accessControl.last_updated).toLocaleString() }}
-                      </span>
-                      <span v-else>Configuration not yet saved</span>
-                    </div>
-                    <button
-                      @click.stop="reloadNginx"
-                      :disabled="reloadingNginx"
-                      class="btn-secondary text-sm flex items-center gap-2"
-                    >
-                      <ArrowPathIcon :class="['h-4 w-4', reloadingNginx && 'animate-spin']" />
-                      {{ reloadingNginx ? 'Reloading...' : 'Reload Nginx' }}
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <code class="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm font-mono text-primary">
+                      {{ range.ip_range }}
+                    </code>
+                  </div>
+                  <div v-if="editingIpRange === index" class="mt-2 flex items-center gap-2">
+                    <input
+                      v-model="ipRanges[index].description"
+                      type="text"
+                      class="input text-sm flex-1"
+                      placeholder="Description"
+                      @keyup.enter="updateIpRangeDescription(index)"
+                    />
+                    <button @click="updateIpRangeDescription(index)" class="btn-primary btn-sm">
+                      <CheckIcon class="h-4 w-4" />
+                    </button>
+                    <button @click="editingIpRange = null" class="btn-secondary btn-sm">
+                      <XMarkIcon class="h-4 w-4" />
                     </button>
                   </div>
-
-                  <div v-if="accessControl.ip_ranges.length === 0" class="text-center py-6 text-secondary">
-                    No IP ranges configured. Add ranges below or use defaults.
-                  </div>
-
-                  <!-- IP Ranges List -->
-                  <div v-else class="space-y-2 mb-4">
-                    <div
-                      v-for="(range, index) in accessControl.ip_ranges"
-                      :key="index"
-                      class="bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-400 dark:border-gray-700 overflow-hidden"
-                    >
-                      <!-- Range Header -->
-                      <div
-                        @click="toggleIpRangeExpanded(index)"
-                        class="flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                      >
-                        <!-- Icon -->
-                        <div
-                          :class="[
-                            'flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center',
-                            range.protected
-                              ? 'bg-gray-200 dark:bg-gray-700'
-                              : range.access_level === 'external'
-                                ? 'bg-purple-100 dark:bg-purple-500/20'
-                                : 'bg-blue-100 dark:bg-blue-500/20'
-                          ]"
-                        >
-                          <GlobeAltIcon
-                            :class="[
-                              'h-4 w-4',
-                              range.protected
-                                ? 'text-gray-500'
-                                : range.access_level === 'external'
-                                  ? 'text-purple-500'
-                                  : 'text-blue-500'
-                            ]"
-                          />
-                        </div>
-
-                        <!-- CIDR -->
-                        <div class="flex-1 min-w-0 flex items-center gap-2">
-                          <p class="font-medium text-gray-900 dark:text-white font-mono text-sm">{{ range.cidr }}</p>
-                          <span
-                            v-if="range.protected"
-                            class="text-xs px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded"
-                          >
-                            System
-                          </span>
-                        </div>
-
-                        <!-- Status Badge -->
-                        <span
-                          :class="[
-                            'flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium',
-                            range.access_level === 'external'
-                              ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400'
-                              : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
-                          ]"
-                        >
-                          {{ range.access_level === 'external' ? 'External' : 'Internal' }}
-                        </span>
-
-                        <!-- Delete button (inline for non-protected) -->
-                        <button
-                          v-if="!range.protected"
-                          @click.stop="confirmDeleteIpRange(range)"
-                          class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
-                          title="Delete IP range"
-                        >
-                          <TrashIcon class="h-4 w-4" />
-                        </button>
-                        <LockClosedIcon v-else class="h-4 w-4 text-gray-400" />
-
-                        <!-- Chevron -->
-                        <ChevronRightIcon
-                          :class="[
-                            'h-4 w-4 text-gray-400 transition-transform duration-200',
-                            expandedIpRanges.has(index) ? 'rotate-90' : ''
-                          ]"
-                        />
-                      </div>
-
-                      <!-- Range Details -->
-                      <Transition name="expand">
-                        <div v-if="expandedIpRanges.has(index)" class="px-3 pb-3 pt-1 border-t border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800">
-                          <div class="space-y-2 text-sm">
-                            <!-- Description with edit capability -->
-                            <div v-if="editingIpRangeIndex === index" class="space-y-2">
-                              <label class="block text-xs text-gray-500 dark:text-gray-400">Description</label>
-                              <input
-                                type="text"
-                                v-model="editingIpRangeDescription"
-                                class="input-field w-full text-sm"
-                                placeholder="Enter description..."
-                                @click.stop
-                                @keyup.enter="saveIpRangeDescription(range.cidr)"
-                                @keyup.escape="cancelEditIpRangeDescription"
-                              />
-                              <div class="flex items-center gap-2">
-                                <button
-                                  @click.stop="saveIpRangeDescription(range.cidr)"
-                                  :disabled="savingIpRangeDescription"
-                                  class="text-xs px-2 py-1 rounded bg-blue-500 hover:bg-blue-600 text-white flex items-center gap-1"
-                                >
-                                  <CheckIcon class="h-3 w-3" />
-                                  {{ savingIpRangeDescription ? 'Saving...' : 'Save' }}
-                                </button>
-                                <button
-                                  @click.stop="cancelEditIpRangeDescription"
-                                  :disabled="savingIpRangeDescription"
-                                  class="text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 flex items-center gap-1"
-                                >
-                                  <XMarkIcon class="h-3 w-3" />
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                            <div v-else class="flex items-start justify-between gap-2">
-                              <p class="text-gray-600 dark:text-gray-300 flex-1">
-                                {{ range.description || 'No description provided' }}
-                              </p>
-                              <button
-                                @click.stop="startEditIpRangeDescription(index, range.description)"
-                                class="p-1 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded transition-colors flex-shrink-0"
-                                title="Edit description"
-                              >
-                                <PencilIcon class="h-4 w-4" />
-                              </button>
-                            </div>
-                            <div class="flex items-center gap-2">
-                              <span class="text-gray-500 dark:text-gray-400">Type:</span>
-                              <span class="text-gray-900 dark:text-white">
-                                {{ range.access_level === 'external' ? 'External network' : 'Internal/trusted network' }}
-                              </span>
-                            </div>
-                            <div v-if="range.protected" class="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                              <LockClosedIcon class="h-4 w-4" />
-                              <span>System protected - required for functionality</span>
-                            </div>
-                          </div>
-                        </div>
-                      </Transition>
-                    </div>
-                  </div>
-
-                  <!-- Add IP Range Form -->
-                  <div class="border-t border-gray-400 dark:border-gray-700 pt-4 mt-4">
-                    <div class="flex items-center gap-2 mb-3">
-                      <PlusIcon class="h-5 w-5 text-blue-500" />
-                      <p class="text-sm font-medium text-primary">Add New IP Range</p>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label class="block text-sm text-secondary mb-1.5">CIDR Address</label>
-                        <input
-                          type="text"
-                          v-model="newIpRange.cidr"
-                          placeholder="e.g., 192.168.1.0/24"
-                          class="input-field w-full font-mono"
-                          @click.stop
-                        />
-                      </div>
-                      <div>
-                        <label class="block text-sm text-secondary mb-1.5">Description</label>
-                        <input
-                          type="text"
-                          v-model="newIpRange.description"
-                          placeholder="e.g., Home Network"
-                          class="input-field w-full"
-                          @click.stop
-                        />
-                      </div>
-                      <div>
-                        <label class="block text-sm text-secondary mb-1.5">Access Level</label>
-                        <select v-model="newIpRange.access_level" class="select-field w-full" @click.stop>
-                          <option value="internal">Internal</option>
-                          <option value="external">External</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div class="flex justify-end mt-4">
-                      <button
-                        @click.stop="addIpRange"
-                        :disabled="addingIpRange || !newIpRange.cidr"
-                        class="btn-primary flex items-center gap-2"
-                      >
-                        <PlusIcon class="h-4 w-4" />
-                        {{ addingIpRange ? 'Adding...' : 'Add IP Range' }}
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Quick Add Common Networks -->
-                  <div v-if="availableDefaultRanges.length > 0" class="border-t border-gray-400 dark:border-gray-700 pt-4 mt-4">
-                    <div class="flex items-center gap-2 mb-3">
-                      <BoltIcon class="h-5 w-5 text-amber-500" />
-                      <p class="text-sm font-medium text-primary">Quick Add Common Networks</p>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <button
-                        v-for="defaultRange in availableDefaultRanges"
-                        :key="defaultRange.cidr"
-                        @click.stop="addDefaultRange(defaultRange)"
-                        class="flex items-center justify-between p-3 rounded-lg border text-left transition-colors border-gray-400 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-                      >
-                        <div>
-                          <p class="font-mono text-gray-900 dark:text-white text-sm">{{ defaultRange.cidr }}</p>
-                          <p class="text-xs text-gray-500 dark:text-gray-400">{{ defaultRange.description }}</p>
-                        </div>
-                        <PlusIcon class="h-5 w-5 text-gray-400" />
-                      </button>
-                    </div>
-                  </div>
+                  <p v-else class="text-sm text-muted mt-1">
+                    {{ range.description || 'No description' }}
+                    <button @click="editingIpRange = index" class="ml-2 text-blue-500 hover:underline">
+                      <PencilIcon class="h-3 w-3 inline" /> Edit
+                    </button>
+                  </p>
                 </div>
+                <button
+                  @click="removeIpRange(index)"
+                  :disabled="savingIpRanges"
+                  class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                >
+                  <TrashIcon class="h-5 w-5" />
+                </button>
               </div>
-            </Transition>
-          </div>
-        </template>
 
-        <!-- Delete IP Range Confirmation Dialog -->
-        <ConfirmDialog
-          v-model:open="showDeleteConfirm"
-          title="Delete IP Range"
-          :message="`Are you sure you want to delete ${ipRangeToDelete?.cidr}? This will remove access for this network range.`"
-          confirm-text="Delete"
-          :danger="true"
-          @confirm="deleteIpRange"
-        />
+              <div v-if="ipRanges.length === 0" class="text-center py-8 text-muted">
+                <GlobeAltIcon class="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>No IP ranges configured</p>
+                <p class="text-sm">Add networks to allow access</p>
+              </div>
+            </div>
 
-        <!-- Delete External Route Confirmation Dialog -->
-        <ConfirmDialog
-          v-model:open="showDeleteRouteConfirm"
-          title="Remove External Route"
-          :message="`Are you sure you want to remove ${routeToDelete?.path}? This path will no longer be publicly accessible.`"
-          confirm-text="Remove"
-          :danger="true"
-          @confirm="deleteExternalRoute"
-        />
+            <!-- Add New IP Range -->
+            <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+              <h4 class="text-sm font-medium text-secondary mb-3">Add Custom IP Range</h4>
+              <div class="flex gap-3">
+                <input
+                  v-model="newIpRange.ip_range"
+                  type="text"
+                  class="input flex-1"
+                  placeholder="e.g., 192.168.1.0/24"
+                />
+                <input
+                  v-model="newIpRange.description"
+                  type="text"
+                  class="input flex-1"
+                  placeholder="Description (optional)"
+                />
+                <button @click="addIpRange" :disabled="savingIpRanges || !newIpRange.ip_range" class="btn-primary">
+                  <PlusIcon class="h-4 w-4 mr-2" />
+                  Add
+                </button>
+              </div>
+            </div>
+          </template>
+        </Card>
       </div>
 
       <!-- Environment Tab -->
-      <div v-if="activeTab === 'environment'">
-        <EnvironmentSettings />
+      <div v-if="activeTab === 'environment'" class="space-y-6">
+        <!-- Header Banner -->
+        <div class="relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-500 via-blue-500 to-cyan-500 p-6 text-white shadow-lg">
+          <div class="absolute inset-0 bg-black/10"></div>
+          <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+          <div class="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+          <div class="relative flex items-center gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+              <DocumentTextIcon class="h-8 w-8" />
+            </div>
+            <div>
+              <h2 class="text-2xl font-bold">Environment Variables</h2>
+              <p class="text-white/80">View and configure application environment</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Restart Warning -->
+        <div v-if="envRestartRequired" class="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+          <div class="flex items-start gap-3">
+            <ExclamationTriangleIcon class="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <h5 class="font-medium text-amber-800 dark:text-amber-300">Restart Required</h5>
+              <p class="mt-1 text-sm text-amber-700 dark:text-amber-400">
+                Environment changes require a container restart to take effect.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <Card title="Environment Variables" subtitle="Application configuration values">
+          <LoadingSpinner v-if="loadingEnvVars" size="sm" text="Loading environment..." />
+          <template v-else>
+            <div class="space-y-3">
+              <div
+                v-for="(envVar, index) in envVars"
+                :key="envVar.key"
+                class="group relative rounded-xl border border-gray-200 dark:border-gray-700 p-4 transition-all hover:border-indigo-300 dark:hover:border-indigo-600"
+              >
+                <div class="flex items-start justify-between">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                      <code class="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 rounded text-sm font-mono text-indigo-700 dark:text-indigo-400">
+                        {{ envVar.key }}
+                      </code>
+                      <span v-if="envVar.sensitive" class="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                        Sensitive
+                      </span>
+                    </div>
+                    <p class="text-sm text-muted mt-1">{{ envVar.description }}</p>
+                  </div>
+                </div>
+
+                <div v-if="editingEnvVar === index" class="mt-3 flex items-center gap-2">
+                  <input
+                    v-model="envVars[index].value"
+                    :type="envVar.sensitive ? 'password' : 'text'"
+                    class="input text-sm flex-1 font-mono"
+                    :placeholder="envVar.sensitive ? 'Enter new value' : envVar.value"
+                    @keyup.enter="updateEnvVar(index)"
+                  />
+                  <button @click="updateEnvVar(index)" class="btn-primary btn-sm">
+                    <CheckIcon class="h-4 w-4" />
+                  </button>
+                  <button @click="editingEnvVar = null" class="btn-secondary btn-sm">
+                    <XMarkIcon class="h-4 w-4" />
+                  </button>
+                </div>
+                <div v-else class="mt-2 flex items-center justify-between">
+                  <code class="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded text-sm font-mono text-gray-700 dark:text-gray-300">
+                    {{ envVar.sensitive ? '••••••••' : envVar.value }}
+                  </code>
+                  <button
+                    @click="editingEnvVar = index"
+                    class="text-sm text-blue-500 hover:underline flex items-center gap-1"
+                  >
+                    <PencilIcon class="h-3 w-3" /> Edit
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Info Section -->
+            <div class="mt-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+              <div class="flex gap-3">
+                <svg class="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <h5 class="font-medium text-blue-800 dark:text-blue-300">About Environment Variables</h5>
+                  <p class="mt-1 text-sm text-blue-700 dark:text-blue-400">
+                    Sensitive values are masked for security. Changes to environment variables require a container restart.
+                    Edit with caution as incorrect values may prevent the application from starting.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </template>
+        </Card>
       </div>
 
       <!-- Account Tab -->
       <div v-if="activeTab === 'account'" class="space-y-6">
-        <Card title="Account Information">
-          <div class="space-y-4">
-            <div class="flex items-center gap-4">
-              <div class="p-4 rounded-full bg-blue-100 dark:bg-blue-500/20">
-                <UserIcon class="h-8 w-8 text-blue-500" />
-              </div>
-              <div>
-                <p class="font-medium text-primary text-lg">{{ authStore.user?.username || 'Admin' }}</p>
-                <p class="text-sm text-secondary">Administrator</p>
-              </div>
+        <!-- Header Banner -->
+        <div class="relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-500 p-6 text-white shadow-lg">
+          <div class="absolute inset-0 bg-black/10"></div>
+          <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+          <div class="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+          <div class="relative flex items-center gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+              <UserIcon class="h-8 w-8" />
+            </div>
+            <div>
+              <h2 class="text-2xl font-bold">Account Settings</h2>
+              <p class="text-white/80">Manage your profile and credentials</p>
             </div>
           </div>
+        </div>
+
+        <!-- User Profile Card -->
+        <Card title="User Profile" subtitle="Your account information">
+          <LoadingSpinner v-if="loadingProfile" size="sm" text="Loading profile..." />
+          <template v-else>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- Avatar and Name -->
+              <div class="flex items-center gap-4">
+                <div class="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold">
+                  {{ (userProfile?.username || 'A').charAt(0).toUpperCase() }}
+                </div>
+                <div>
+                  <h3 class="text-lg font-semibold text-primary">{{ userProfile?.username || 'admin' }}</h3>
+                  <p class="text-sm text-muted capitalize">{{ userProfile?.role || 'Administrator' }}</p>
+                </div>
+              </div>
+
+              <!-- Profile Details -->
+              <div class="space-y-3">
+                <div class="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                  <span class="text-sm text-secondary">Username</span>
+                  <span class="font-medium text-primary">{{ userProfile?.username || 'admin' }}</span>
+                </div>
+                <div class="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                  <span class="text-sm text-secondary">Role</span>
+                  <span class="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 capitalize">
+                    {{ userProfile?.role || 'admin' }}
+                  </span>
+                </div>
+                <div class="flex justify-between items-center py-2">
+                  <span class="text-sm text-secondary">Account Created</span>
+                  <span class="font-medium text-primary">
+                    {{ userProfile?.created_at ? new Date(userProfile.created_at).toLocaleDateString() : 'N/A' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </template>
         </Card>
 
-        <Card title="Change Password">
-          <form @submit.prevent="changePassword" class="space-y-4">
+        <Card title="Change Password" subtitle="Update your account password">
+          <div class="max-w-md space-y-4">
             <div>
-              <label class="block text-sm font-medium text-primary mb-1.5">Current Password</label>
+              <label class="block text-sm font-medium text-secondary mb-1">Current Password</label>
               <div class="relative">
-                <KeyIcon class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" />
                 <input
                   v-model="passwordForm.current"
                   :type="showPasswords.current ? 'text' : 'password'"
-                  placeholder="Enter current password"
-                  class="input-field pl-10 pr-10 w-full"
-                  required
+                  class="input pr-10"
                 />
                 <button
                   type="button"
                   @click="showPasswords.current = !showPasswords.current"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-secondary"
+                  class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
                 >
                   <EyeSlashIcon v-if="showPasswords.current" class="h-5 w-5" />
                   <EyeIcon v-else class="h-5 w-5" />
                 </button>
               </div>
             </div>
-
             <div>
-              <label class="block text-sm font-medium text-primary mb-1.5">New Password</label>
+              <label class="block text-sm font-medium text-secondary mb-1">New Password</label>
               <div class="relative">
-                <KeyIcon class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" />
                 <input
                   v-model="passwordForm.new"
                   :type="showPasswords.new ? 'text' : 'password'"
-                  placeholder="Enter new password"
-                  class="input-field pl-10 pr-10 w-full"
-                  required
-                  minlength="8"
+                  class="input pr-10"
                 />
                 <button
                   type="button"
                   @click="showPasswords.new = !showPasswords.new"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-secondary"
+                  class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
                 >
                   <EyeSlashIcon v-if="showPasswords.new" class="h-5 w-5" />
                   <EyeIcon v-else class="h-5 w-5" />
                 </button>
               </div>
             </div>
-
             <div>
-              <label class="block text-sm font-medium text-primary mb-1.5">Confirm New Password</label>
+              <label class="block text-sm font-medium text-secondary mb-1">Confirm New Password</label>
               <div class="relative">
-                <KeyIcon class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" />
                 <input
                   v-model="passwordForm.confirm"
                   :type="showPasswords.confirm ? 'text' : 'password'"
-                  placeholder="Confirm new password"
-                  class="input-field pl-10 pr-10 w-full"
-                  required
+                  class="input pr-10"
                 />
                 <button
                   type="button"
                   @click="showPasswords.confirm = !showPasswords.confirm"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-secondary"
+                  class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
                 >
                   <EyeSlashIcon v-if="showPasswords.confirm" class="h-5 w-5" />
                   <EyeIcon v-else class="h-5 w-5" />
                 </button>
               </div>
             </div>
-
-            <div class="pt-2">
-              <button
-                type="submit"
-                :disabled="changingPassword"
-                class="btn-primary"
-              >
-                {{ changingPassword ? 'Changing...' : 'Change Password' }}
-              </button>
-            </div>
-          </form>
+          </div>
+          <div class="flex justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <button @click="changePassword" :disabled="changingPassword" class="btn-primary">
+              <KeyIcon class="h-4 w-4 mr-2" />
+              Change Password
+            </button>
+          </div>
         </Card>
       </div>
 
-      <!-- n8n API / Debug Tab -->
-      <div v-if="activeTab === 'api-debug'" class="space-y-6">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- n8n API Key Card -->
-          <Card :padding="false">
-            <template #header>
-              <div class="flex items-center gap-2 px-4 py-3">
-                <KeyIcon class="h-5 w-5 text-blue-500" />
-                <h3 class="font-semibold text-primary">n8n API Key</h3>
-              </div>
-            </template>
-            <div class="p-4">
-              <p class="text-sm text-secondary mb-4">
-                The n8n API key enables communication with your n8n instance for workflow management
-                and notifications. Generate this key in n8n under
-                <span class="font-medium">Settings &rarr; API</span>.
-              </p>
+      <!-- Advanced Tab -->
+      <div v-if="activeTab === 'advanced'" class="space-y-6">
+        <!-- Header Banner -->
+        <div class="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 p-6 text-white shadow-lg">
+          <div class="absolute inset-0 bg-black/10"></div>
+          <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+          <div class="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+          <div class="relative flex items-center gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+              <BugAntIcon class="h-8 w-8" />
+            </div>
+            <div>
+              <h2 class="text-2xl font-bold">Advanced Settings</h2>
+              <p class="text-white/80">Developer and debugging options</p>
+            </div>
+          </div>
+        </div>
 
-              <div class="flex items-center justify-between mb-3 py-2 border-b border-[var(--color-border)]">
-                <span class="text-sm text-secondary">Status</span>
-                <span
-                  :class="[
-                    'flex items-center gap-2 text-sm font-medium',
-                    n8nApiKeyIsSet ? 'text-emerald-500' : 'text-amber-500'
-                  ]"
-                >
-                  <span :class="['w-2 h-2 rounded-full', n8nApiKeyIsSet ? 'bg-emerald-500' : 'bg-amber-500']"></span>
-                  {{ n8nApiKeyIsSet ? 'Configured' : 'Not Set' }}
-                </span>
-              </div>
-
-              <div v-if="n8nApiKeyIsSet && !n8nApiKeyEditing" class="flex items-center justify-between mb-4 py-2 border-b border-[var(--color-border)]">
-                <span class="text-sm text-secondary">Current Key</span>
-                <span class="font-mono text-sm text-primary">{{ n8nApiKeyMasked }}</span>
-              </div>
-
-              <!-- Edit Form -->
-              <div v-if="n8nApiKeyEditing" class="space-y-4">
-                <div>
-                  <label class="block text-sm font-medium text-primary mb-1.5">New API Key</label>
-                  <div class="relative">
-                    <KeyIcon class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" />
-                    <input
-                      v-model="n8nApiKey"
-                      :type="showN8nApiKey ? 'text' : 'password'"
-                      placeholder="Enter your n8n API key"
-                      class="input-field pl-10 pr-10 w-full"
-                    />
+        <Card>
+          <div class="space-y-6">
+            <!-- Debug Mode Toggle -->
+            <div class="group relative rounded-xl border border-gray-200 dark:border-gray-700 p-5 transition-all hover:border-amber-300 dark:hover:border-amber-600 hover:shadow-md">
+              <div class="flex items-start gap-4">
+                <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-orange-500/25">
+                  <BugAntIcon class="h-6 w-6" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <h4 class="font-semibold text-primary">Debug Mode</h4>
+                        <span
+                          v-if="debugStore.isEnabled"
+                          class="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+                        >
+                          Enabled
+                        </span>
+                      </div>
+                      <p class="mt-1 text-sm text-muted">Enable verbose logging and debugging features for development and troubleshooting.</p>
+                    </div>
                     <button
-                      type="button"
-                      @click="showN8nApiKey = !showN8nApiKey"
-                      class="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-secondary"
+                      @click="debugStore.toggleDebugMode"
+                      :disabled="debugStore.loading"
+                      :class="[
+                        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2',
+                        debugStore.isEnabled ? 'bg-amber-500' : 'bg-gray-200 dark:bg-gray-700'
+                      ]"
                     >
-                      <EyeSlashIcon v-if="showN8nApiKey" class="h-5 w-5" />
-                      <EyeIcon v-else class="h-5 w-5" />
+                      <span
+                        :class="[
+                          'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                          debugStore.isEnabled ? 'translate-x-5' : 'translate-x-0'
+                        ]"
+                      />
                     </button>
                   </div>
-                </div>
-                <div class="flex gap-3">
-                  <button
-                    @click="saveN8nApiKey"
-                    :disabled="n8nApiKeyLoading || !n8nApiKey.trim()"
-                    class="btn-primary"
-                  >
-                    {{ n8nApiKeyLoading ? 'Saving...' : 'Save Key' }}
-                  </button>
-                  <button
-                    @click="cancelEditN8nApiKey"
-                    :disabled="n8nApiKeyLoading"
-                    class="btn-secondary"
-                  >
-                    Cancel
-                  </button>
+                  <div v-if="debugStore.isEnabled" class="mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <p class="text-sm text-amber-800 dark:text-amber-300">
+                      Debug mode is active. Additional logging will appear in the browser console and server logs.
+                      A debug indicator will also be shown in the sidebar.
+                    </p>
+                  </div>
                 </div>
               </div>
-
-              <!-- Edit Button -->
-              <button
-                v-if="!n8nApiKeyEditing"
-                @click="startEditN8nApiKey"
-                :class="[
-                  'w-full py-2 rounded-lg font-medium transition-all',
-                  n8nApiKeyIsSet
-                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                    : 'btn-primary'
-                ]"
-              >
-                {{ n8nApiKeyIsSet ? 'Update API Key' : 'Set API Key' }}
-              </button>
             </div>
-          </Card>
 
-          <!-- Debug Mode Card -->
-          <Card :padding="false">
-            <template #header>
-              <div class="flex items-center gap-2 px-4 py-3">
-                <BugAntIcon class="h-5 w-5 text-amber-500" />
-                <h3 class="font-semibold text-primary">Debug Mode</h3>
-              </div>
-            </template>
-            <div class="p-4">
-              <p class="text-sm text-secondary mb-4">
-                Enable debug mode to show detailed error messages and verbose logging.
-                Useful for troubleshooting issues with the management console.
-              </p>
-
-              <div class="flex items-center justify-between py-3 border-y border-[var(--color-border)]">
+            <!-- Info Section -->
+            <div class="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+              <div class="flex gap-3">
+                <svg class="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
                 <div>
-                  <p class="font-medium text-primary">Enable Debug Mode</p>
-                  <p class="text-sm text-secondary">
-                    Shows detailed errors in the browser console
+                  <h5 class="font-medium text-blue-800 dark:text-blue-300">About Advanced Settings</h5>
+                  <p class="mt-1 text-sm text-blue-700 dark:text-blue-400">
+                    These settings are intended for development and troubleshooting purposes.
+                    Enable debug mode when reporting issues or diagnosing problems.
                   </p>
                 </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    :checked="debugMode"
-                    @change="toggleDebugMode"
-                    :disabled="debugModeLoading"
-                    class="sr-only peer"
-                  />
-                  <div
-                    :class="[
-                      'w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700',
-                      'peer-checked:after:translate-x-full peer-checked:after:border-white',
-                      `after:content-[''] after:absolute after:top-[2px] after:left-[2px]`,
-                      'after:bg-white after:border-gray-400 after:border after:rounded-full',
-                      'after:h-5 after:w-5 after:transition-all dark:border-gray-600',
-                      'peer-checked:bg-amber-500',
-                      debugModeLoading ? 'opacity-50' : ''
-                    ]"
-                  ></div>
-                </label>
-              </div>
-
-              <div v-if="debugMode" class="mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
-                <p class="text-sm text-amber-700 dark:text-amber-400">
-                  Debug mode is active. Check the browser developer console (F12) for detailed logs.
-                </p>
-              </div>
-
-              <div v-else class="mt-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-400 dark:border-gray-700">
-                <p class="text-sm text-secondary">
-                  Debug mode is disabled. Enable it when troubleshooting issues.
-                </p>
               </div>
             </div>
-          </Card>
-        </div>
+          </div>
+        </Card>
       </div>
     </template>
   </div>
 </template>
-
-<style scoped>
-/* Section expand/collapse transitions (for main collapsible cards) */
-.section-expand-enter-active,
-.section-expand-leave-active {
-  transition: all 0.3s ease-out;
-  overflow: hidden;
-}
-
-.section-expand-enter-from,
-.section-expand-leave-to {
-  opacity: 0;
-  max-height: 0;
-}
-
-.section-expand-enter-to,
-.section-expand-leave-from {
-  opacity: 1;
-  max-height: 2000px;
-}
-
-/* Item expand/collapse transitions (for individual items) */
-.expand-enter-active,
-.expand-leave-active {
-  transition: all 0.2s ease-out;
-  overflow: hidden;
-}
-
-.expand-enter-from,
-.expand-leave-to {
-  opacity: 0;
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-.expand-enter-to,
-.expand-leave-from {
-  opacity: 1;
-  max-height: 200px;
-}
-
-/* Settings loading animations */
-.settings-gear {
-  animation: gearSpin 3s linear infinite;
-}
-
-.settings-gear-small {
-  animation: gearSpinReverse 2s linear infinite;
-  margin-left: -8px;
-  margin-top: 16px;
-}
-
-@keyframes gearSpin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes gearSpinReverse {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(-360deg);
-  }
-}
-
-.settings-shield {
-  animation: shieldPulse 2s ease-in-out infinite;
-}
-
-.settings-shield-pulse {
-  animation: shieldWave 2s ease-out infinite;
-}
-
-@keyframes shieldPulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-}
-
-@keyframes shieldWave {
-  0% {
-    transform: scale(1);
-    opacity: 0.5;
-  }
-  100% {
-    transform: scale(1.5);
-    opacity: 0;
-  }
-}
-</style>
