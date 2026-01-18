@@ -400,6 +400,8 @@
                   type="text"
                   placeholder="genslave"
                   class="input"
+                  @focus="isEditingConfig = true"
+                  @blur="isEditingConfig = false"
                 />
                 <p class="text-xs text-muted mt-1">Hostname used in URL (e.g., genslave)</p>
               </div>
@@ -410,6 +412,8 @@
                   type="text"
                   placeholder="192.168.1.100"
                   class="input"
+                  @focus="isEditingConfig = true"
+                  @blur="isEditingConfig = false"
                 />
                 <p class="text-xs text-muted mt-1">IP address for hostname resolution</p>
               </div>
@@ -428,6 +432,8 @@
                 type="text"
                 placeholder="http://genslave:8001"
                 class="input"
+                @focus="isEditingConfig = true"
+                @blur="isEditingConfig = false"
               />
               <p class="text-xs text-muted mt-1">Full URL to GenSlave API (uses hostname above)</p>
             </div>
@@ -451,6 +457,8 @@
               min="5"
               max="60"
               class="input w-48"
+              @focus="isEditingConfig = true"
+              @blur="isEditingConfig = false"
             />
             <p class="text-xs text-muted mt-1">How often GenMaster sends heartbeat to GenSlave</p>
           </div>
@@ -550,6 +558,7 @@ const slaveConfig = ref({
   genslave_hostname: 'genslave',
 })
 const savingSlaveConfig = ref(false)
+const isEditingConfig = ref(false)  // Prevent polling from overwriting user input
 
 // Polling
 let pollInterval = null
@@ -565,17 +574,19 @@ async function loadSlaveInfo() {
   }, 1500)
 
   try {
-    // Load config first
-    try {
-      const configRes = await configApi.get()
-      if (configRes.data) {
-        slaveConfig.value.slave_api_url = configRes.data.slave_api_url || slaveConfig.value.slave_api_url
-        slaveConfig.value.heartbeat_interval_seconds = configRes.data.heartbeat_interval_seconds || 30
-        slaveConfig.value.genslave_ip = configRes.data.genslave_ip || ''
-        slaveConfig.value.genslave_hostname = configRes.data.genslave_hostname || 'genslave'
+    // Load config first (skip if user is actively editing to prevent overwriting their input)
+    if (!isEditingConfig.value) {
+      try {
+        const configRes = await configApi.get()
+        if (configRes.data) {
+          slaveConfig.value.slave_api_url = configRes.data.slave_api_url || slaveConfig.value.slave_api_url
+          slaveConfig.value.heartbeat_interval_seconds = configRes.data.heartbeat_interval_seconds || 30
+          slaveConfig.value.genslave_ip = configRes.data.genslave_ip || ''
+          slaveConfig.value.genslave_hostname = configRes.data.genslave_hostname || 'genslave'
+        }
+      } catch (e) {
+        console.warn('Failed to load config for GenSlave:', e)
       }
-    } catch (e) {
-      console.warn('Failed to load config for GenSlave:', e)
     }
 
     // Load all GenSlave data in parallel with better error tracking
