@@ -61,6 +61,10 @@ class HeartbeatRequest(BaseModel):
         None,
         description="GenMaster armed state (for sync)",
     )
+    heartbeat_interval: Optional[int] = Field(
+        None,
+        description="GenMaster's heartbeat interval in seconds (used to calculate failsafe timeout)",
+    )
 
 
 class HeartbeatResponse(BaseModel):
@@ -89,6 +93,12 @@ class FailsafeStatus(BaseModel):
         None, description="When failsafe was triggered"
     )
     timeout_seconds: int = Field(description="Failsafe timeout threshold")
+    heartbeat_interval: Optional[int] = Field(
+        None, description="GenMaster's heartbeat interval in seconds"
+    )
+    timeout_source: Literal["genmaster", "config"] = Field(
+        description="Source of timeout value (genmaster=dynamic, config=default)"
+    )
 
 
 # =========================================================================
@@ -158,6 +168,7 @@ async def receive_heartbeat(request: HeartbeatRequest) -> HeartbeatResponse:
         "timestamp": request.timestamp,
         "generator_running": request.generator_running,
         "command": request.command,
+        "heartbeat_interval": request.heartbeat_interval,
     })
 
     return HeartbeatResponse(**response)

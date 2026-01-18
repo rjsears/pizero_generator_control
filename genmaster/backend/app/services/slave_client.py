@@ -169,6 +169,7 @@ class SlaveClient:
         timestamp: int,
         generator_running: bool,
         armed: bool,
+        heartbeat_interval: int = 60,
         command: str = "none",
     ) -> SlaveResponse:
         """
@@ -178,6 +179,7 @@ class SlaveClient:
             timestamp: Current Unix timestamp
             generator_running: Whether generator is currently running
             armed: Whether automation is armed
+            heartbeat_interval: Interval between heartbeats in seconds
             command: Command to execute ("start", "stop", or "none")
 
         Returns:
@@ -188,6 +190,7 @@ class SlaveClient:
             "/api/heartbeat",
             json={
                 "timestamp": timestamp,
+                "heartbeat_interval": heartbeat_interval,
                 "generator_running": generator_running,
                 "command": command,
                 "armed": armed,
