@@ -381,24 +381,48 @@ async function loadSlaveInfo() {
         slaveConfig.value.slave_api_url = configRes.data.slave_api_url || slaveConfig.value.slave_api_url
         slaveConfig.value.heartbeat_interval_seconds = configRes.data.heartbeat_interval_seconds || 30
       }
-    } catch {
-      // Use defaults
+    } catch (e) {
+      console.warn('Failed to load config for GenSlave:', e)
     }
 
-    // Load all GenSlave data in parallel
+    // Load all GenSlave data in parallel with better error tracking
+    let systemError = null
+    let healthStatusError = null
+
     const [healthRes, systemRes, healthStatusRes, failsafeRes, relayRes] = await Promise.all([
-      api.get('/health/slave').catch(() => ({ data: { connection_status: 'disconnected' } })),
-      genslaveApi.getSystemInfo().catch(() => ({ data: null })),
-      genslaveApi.getHealthStatus().catch(() => ({ data: null })),
-      genslaveApi.getFailsafeStatus().catch(() => ({ data: null })),
-      genslaveApi.getRelayState().catch(() => ({ data: null })),
+      api.get('/health/slave').catch((e) => {
+        console.warn('Failed to get /health/slave:', e.response?.data || e.message)
+        return { data: { connection_status: 'disconnected' } }
+      }),
+      genslaveApi.getSystemInfo().catch((e) => {
+        systemError = e.response?.data?.detail || e.message
+        console.warn('Failed to get GenSlave system info:', systemError)
+        return { data: null }
+      }),
+      genslaveApi.getHealthStatus().catch((e) => {
+        healthStatusError = e.response?.data?.detail || e.message
+        console.warn('Failed to get GenSlave health status:', healthStatusError)
+        return { data: null }
+      }),
+      genslaveApi.getFailsafeStatus().catch((e) => {
+        console.warn('Failed to get GenSlave failsafe status:', e.response?.data?.detail || e.message)
+        return { data: null }
+      }),
+      genslaveApi.getRelayState().catch((e) => {
+        console.warn('Failed to get GenSlave relay state:', e.response?.data?.detail || e.message)
+        return { data: null }
+      }),
     ])
+
+    // Check if we got system data - if not, GenSlave is likely unreachable
+    const isOnline = systemRes.data !== null
 
     // Basic connection info
     slaveInfo.value = {
-      online: healthRes.data?.connection_status === 'connected',
+      online: isOnline,
       last_heartbeat: healthRes.data?.last_heartbeat_received,
       details: systemRes.data,
+      error: systemError,
     }
 
     // Comprehensive data
@@ -407,11 +431,16 @@ async function loadSlaveInfo() {
     slaveFailsafeStatus.value = failsafeRes.data
     slaveRelayState.value = relayRes.data
 
-    // Update armed state from relay state
-    relayArmed.value = relayRes.data?.armed || false
+    // Update armed state from relay state or health status
+    relayArmed.value = relayRes.data?.armed || healthStatusRes.data?.armed || false
+
+    // Show error notification if we couldn't reach GenSlave
+    if (!isOnline && systemError) {
+      notificationStore.error(`GenSlave unreachable: ${systemError}`)
+    }
   } catch (error) {
     console.error('GenSlave info load failed:', error)
-    slaveInfo.value = { online: false, last_heartbeat: null, details: null }
+    slaveInfo.value = { online: false, last_heartbeat: null, details: null, error: error.message }
     slaveSystemInfo.value = null
     slaveHealthStatus.value = null
     slaveFailsafeStatus.value = null
@@ -541,12 +570,20 @@ watch(activeTab, (newTab) => {
   }
 })
 
-// Check for query param
+// Check for query param and load appropriate data
 onMounted(async () => {
   if (route.query.tab) {
     activeTab.value = route.query.tab
   }
   await loadHealthData()
+
+  // Load tab-specific data based on initial tab
+  if (activeTab.value === 'genslave') {
+    loadSlaveInfo()
+  } else if (activeTab.value === 'network') {
+    loadNetworkInfo()
+    loadSslInfo()
+  }
 })
 </script>
 
