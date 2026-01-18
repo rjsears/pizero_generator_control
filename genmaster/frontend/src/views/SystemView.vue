@@ -41,6 +41,10 @@ import {
   XCircleIcon,
   ExclamationTriangleIcon,
   ArchiveBoxIcon,
+  CloudIcon,
+  KeyIcon,
+  LinkIcon,
+  ChevronDownIcon,
 } from '@heroicons/vue/24/outline'
 
 const route = useRoute()
@@ -92,10 +96,20 @@ let healthLoadingInterval = null
 // Network state
 const networkInfo = ref({ hostname: '', interfaces: [], gateway: null, dns_servers: [] })
 const networkLoading = ref(false)
+const networkLoadingMessages = [
+  'Scanning network interfaces...',
+  'Checking VPN status...',
+  'Querying DNS servers...',
+  'Detecting tunnel connections...',
+]
+const networkLoadingMessageIndex = ref(0)
+let networkLoadingInterval = null
 
 // External services state
+const externalServices = ref([])
 const cloudflareInfo = ref({ installed: false, running: false, connected: false })
 const tailscaleInfo = ref({ installed: false, running: false, logged_in: false, tailscale_ip: null })
+const peersExpanded = ref(false)
 
 // SSL state
 const sslInfo = ref({ configured: false, certificates: [] })
@@ -131,17 +145,19 @@ async function loadHealthData() {
 
   try {
     // Load all health data in parallel
-    const [systemRes, containersRes, sslRes, slaveRes] = await Promise.all([
+    const [systemRes, containersRes, sslRes, slaveRes, dockerRes] = await Promise.all([
       api.get('/system').catch(() => ({ data: {} })),
       api.get('/metrics/containers/summary').catch(() => ({ data: { total: 0, running: 0, stopped: 0, unhealthy: 0 } })),
       systemApi.getSsl().catch(() => ({ data: { certificates: [] } })),
       api.get('/health/slave').catch(() => ({ data: { connection_status: 'disconnected' } })),
+      systemApi.dockerInfo().catch(() => ({ data: { disk_usage_gb: 0 } })),
     ])
 
     const system = systemRes.data
     const containers = containersRes.data
     const ssl = sslRes.data
     const slave = slaveRes.data
+    const docker = dockerRes.data
 
     // Calculate status counts
     let passed = 0
@@ -232,6 +248,7 @@ async function loadHealthData() {
         },
       },
       ssl_certificates: certs,
+      docker_disk_usage_gb: docker.disk_usage_gb || 0,
     }
 
     healthLastUpdated.value = new Date()
@@ -252,20 +269,58 @@ async function loadHealthData() {
 // Load network info
 async function loadNetworkInfo() {
   networkLoading.value = true
+  networkLoadingMessageIndex.value = 0
+
+  // Start rotating messages
+  networkLoadingInterval = setInterval(() => {
+    networkLoadingMessageIndex.value = (networkLoadingMessageIndex.value + 1) % networkLoadingMessages.length
+  }, 1500)
+
   try {
-    const [networkRes, cloudflareRes, tailscaleRes] = await Promise.all([
+    const [networkRes, cloudflareRes, tailscaleRes, servicesRes] = await Promise.all([
       systemApi.getNetwork(),
       systemApi.getCloudflare().catch(() => ({ data: {} })),
       systemApi.getTailscale().catch(() => ({ data: {} })),
+      systemApi.getExternalServices().catch(() => ({ data: [] })),
     ])
     networkInfo.value = networkRes.data
     cloudflareInfo.value = cloudflareRes.data
     tailscaleInfo.value = tailscaleRes.data
+    externalServices.value = servicesRes.data || []
   } catch (error) {
     console.error('Network info load failed:', error)
     notificationStore.error('Failed to load network information')
   } finally {
+    if (networkLoadingInterval) {
+      clearInterval(networkLoadingInterval)
+      networkLoadingInterval = null
+    }
     networkLoading.value = false
+  }
+}
+
+// Modal functions for VPN configuration
+function openCloudflareTokenModal() {
+  notificationStore.info('Cloudflare token configuration not yet implemented')
+}
+
+function openTailscaleKeyModal() {
+  notificationStore.info('Tailscale key configuration not yet implemented')
+}
+
+function openRestartDialog(containerName, serviceName) {
+  if (confirm(`Are you sure you want to restart ${serviceName}?`)) {
+    restartContainer(containerName, serviceName)
+  }
+}
+
+async function restartContainer(containerName, serviceName) {
+  try {
+    await containersApi.restart(containerName)
+    notificationStore.success(`${serviceName} restarted successfully`)
+    await loadNetworkInfo()
+  } catch (error) {
+    notificationStore.error(`Failed to restart ${serviceName}`)
   }
 }
 
@@ -621,6 +676,41 @@ onMounted(async () => {
                 </span>
               </div>
               <div class="space-y-3">
+                <!-- Disk -->
+                <div>
+                  <div class="flex justify-between items-center text-sm mb-1">
+                    <span class="text-secondary">Disk</span>
+                    <span class="font-medium text-primary">{{ healthData.checks?.resources?.details?.disk_percent || 0 }}%</span>
+                  </div>
+                  <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      :class="[
+                        'h-full rounded-full transition-all',
+                        (healthData.checks?.resources?.details?.disk_percent || 0) >= 90 ? 'bg-red-500' :
+                        (healthData.checks?.resources?.details?.disk_percent || 0) >= 75 ? 'bg-amber-500' : 'bg-cyan-500'
+                      ]"
+                      :style="{ width: `${healthData.checks?.resources?.details?.disk_percent || 0}%` }"
+                    ></div>
+                  </div>
+                  <p class="text-xs text-muted mt-1">{{ healthData.checks?.resources?.details?.disk_free_gb?.toFixed(1) || 0 }} GB free</p>
+                </div>
+                <!-- Memory -->
+                <div>
+                  <div class="flex justify-between items-center text-sm mb-1">
+                    <span class="text-secondary">Memory</span>
+                    <span class="font-medium text-primary">{{ healthData.checks?.resources?.details?.memory_percent || 0 }}%</span>
+                  </div>
+                  <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      :class="[
+                        'h-full rounded-full transition-all',
+                        (healthData.checks?.resources?.details?.memory_percent || 0) >= 90 ? 'bg-red-500' :
+                        (healthData.checks?.resources?.details?.memory_percent || 0) >= 75 ? 'bg-amber-500' : 'bg-purple-500'
+                      ]"
+                      :style="{ width: `${healthData.checks?.resources?.details?.memory_percent || 0}%` }"
+                    ></div>
+                  </div>
+                </div>
                 <!-- CPU -->
                 <div>
                   <div class="flex justify-between items-center text-sm mb-1">
@@ -629,37 +719,14 @@ onMounted(async () => {
                   </div>
                   <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                     <div
-                      :class="['h-full rounded-full transition-all', getProgressColor(healthData.checks?.resources?.details?.cpu_percent || 0)]"
+                      :class="[
+                        'h-full rounded-full transition-all',
+                        (healthData.checks?.resources?.details?.cpu_percent || 0) >= 90 ? 'bg-red-500' :
+                        (healthData.checks?.resources?.details?.cpu_percent || 0) >= 75 ? 'bg-amber-500' : 'bg-blue-500'
+                      ]"
                       :style="{ width: `${healthData.checks?.resources?.details?.cpu_percent || 0}%` }"
                     ></div>
                   </div>
-                </div>
-                <!-- Memory -->
-                <div>
-                  <div class="flex justify-between items-center text-sm mb-1">
-                    <span class="text-secondary">Memory</span>
-                    <span class="font-medium text-primary">{{ healthData.checks?.resources?.details?.memory_percent?.toFixed(1) || 0 }}%</span>
-                  </div>
-                  <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      :class="['h-full rounded-full transition-all', getProgressColor(healthData.checks?.resources?.details?.memory_percent || 0)]"
-                      :style="{ width: `${healthData.checks?.resources?.details?.memory_percent || 0}%` }"
-                    ></div>
-                  </div>
-                </div>
-                <!-- Disk -->
-                <div>
-                  <div class="flex justify-between items-center text-sm mb-1">
-                    <span class="text-secondary">Disk</span>
-                    <span class="font-medium text-primary">{{ healthData.checks?.resources?.details?.disk_percent?.toFixed(1) || 0 }}%</span>
-                  </div>
-                  <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      :class="['h-full rounded-full transition-all', getProgressColor(healthData.checks?.resources?.details?.disk_percent || 0)]"
-                      :style="{ width: `${healthData.checks?.resources?.details?.disk_percent || 0}%` }"
-                    ></div>
-                  </div>
-                  <p class="text-xs text-muted mt-1">{{ healthData.checks?.resources?.details?.disk_free_gb?.toFixed(1) || 0 }} GB free</p>
                 </div>
               </div>
             </div>
@@ -799,23 +866,24 @@ onMounted(async () => {
             </div>
           </Card>
 
-          <!-- System Actions -->
+          <!-- Docker Storage -->
           <Card :padding="false">
             <div class="p-4">
               <div class="flex items-center gap-3 mb-4">
-                <div class="p-2 rounded-lg bg-red-100 dark:bg-red-500/20">
-                  <ExclamationTriangleIcon class="h-5 w-5 text-red-500" />
+                <div class="p-2 rounded-lg bg-orange-100 dark:bg-orange-500/20">
+                  <ServerStackIcon class="h-5 w-5 text-orange-500" />
                 </div>
                 <div class="flex-1">
-                  <h3 class="font-semibold text-primary">System Actions</h3>
-                  <p class="text-xs text-muted">Administrative controls</p>
+                  <h3 class="font-semibold text-primary">Docker Storage</h3>
+                  <p class="text-xs text-muted">Images, volumes, containers</p>
                 </div>
               </div>
-              <div class="space-y-2">
-                <button @click="openRebootDialog" class="w-full btn-warning flex items-center justify-center gap-2">
-                  <ArrowPathIcon class="h-5 w-5" />
-                  Reboot System
-                </button>
+              <div class="text-center py-4">
+                <p class="text-4xl font-bold text-primary">
+                  {{ healthData.docker_disk_usage_gb?.toFixed(1) || '0.0' }}
+                  <span class="text-lg text-muted">GB</span>
+                </p>
+                <p class="text-xs text-muted mt-1">Total Docker disk usage</p>
               </div>
             </div>
           </Card>
@@ -825,122 +893,352 @@ onMounted(async () => {
 
     <!-- Network Tab -->
     <template v-if="activeTab === 'network'">
-      <LoadingSpinner v-if="networkLoading" text="Loading network info..." class="py-16" />
+      <HeartbeatLoader v-if="networkLoading" :text="networkLoadingMessages[networkLoadingMessageIndex] || 'Scanning network interfaces...'" color="purple" class="py-16 mt-8" />
 
       <template v-else>
-        <!-- Network Interfaces -->
-        <Card title="Network Interfaces" subtitle="Local network configuration">
-          <div class="space-y-3">
-            <div
-              v-for="iface in networkInfo.interfaces"
-              :key="iface.name"
-              class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50"
-            >
-              <div class="flex items-center gap-3">
-                <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-500/20">
-                  <WifiIcon class="h-5 w-5 text-blue-500" />
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- External Services -->
+          <Card title="External Services">
+            <div v-if="externalServices.length > 0" class="grid grid-cols-1 gap-3">
+              <a
+                v-for="service in externalServices"
+                :key="service.name"
+                :href="service.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="group block p-4 bg-surface rounded-lg border border-gray-400 dark:border-black hover:border-blue-500 hover:shadow-md transition-all"
+              >
+                <div class="flex items-center gap-3">
+                  <div :class="['p-2 rounded-lg', service.color || 'bg-blue-100 dark:bg-blue-500/20']">
+                    <LinkIcon :class="['h-5 w-5', service.iconColor || 'text-blue-500']" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <h4 class="font-semibold text-primary group-hover:text-blue-500 transition-colors">{{ service.name }}</h4>
+                    <p class="text-xs text-muted">{{ service.description }}</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span
+                      :class="[
+                        'w-2 h-2 rounded-full',
+                        service.running ? 'bg-emerald-500' : 'bg-gray-400'
+                      ]"
+                    ></span>
+                    <svg class="h-4 w-4 text-gray-400 group-hover:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </div>
                 </div>
-                <div>
-                  <p class="font-medium text-primary">{{ iface.name }}</p>
-                  <p class="text-sm text-muted font-mono">{{ iface.ipv4 || 'No IP' }}</p>
-                </div>
-              </div>
-              <span :class="['px-2 py-1 rounded-full text-xs font-medium', iface.state === 'up' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400']">
-                {{ iface.state?.toUpperCase() || 'UNKNOWN' }}
-              </span>
+              </a>
             </div>
-          </div>
-          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <dl class="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <dt class="text-secondary">Hostname</dt>
-                <dd class="font-medium text-primary">{{ networkInfo.hostname || 'N/A' }}</dd>
-              </div>
-              <div>
-                <dt class="text-secondary">Gateway</dt>
-                <dd class="font-medium text-primary font-mono">{{ networkInfo.gateway || 'N/A' }}</dd>
-              </div>
-              <div class="col-span-2">
-                <dt class="text-secondary">DNS Servers</dt>
-                <dd class="font-medium text-primary font-mono">{{ networkInfo.dns_servers?.join(', ') || 'N/A' }}</dd>
-              </div>
-            </dl>
-          </div>
-        </Card>
-
-        <!-- External Services -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <!-- Cloudflare Tunnel -->
-          <Card :padding="false">
-            <div class="p-4">
-              <div class="flex items-center gap-3 mb-4">
-                <div :class="['p-2 rounded-lg', cloudflareInfo.running ? 'bg-emerald-100 dark:bg-emerald-500/20' : 'bg-gray-100 dark:bg-gray-700']">
-                  <GlobeAltIcon :class="['h-5 w-5', cloudflareInfo.running ? 'text-emerald-500' : 'text-gray-500']" />
-                </div>
-                <div class="flex-1">
-                  <h3 class="font-semibold text-primary">Cloudflare Tunnel</h3>
-                  <p class="text-xs text-muted">Secure tunnel for external access</p>
-                </div>
-                <span :class="['px-2 py-1 rounded-full text-xs font-medium', cloudflareInfo.running ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : cloudflareInfo.installed ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400']">
-                  {{ cloudflareInfo.running ? 'CONNECTED' : cloudflareInfo.installed ? 'STOPPED' : 'NOT INSTALLED' }}
-                </span>
-              </div>
+            <div v-else class="text-center py-4 text-muted">
+              No external services configured in nginx
             </div>
           </Card>
 
-          <!-- Tailscale -->
+          <!-- Network Configuration (with hostname in header) -->
           <Card :padding="false">
-            <div class="p-4">
-              <div class="flex items-center gap-3 mb-4">
-                <div :class="['p-2 rounded-lg', tailscaleInfo.connected ? 'bg-emerald-100 dark:bg-emerald-500/20' : 'bg-gray-100 dark:bg-gray-700']">
-                  <ShieldCheckIcon :class="['h-5 w-5', tailscaleInfo.connected ? 'text-emerald-500' : 'text-gray-500']" />
-                </div>
-                <div class="flex-1">
-                  <h3 class="font-semibold text-primary">Tailscale VPN</h3>
-                  <p class="text-xs text-muted">{{ tailscaleInfo.ip_addresses?.[0] || 'Mesh VPN network' }}</p>
-                </div>
-                <span :class="['px-2 py-1 rounded-full text-xs font-medium', tailscaleInfo.connected ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : tailscaleInfo.running ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400']">
-                  {{ tailscaleInfo.connected ? 'CONNECTED' : tailscaleInfo.running ? 'DISCONNECTED' : 'NOT RUNNING' }}
+            <template #header>
+              <div class="flex items-center justify-between w-full px-4 py-3">
+                <h3 class="font-semibold text-primary">Network Configuration</h3>
+                <span class="px-3 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-full text-sm font-mono">
+                  {{ networkInfo.hostname || 'unknown' }}
                 </span>
+              </div>
+            </template>
+            <div class="p-4 space-y-4">
+              <!-- Gateway & DNS -->
+              <div class="space-y-2">
+                <div class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Default Gateway</span>
+                  <span class="font-medium text-primary font-mono">{{ networkInfo.gateway || 'N/A' }}</span>
+                </div>
+                <div class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">DNS Servers</span>
+                  <div class="text-right">
+                    <span
+                      v-for="(dns, i) in networkInfo.dns_servers"
+                      :key="i"
+                      class="font-medium text-primary font-mono block"
+                    >
+                      {{ dns }}
+                    </span>
+                    <span v-if="!networkInfo.dns_servers?.length" class="text-muted">None</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Network Interfaces -->
+              <div class="space-y-3">
+                <h4 class="text-sm font-medium text-secondary">Interfaces</h4>
+                <div
+                  v-for="iface in networkInfo.interfaces"
+                  :key="iface.name"
+                  class="p-3 rounded-lg bg-surface-hover"
+                >
+                  <div class="flex items-center gap-2 mb-2">
+                    <WifiIcon class="h-4 w-4 text-blue-500" />
+                    <span class="font-medium text-primary">{{ iface.name }}</span>
+                  </div>
+                  <div class="space-y-1 text-sm">
+                    <div
+                      v-for="addr in iface.addresses"
+                      :key="addr.address"
+                      class="flex justify-between"
+                    >
+                      <span class="text-secondary">{{ addr.type.toUpperCase() }}</span>
+                      <span class="font-mono text-primary">{{ addr.address }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="!networkInfo.interfaces?.length" class="text-center py-4 text-muted">
+                  No network interfaces found
+                </div>
               </div>
             </div>
           </Card>
         </div>
 
-        <!-- SSL Certificates -->
-        <Card title="SSL Certificates" subtitle="HTTPS certificate status">
-          <LoadingSpinner v-if="sslLoading" size="sm" text="Loading SSL info..." />
-          <div v-else-if="sslInfo.certificates?.length > 0" class="space-y-3">
-            <div
-              v-for="cert in sslInfo.certificates"
-              :key="cert.domain"
-              class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50"
-            >
-              <div class="flex items-center justify-between mb-2">
+        <!-- VPN & Tunnel Services -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <!-- Cloudflare Tunnel -->
+          <Card :padding="false">
+            <template #header>
+              <div class="flex items-center justify-between w-full px-4 py-3">
                 <div class="flex items-center gap-2">
-                  <ShieldCheckIcon :class="['h-5 w-5', cert.days_until_expiry > 30 ? 'text-emerald-500' : cert.days_until_expiry > 7 ? 'text-amber-500' : 'text-red-500']" />
-                  <span class="font-medium text-primary">{{ cert.domain }}</span>
+                  <CloudIcon class="h-5 w-5 text-orange-500" />
+                  <h3 class="font-semibold text-primary">Cloudflare Tunnel</h3>
                 </div>
-                <span :class="['text-sm font-medium', cert.days_until_expiry > 30 ? 'text-emerald-500' : cert.days_until_expiry > 7 ? 'text-amber-500' : 'text-red-500']">
-                  {{ cert.days_until_expiry }} days left
-                </span>
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="openCloudflareTokenModal"
+                    :class="[
+                      'px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-sm flex items-center gap-1.5',
+                      cloudflareInfo.running
+                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                        : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300'
+                    ]"
+                  >
+                    <KeyIcon class="h-3.5 w-3.5" />
+                    API Key
+                  </button>
+                  <button
+                    v-if="cloudflareInfo.running"
+                    @click="openRestartDialog('genmaster_cloudflared', 'Cloudflare Tunnel')"
+                    class="btn-secondary flex items-center gap-1.5 text-xs py-1 px-2"
+                    title="Restart Container"
+                  >
+                    <ArrowPathIcon class="h-3.5 w-3.5" />
+                    Restart
+                  </button>
+                </div>
               </div>
-              <dl class="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <dt class="text-muted">Valid From</dt>
-                  <dd class="text-secondary">{{ cert.valid_from }}</dd>
-                </div>
-                <div>
-                  <dt class="text-muted">Valid Until</dt>
-                  <dd class="text-secondary">{{ cert.valid_until }}</dd>
-                </div>
-              </dl>
+            </template>
+            <div class="p-4">
+            <div v-if="cloudflareInfo.error && !cloudflareInfo.installed" class="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-500/10 rounded-lg">
+              <CloudIcon class="h-6 w-6 text-gray-400" />
+              <p class="text-muted">{{ cloudflareInfo.error }}</p>
             </div>
-          </div>
-          <div v-else class="text-center py-4 text-muted">
-            No SSL certificates configured
-          </div>
-        </Card>
+            <template v-else>
+              <div class="space-y-3">
+                <!-- Status -->
+                <div class="flex items-center justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Status</span>
+                  <span :class="[
+                    'flex items-center gap-2 font-medium',
+                    cloudflareInfo.running ? 'text-emerald-500' : 'text-red-500'
+                  ]">
+                    <span :class="['w-2 h-2 rounded-full', cloudflareInfo.running ? 'bg-emerald-500' : 'bg-red-500']"></span>
+                    {{ cloudflareInfo.running ? 'Running' : 'Stopped' }}
+                  </span>
+                </div>
+                <div v-if="cloudflareInfo.version" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Version</span>
+                  <span class="font-medium text-primary">{{ cloudflareInfo.version }}</span>
+                </div>
+                <div v-if="cloudflareInfo.connected !== undefined" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Connected</span>
+                  <span :class="cloudflareInfo.connected ? 'text-emerald-500' : 'text-amber-500'">
+                    {{ cloudflareInfo.connected ? 'Yes' : 'No' }}
+                  </span>
+                </div>
+                <div v-if="cloudflareInfo.edge_locations?.length" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Edge Locations</span>
+                  <div class="flex flex-wrap gap-1 justify-end">
+                    <span
+                      v-for="loc in cloudflareInfo.edge_locations"
+                      :key="loc"
+                      class="px-2 py-0.5 text-xs rounded bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300 uppercase"
+                    >
+                      {{ loc }}
+                    </span>
+                  </div>
+                </div>
+                <div v-if="cloudflareInfo.tunnel_id" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Tunnel ID</span>
+                  <span class="font-mono text-xs text-primary truncate max-w-[180px]" :title="cloudflareInfo.tunnel_id">
+                    {{ cloudflareInfo.tunnel_id.slice(0, 8) }}...
+                  </span>
+                </div>
+
+                <!-- Metrics Section -->
+                <div v-if="cloudflareInfo.metrics && Object.keys(cloudflareInfo.metrics).length" class="pt-2">
+                  <p class="text-xs text-muted uppercase tracking-wide mb-2">Traffic Metrics</p>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div v-if="cloudflareInfo.metrics.total_requests !== undefined" class="bg-surface-hover rounded-lg p-3">
+                      <p class="text-xs text-muted">Total Requests</p>
+                      <p class="text-lg font-semibold text-primary">{{ cloudflareInfo.metrics.total_requests.toLocaleString() }}</p>
+                    </div>
+                    <div v-if="cloudflareInfo.metrics.ha_connections !== undefined" class="bg-surface-hover rounded-lg p-3">
+                      <p class="text-xs text-muted">HA Connections</p>
+                      <p class="text-lg font-semibold text-primary">{{ cloudflareInfo.metrics.ha_connections }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Error display -->
+                <div v-if="cloudflareInfo.last_error" class="mt-3 p-3 bg-red-50 dark:bg-red-500/10 rounded-lg">
+                  <p class="text-xs text-red-600 dark:text-red-400 font-mono break-all">{{ cloudflareInfo.last_error }}</p>
+                </div>
+              </div>
+            </template>
+            </div>
+          </Card>
+
+          <!-- Tailscale -->
+          <Card :padding="false">
+            <template #header>
+              <div class="flex items-center justify-between w-full px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <LinkIcon class="h-5 w-5 text-blue-500" />
+                  <h3 class="font-semibold text-primary">Tailscale VPN</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="openTailscaleKeyModal"
+                    :class="[
+                      'px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-sm flex items-center gap-1.5',
+                      tailscaleInfo.running && tailscaleInfo.logged_in
+                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                        : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300'
+                    ]"
+                  >
+                    <KeyIcon class="h-3.5 w-3.5" />
+                    API Key
+                  </button>
+                  <button
+                    v-if="tailscaleInfo.running"
+                    @click="openRestartDialog('genmaster_tailscale', 'Tailscale VPN')"
+                    class="btn-secondary flex items-center gap-1.5 text-xs py-1 px-2"
+                    title="Restart Container"
+                  >
+                    <ArrowPathIcon class="h-3.5 w-3.5" />
+                    Restart
+                  </button>
+                </div>
+              </div>
+            </template>
+            <div class="p-4">
+            <div v-if="tailscaleInfo.error && !tailscaleInfo.installed" class="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-500/10 rounded-lg">
+              <LinkIcon class="h-6 w-6 text-gray-400" />
+              <p class="text-muted">{{ tailscaleInfo.error }}</p>
+            </div>
+            <template v-else>
+              <div class="space-y-3">
+                <div class="flex items-center justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Status</span>
+                  <span :class="[
+                    'flex items-center gap-2 font-medium',
+                    tailscaleInfo.running && tailscaleInfo.logged_in ? 'text-emerald-500' : 'text-red-500'
+                  ]">
+                    <span :class="['w-2 h-2 rounded-full', tailscaleInfo.running && tailscaleInfo.logged_in ? 'bg-emerald-500' : 'bg-red-500']"></span>
+                    {{ tailscaleInfo.running && tailscaleInfo.logged_in ? 'Connected' : tailscaleInfo.running ? 'Not Logged In' : 'Stopped' }}
+                  </span>
+                </div>
+                <div v-if="tailscaleInfo.tailscale_ip" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Tailscale IP</span>
+                  <span class="font-medium text-primary font-mono">{{ tailscaleInfo.tailscale_ip }}</span>
+                </div>
+                <div v-if="tailscaleInfo.hostname" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Hostname</span>
+                  <span class="font-medium text-primary">{{ tailscaleInfo.hostname }}</span>
+                </div>
+                <div v-if="tailscaleInfo.dns_name" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">DNS Name</span>
+                  <span class="font-medium text-primary font-mono text-sm">{{ tailscaleInfo.dns_name }}</span>
+                </div>
+                <div v-if="tailscaleInfo.tailnet" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Tailnet</span>
+                  <span class="font-medium text-primary">{{ tailscaleInfo.tailnet }}</span>
+                </div>
+                <!-- Devices with expandable list -->
+                <div v-if="tailscaleInfo.peers?.length" class="py-2">
+                  <button
+                    @click="peersExpanded = !peersExpanded"
+                    class="w-full flex items-center justify-between hover:bg-surface-hover rounded-lg p-1 -m-1 transition-colors"
+                  >
+                    <span class="text-secondary">Devices</span>
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-primary">
+                        {{ tailscaleInfo.online_peers || 0 }} online / {{ tailscaleInfo.peer_count }} total
+                      </span>
+                      <ChevronDownIcon
+                        :class="[
+                          'h-4 w-4 text-secondary transition-transform duration-200',
+                          peersExpanded ? 'rotate-180' : ''
+                        ]"
+                      />
+                    </div>
+                  </button>
+
+                  <!-- Expandable Peer List -->
+                  <div
+                    v-show="peersExpanded"
+                    class="mt-3 space-y-2 max-h-[250px] overflow-y-auto"
+                  >
+                    <div
+                      v-for="peer in tailscaleInfo.peers"
+                      :key="peer.id || peer.hostname"
+                      :class="[
+                        'flex items-center justify-between p-2 rounded-lg',
+                        peer.is_self ? 'bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30' : 'bg-surface-hover'
+                      ]"
+                    >
+                      <div class="flex items-center gap-2">
+                        <span
+                          :class="[
+                            'w-2 h-2 rounded-full flex-shrink-0',
+                            peer.online ? 'bg-emerald-500' : 'bg-gray-400'
+                          ]"
+                        ></span>
+                        <div class="min-w-0">
+                          <p class="font-medium text-primary text-sm truncate">
+                            {{ peer.hostname }}
+                            <span v-if="peer.is_self" class="text-xs text-blue-600 dark:text-blue-400 ml-1">(this device)</span>
+                          </p>
+                          <p class="text-xs text-muted font-mono truncate">{{ peer.ip }}</p>
+                        </div>
+                      </div>
+                      <div class="text-right flex-shrink-0 ml-2">
+                        <span
+                          :class="[
+                            'text-xs px-2 py-0.5 rounded',
+                            peer.online
+                              ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                              : 'bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400'
+                          ]"
+                        >
+                          {{ peer.online ? 'online' : 'offline' }}
+                        </span>
+                        <p v-if="peer.os" class="text-xs text-muted mt-1">{{ peer.os }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+            </div>
+          </Card>
+        </div>
       </template>
     </template>
 

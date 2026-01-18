@@ -672,6 +672,27 @@ async def get_docker_info() -> dict:
         running = sum(1 for c in containers if c.status == "running")
         stopped = len(containers) - running
 
+        # Get Docker disk usage
+        disk_usage_gb = 0.0
+        try:
+            df = client.df()
+            # Sum up all types of disk usage
+            for layer in df.get("LayersSize", 0) or []:
+                disk_usage_gb += layer if isinstance(layer, (int, float)) else 0
+            # LayersSize is usually a single int
+            if isinstance(df.get("LayersSize"), (int, float)):
+                disk_usage_gb = df.get("LayersSize", 0) / (1024 * 1024 * 1024)
+            # Add volumes
+            for vol in df.get("Volumes", []) or []:
+                if vol.get("UsageData", {}).get("Size"):
+                    disk_usage_gb += vol["UsageData"]["Size"] / (1024 * 1024 * 1024)
+            # Add images
+            for img in df.get("Images", []) or []:
+                if img.get("Size"):
+                    disk_usage_gb += img["Size"] / (1024 * 1024 * 1024)
+        except Exception as df_err:
+            logger.debug(f"Could not get Docker disk usage: {df_err}")
+
         return {
             "version": version.get("Version"),
             "api_version": version.get("ApiVersion"),
@@ -686,6 +707,7 @@ async def get_docker_info() -> dict:
             },
             "images": info.get("Images", 0),
             "storage_driver": info.get("Driver"),
+            "disk_usage_gb": round(disk_usage_gb, 2),
         }
 
     except ImportError:
