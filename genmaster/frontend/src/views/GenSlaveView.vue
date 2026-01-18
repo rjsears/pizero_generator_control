@@ -510,8 +510,8 @@
                   <span v-else>Save</span>
                 </button>
               </div>
-              <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                After changing: Update GenSlave's .env file with the new API_SECRET and restart the GenSlave container
+              <p class="text-xs text-muted mt-2">
+                Key rotation is automatic - updates both GenMaster and GenSlave simultaneously
               </p>
             </div>
           </div>
@@ -831,17 +831,21 @@ async function saveApiSecret() {
     return
   }
 
+  if (newApiSecret.value.length < 16) {
+    notificationStore.error('API secret must be at least 16 characters')
+    return
+  }
+
   savingApiSecret.value = true
   try {
-    await configApi.update({
-      slave_api_secret: newApiSecret.value,
-    })
+    // Call the rotate endpoint which updates both GenSlave and GenMaster
+    await api.post('/health/rotate-api-key', { new_key: newApiSecret.value })
     apiSecret.value = newApiSecret.value
     newApiSecret.value = ''
-    notificationStore.success('API secret updated')
-    notificationStore.warning('Important: Update GenSlave .env file with the new API_SECRET and restart the GenSlave container')
+    notificationStore.success('API key rotated successfully on both GenMaster and GenSlave')
   } catch (error) {
-    notificationStore.error('Failed to save API secret')
+    const detail = error.response?.data?.detail || 'Failed to rotate API key'
+    notificationStore.error(detail)
   } finally {
     savingApiSecret.value = false
   }

@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth import verify_api_key
 from app.config import settings
 from app.routers import relay_router, health_router, system_router
+from app.services.database import db_service
 from app.services.relay import relay_service
 from app.services.failsafe import failsafe_monitor
 from app.services.display import display_service
@@ -46,6 +47,9 @@ async def lifespan(app: FastAPI):
     # Ensure directories exist
     settings.ensure_directories()
 
+    # Initialize database (loads API secret from env on first run)
+    db_service.initialize()
+
     # Connect failsafe monitor to relay service
     failsafe_monitor.set_relay_service(relay_service)
 
@@ -58,10 +62,15 @@ async def lifespan(app: FastAPI):
     # Start display service
     await display_service.start()
 
+    # Check if API secret is configured
+    api_secret = db_service.get_api_secret()
+    api_status = "configured" if api_secret else "NOT CONFIGURED (API unprotected!)"
+
     logger.info(
         f"GenSlave ready - "
         f"HAT: {'real' if not relay_service.is_mock_mode else 'mock'}, "
-        f"Failsafe timeout: {settings.FAILSAFE_TIMEOUT_SECONDS}s"
+        f"Failsafe timeout: {settings.FAILSAFE_TIMEOUT_SECONDS}s, "
+        f"API Auth: {api_status}"
     )
 
     yield

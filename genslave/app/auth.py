@@ -17,7 +17,7 @@ from typing import Optional
 from fastapi import HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 
-from app.config import settings
+from app.services.database import db_service
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +25,22 @@ logger = logging.getLogger(__name__)
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
+def get_current_api_secret() -> Optional[str]:
+    """Get the current API secret from database.
+
+    Returns:
+        The API secret or None if not configured.
+    """
+    return db_service.get_api_secret()
+
+
 async def verify_api_key(api_key: Optional[str] = Security(API_KEY_HEADER)) -> str:
     """
     Verify the API key from the X-API-Key header.
 
     This dependency should be added to routes that require authentication.
+    Reads the expected API secret from the database, allowing runtime updates
+    without container restarts.
 
     Raises:
         HTTPException: If API key is missing or invalid
@@ -37,8 +48,11 @@ async def verify_api_key(api_key: Optional[str] = Security(API_KEY_HEADER)) -> s
     Returns:
         The validated API key
     """
+    # Get the current API secret from database
+    expected_secret = get_current_api_secret()
+
     # If no API secret is configured, allow all requests (development mode)
-    if not settings.API_SECRET:
+    if not expected_secret:
         logger.warning("API_SECRET not configured - authentication disabled")
         return ""
 
@@ -49,7 +63,7 @@ async def verify_api_key(api_key: Optional[str] = Security(API_KEY_HEADER)) -> s
             detail="Missing X-API-Key header",
         )
 
-    if api_key != settings.API_SECRET:
+    if api_key != expected_secret:
         logger.warning("API request rejected - invalid API key")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -67,7 +81,9 @@ async def verify_api_key_optional(
 
     Use this for endpoints that should work without auth but log access.
     """
-    if settings.API_SECRET and api_key and api_key != settings.API_SECRET:
+    expected_secret = get_current_api_secret()
+
+    if expected_secret and api_key and api_key != expected_secret:
         logger.warning("API request with invalid key - rejecting")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

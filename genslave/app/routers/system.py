@@ -21,6 +21,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.services.database import db_service
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,23 @@ class ConfigResponse(BaseModel):
     """Response from config update."""
 
     success: bool = Field(description="Whether update was successful")
+    message: str = Field(description="Status message")
+
+
+class RotateKeyRequest(BaseModel):
+    """Request to rotate the API secret key."""
+
+    new_key: str = Field(
+        min_length=16,
+        max_length=128,
+        description="The new API secret key (minimum 16 characters)",
+    )
+
+
+class RotateKeyResponse(BaseModel):
+    """Response from API key rotation."""
+
+    success: bool = Field(description="Whether the rotation was successful")
     message: str = Field(description="Status message")
 
 
@@ -394,3 +412,50 @@ def _get_primary_ip(interfaces: list[NetworkInfo]) -> Optional[str]:
             return iface.ip_address
 
     return None
+
+
+# =========================================================================
+# API Key Management Endpoints
+# =========================================================================
+
+
+@router.post("/rotate-key", response_model=RotateKeyResponse)
+async def rotate_api_key(request: RotateKeyRequest) -> RotateKeyResponse:
+    """
+    Rotate the API secret key.
+
+    This endpoint allows GenMaster to remotely update the API secret key
+    on GenSlave. The request must be authenticated with the current valid
+    API key.
+
+    The new key is stored in the database and takes effect immediately -
+    no container restart is required. Subsequent API calls must use the
+    new key.
+
+    Note: GenMaster should update its own configuration first, then call
+    this endpoint. If this call succeeds, GenMaster should immediately
+    start using the new key.
+    """
+    try:
+        # Update the API secret in the database
+        success = db_service.set_api_secret(request.new_key)
+
+        if success:
+            logger.info("API key rotated successfully via API call")
+            return RotateKeyResponse(
+                success=True,
+                message="API key rotated successfully. New key is now active.",
+            )
+        else:
+            logger.error("Failed to rotate API key - database update failed")
+            return RotateKeyResponse(
+                success=False,
+                message="Failed to update API key in database",
+            )
+
+    except Exception as e:
+        logger.error(f"Error rotating API key: {e}")
+        return RotateKeyResponse(
+            success=False,
+            message=f"Error rotating API key: {str(e)}",
+        )
