@@ -2499,6 +2499,8 @@ services:
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
     volumes:
       - genmaster_db_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
     networks:
       - genmaster-internal
     healthcheck:
@@ -2517,6 +2519,8 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - genmaster_redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
     networks:
       - genmaster-internal
     healthcheck:
@@ -2528,21 +2532,24 @@ services:
   # ===========================================================================
   # GenMaster Application
   # ===========================================================================
+  # Uses host networking to allow direct communication with GenSlave on the LAN.
+  # Database and Redis are accessed via localhost (ports exposed above).
   genmaster:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: ${GENMASTER_CONTAINER:-genmaster}
     restart: unless-stopped
+    network_mode: host
     environment:
       - APP_ENV=${APP_ENV:-production}
       - MOCK_GPIO_MODE=${MOCK_GPIO_MODE:-false}
-      - DATABASE_HOST=db
+      - DATABASE_HOST=127.0.0.1
       - DATABASE_PORT=5432
       - DATABASE_NAME=${DATABASE_NAME:-genmaster}
       - DATABASE_USER=${DATABASE_USER:-genmaster}
       - DATABASE_PASSWORD=${DATABASE_PASSWORD}
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://127.0.0.1:6379/0
       - SECRET_KEY=${SECRET_KEY}
       - GENSLAVE_ENABLED=${GENSLAVE_ENABLED:-true}
       - SLAVE_API_URL=${SLAVE_API_URL}
@@ -2556,10 +2563,6 @@ services:
     volumes:
       - genmaster_logs:/app/logs
       - genmaster_data:/app/data
-    extra_hosts:
-      - "\${GENSLAVE_HOSTNAME:-genslave}:\${GENSLAVE_IP:-127.0.0.1}"
-    networks:
-      - genmaster-internal
     depends_on:
       db:
         condition: service_healthy
@@ -2575,6 +2578,7 @@ services:
   # ===========================================================================
   # Nginx Reverse Proxy
   # ===========================================================================
+  # Uses host.docker.internal to reach GenMaster on host network
   nginx:
     image: nginx:alpine
     container_name: ${NGINX_CONTAINER:-genmaster_nginx}
@@ -2582,6 +2586,8 @@ services:
     ports:
       - "443:443"
       - "80:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - letsencrypt:/etc/letsencrypt:ro
@@ -2756,7 +2762,7 @@ $(echo -e "$internal_ips")
     }
 
     upstream genmaster {
-        server genmaster:8000;
+        server host.docker.internal:8000;
         keepalive 32;
     }
 
