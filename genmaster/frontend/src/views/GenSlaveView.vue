@@ -3,10 +3,10 @@
   /genmaster/frontend/src/views/GenSlaveView.vue
 
   Part of the "RPi Generator Control" suite
-  Version 1.0.0 - January 16th, 2026
+  Version 1.0.0 - January 18th, 2026
 
   Dedicated view for GenSlave health monitoring with detailed
-  system metrics, network info, and real-time status.
+  system metrics, network info, relay control, and real-time status.
 
   Richard J. Sears
   richardjsears@protonmail.com
@@ -16,501 +16,677 @@
 
 <template>
   <div class="space-y-6">
-      <!-- Page header with refresh button -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">GenSlave</h1>
-          <p class="text-gray-600 dark:text-gray-400 mt-1">
-            Remote generator controller health and status
-          </p>
-        </div>
-        <div class="flex items-center space-x-3">
-          <!-- Connection status badge -->
-          <StatusBadge
-            :status="connectionStatus"
-            :text="connectionStatusText"
-          />
-          <!-- Refresh button -->
-          <Button
-            variant="secondary"
-            @click="refreshHealth"
-            :loading="loading"
-            :disabled="loading"
-          >
-            <svg class="w-5 h-5 mr-2" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-          </Button>
+    <!-- Page header -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-primary">GenSlave</h1>
+        <p class="text-secondary mt-1">
+          Remote generator controller health, status, and relay control
+        </p>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <HeartbeatLoader v-if="slaveLoading" :text="slaveLoadingMessages[slaveLoadingMessageIndex]" color="blue" class="py-16 mt-8" />
+
+    <template v-else>
+      <!-- GenSlave Status Banner -->
+      <div :class="['rounded-xl p-6 border-2 relative overflow-hidden', slaveInfo.online ? 'bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 border-emerald-500/50' : 'bg-gradient-to-r from-red-500/10 to-red-500/5 border-red-500/50']">
+        <div class="relative flex items-center justify-between flex-wrap gap-4">
+          <div class="flex items-center gap-4">
+            <div :class="['p-4 rounded-2xl', slaveInfo.online ? 'bg-emerald-500/20' : 'bg-red-500/20']">
+              <ServerIcon :class="['h-10 w-10', slaveInfo.online ? 'text-emerald-500' : 'text-red-500']" />
+            </div>
+            <div>
+              <h2 class="text-2xl font-bold text-primary">
+                GenSlave: <span :class="slaveInfo.online ? 'text-emerald-500' : 'text-red-500'">{{ slaveInfo.online ? 'ONLINE' : 'OFFLINE' }}</span>
+              </h2>
+              <p class="text-secondary mt-1">
+                {{ slaveSystemInfo?.hostname || 'genslave' }} • {{ slaveSystemInfo?.platform || 'Raspberry Pi' }}
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <button
+              @click="loadSlaveInfo"
+              :disabled="slaveLoading"
+              class="btn-secondary flex items-center gap-2"
+            >
+              <ArrowPathIcon :class="['h-4 w-4', slaveLoading ? 'animate-spin' : '']" />
+              Refresh
+            </button>
+            <button
+              @click="testSlaveConnection"
+              :disabled="testingConnection"
+              class="btn-secondary flex items-center gap-2"
+            >
+              <BoltIcon :class="['h-4 w-4', testingConnection ? 'animate-pulse' : '']" />
+              Test
+            </button>
+          </div>
         </div>
       </div>
 
-      <!-- Loading State -->
-      <div v-if="loading && !slaveDetails">
-        <GenSlaveLoader />
+      <!-- ARM/DISARM Banner -->
+      <div
+        :class="[
+          'rounded-xl p-4 border-2 relative overflow-hidden transition-all',
+          relayArmed
+            ? 'bg-gradient-to-r from-red-500/20 to-red-500/10 border-red-500'
+            : 'bg-gradient-to-r from-gray-500/20 to-gray-500/10 border-gray-400 dark:border-gray-600'
+        ]"
+      >
+        <div class="flex items-center justify-between flex-wrap gap-4">
+          <div class="flex items-center gap-4">
+            <div
+              :class="[
+                'p-3 rounded-xl',
+                relayArmed ? 'bg-red-500/30' : 'bg-gray-500/30'
+              ]"
+            >
+              <ShieldExclamationIcon
+                :class="[
+                  'h-8 w-8',
+                  relayArmed ? 'text-red-500' : 'text-gray-500'
+                ]"
+              />
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-primary">
+                Relay Status:
+                <span :class="relayArmed ? 'text-red-500' : 'text-gray-500'">
+                  {{ relayArmed ? 'ARMED' : 'DISARMED' }}
+                </span>
+              </h3>
+              <p class="text-sm text-secondary">
+                {{ relayArmed ? 'Generator can be started via relay control' : 'Relay is disabled - generator cannot be started remotely' }}
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button
+              @click="toggleRelayArm"
+              :disabled="armingRelay || !slaveInfo.online"
+              :class="[
+                'relative inline-flex h-8 w-16 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
+                relayArmed
+                  ? 'bg-red-500 focus:ring-red-500'
+                  : 'bg-gray-400 focus:ring-gray-500',
+                (armingRelay || !slaveInfo.online) ? 'opacity-50 cursor-not-allowed' : ''
+              ]"
+            >
+              <span
+                :class="[
+                  'inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform',
+                  relayArmed ? 'translate-x-9' : 'translate-x-1'
+                ]"
+              />
+            </button>
+            <span
+              :class="[
+                'px-3 py-1 rounded-full text-sm font-bold',
+                relayArmed
+                  ? 'bg-red-500 text-white'
+                  : 'bg-gray-400 text-white'
+              ]"
+            >
+              {{ relayArmed ? 'ARMED' : 'SAFE' }}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <!-- Error State -->
-      <Card v-else-if="error" class="border-red-200 dark:border-red-800">
-        <div class="flex items-center space-x-4">
-          <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-            <svg class="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+      <!-- System Resources Grid -->
+      <div v-if="slaveSystemInfo" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <!-- CPU -->
+        <Card :padding="false">
+          <div class="p-4 text-center">
+            <div class="relative inline-block">
+              <svg class="w-20 h-20" viewBox="0 0 100 100">
+                <circle class="text-gray-200 dark:text-gray-700" stroke="currentColor" stroke-width="10" fill="transparent" r="40" cx="50" cy="50" />
+                <circle
+                  :class="[
+                    (slaveSystemInfo.cpu_percent || 0) >= 90 ? 'text-red-500' :
+                    (slaveSystemInfo.cpu_percent || 0) >= 75 ? 'text-amber-500' : 'text-blue-500'
+                  ]"
+                  stroke="currentColor" stroke-width="10" stroke-linecap="round" fill="transparent" r="40" cx="50" cy="50"
+                  :stroke-dasharray="`${(slaveSystemInfo.cpu_percent || 0) * 2.51} 251`" transform="rotate(-90 50 50)"
+                />
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-xl font-bold text-primary">{{ Math.round(slaveSystemInfo.cpu_percent || 0) }}%</span>
+              </div>
+            </div>
+            <p class="text-sm text-secondary mt-2">CPU</p>
           </div>
-          <div class="flex-1">
-            <h3 class="font-medium text-gray-900 dark:text-white">Connection Failed</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400">{{ error }}</p>
+        </Card>
+
+        <!-- Memory -->
+        <Card :padding="false">
+          <div class="p-4 text-center">
+            <div class="relative inline-block">
+              <svg class="w-20 h-20" viewBox="0 0 100 100">
+                <circle class="text-gray-200 dark:text-gray-700" stroke="currentColor" stroke-width="10" fill="transparent" r="40" cx="50" cy="50" />
+                <circle
+                  :class="[
+                    (slaveSystemInfo.ram_percent || 0) >= 90 ? 'text-red-500' :
+                    (slaveSystemInfo.ram_percent || 0) >= 75 ? 'text-amber-500' : 'text-purple-500'
+                  ]"
+                  stroke="currentColor" stroke-width="10" stroke-linecap="round" fill="transparent" r="40" cx="50" cy="50"
+                  :stroke-dasharray="`${(slaveSystemInfo.ram_percent || 0) * 2.51} 251`" transform="rotate(-90 50 50)"
+                />
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-xl font-bold text-primary">{{ Math.round(slaveSystemInfo.ram_percent || 0) }}%</span>
+              </div>
+            </div>
+            <p class="text-sm text-secondary mt-2">Memory</p>
+            <p class="text-xs text-muted">{{ slaveSystemInfo.ram_used_mb || 0 }}MB / {{ slaveSystemInfo.ram_total_mb || 0 }}MB</p>
           </div>
-          <Button variant="primary" @click="refreshHealth">
-            Retry
-          </Button>
+        </Card>
+
+        <!-- Disk -->
+        <Card :padding="false">
+          <div class="p-4 text-center">
+            <div class="relative inline-block">
+              <svg class="w-20 h-20" viewBox="0 0 100 100">
+                <circle class="text-gray-200 dark:text-gray-700" stroke="currentColor" stroke-width="10" fill="transparent" r="40" cx="50" cy="50" />
+                <circle
+                  :class="[
+                    (slaveSystemInfo.disk_percent || 0) >= 90 ? 'text-red-500' :
+                    (slaveSystemInfo.disk_percent || 0) >= 75 ? 'text-amber-500' : 'text-emerald-500'
+                  ]"
+                  stroke="currentColor" stroke-width="10" stroke-linecap="round" fill="transparent" r="40" cx="50" cy="50"
+                  :stroke-dasharray="`${(slaveSystemInfo.disk_percent || 0) * 2.51} 251`" transform="rotate(-90 50 50)"
+                />
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-xl font-bold text-primary">{{ Math.round(slaveSystemInfo.disk_percent || 0) }}%</span>
+              </div>
+            </div>
+            <p class="text-sm text-secondary mt-2">Disk</p>
+            <p class="text-xs text-muted">{{ ((slaveSystemInfo.disk_total_gb || 0) - (slaveSystemInfo.disk_used_gb || 0)).toFixed(1) }}GB free</p>
+          </div>
+        </Card>
+
+        <!-- Temperature -->
+        <Card :padding="false">
+          <div class="p-4 text-center">
+            <div class="relative inline-block">
+              <svg class="w-20 h-20" viewBox="0 0 100 100">
+                <circle class="text-gray-200 dark:text-gray-700" stroke="currentColor" stroke-width="10" fill="transparent" r="40" cx="50" cy="50" />
+                <circle
+                  :class="[
+                    (slaveSystemInfo.temperature_celsius || 0) >= 80 ? 'text-red-500' :
+                    (slaveSystemInfo.temperature_celsius || 0) >= 60 ? 'text-amber-500' : 'text-cyan-500'
+                  ]"
+                  stroke="currentColor" stroke-width="10" stroke-linecap="round" fill="transparent" r="40" cx="50" cy="50"
+                  :stroke-dasharray="`${Math.min((slaveSystemInfo.temperature_celsius || 0), 100) * 2.51} 251`" transform="rotate(-90 50 50)"
+                />
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-xl font-bold text-primary">{{ Math.round(slaveSystemInfo.temperature_celsius || 0) }}°</span>
+              </div>
+            </div>
+            <p class="text-sm text-secondary mt-2">Temp</p>
+            <p class="text-xs text-muted">{{ (slaveSystemInfo.temperature_celsius || 0) >= 60 ? 'Warm' : 'Normal' }}</p>
+          </div>
+        </Card>
+      </div>
+
+      <!-- Detail Cards Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- System Info Card -->
+        <Card title="System Information">
+          <div v-if="slaveSystemInfo" class="space-y-3">
+            <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">Hostname</span>
+              <span class="font-medium text-primary">{{ slaveSystemInfo.hostname || 'Unknown' }}</span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">Platform</span>
+              <span class="font-medium text-primary">{{ slaveSystemInfo.platform || 'Unknown' }}</span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">IP Address</span>
+              <span class="font-medium text-primary font-mono">{{ slaveSystemInfo.ip_address || 'Unknown' }}</span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">Uptime</span>
+              <span class="font-medium text-primary">{{ formatSeconds(slaveSystemInfo.uptime_seconds) }}</span>
+            </div>
+            <div v-if="slaveHealthStatus?.version" class="flex justify-between py-2">
+              <span class="text-secondary">Version</span>
+              <span class="font-medium text-primary">{{ slaveHealthStatus.version }}</span>
+            </div>
+          </div>
+          <div v-else class="text-center py-4 text-muted">
+            System information not available
+          </div>
+        </Card>
+
+        <!-- Relay & Health Card -->
+        <Card title="Relay & Health Status">
+          <div class="space-y-3">
+            <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">Relay State</span>
+              <span :class="['font-medium', slaveRelayState?.relay_on ? 'text-emerald-500' : 'text-gray-500']">
+                {{ slaveRelayState?.relay_on ? 'ON' : 'OFF' }}
+              </span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">Armed</span>
+              <span :class="['font-medium', relayArmed ? 'text-red-500' : 'text-emerald-500']">
+                {{ relayArmed ? 'Yes' : 'No' }}
+              </span>
+            </div>
+            <div v-if="slaveRelayState?.armed_at" class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">Armed At</span>
+              <span class="font-medium text-primary text-sm">{{ new Date(slaveRelayState.armed_at * 1000).toLocaleString() }}</span>
+            </div>
+            <div v-if="slaveRelayState?.change_count !== undefined" class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">State Changes</span>
+              <span class="font-medium text-primary">{{ slaveRelayState.change_count }}</span>
+            </div>
+            <div class="flex justify-between py-2">
+              <span class="text-secondary">Mock Mode</span>
+              <span :class="['font-medium', slaveHealthStatus?.mock_mode ? 'text-amber-500' : 'text-emerald-500']">
+                {{ slaveHealthStatus?.mock_mode ? 'Enabled' : 'Disabled' }}
+              </span>
+            </div>
+          </div>
+        </Card>
+
+        <!-- Failsafe Monitoring Card -->
+        <Card title="Failsafe Monitoring">
+          <div v-if="slaveFailsafeStatus" class="space-y-3">
+            <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">Failsafe Running</span>
+              <span :class="['font-medium', slaveFailsafeStatus.running ? 'text-emerald-500' : 'text-red-500']">
+                {{ slaveFailsafeStatus.running ? 'Yes' : 'No' }}
+              </span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">Last Heartbeat</span>
+              <span class="font-medium text-primary text-sm">
+                {{ slaveFailsafeStatus.last_heartbeat ? new Date(slaveFailsafeStatus.last_heartbeat * 1000).toLocaleTimeString() : 'Never' }}
+              </span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">Since Heartbeat</span>
+              <span :class="['font-medium', (slaveFailsafeStatus.seconds_since_heartbeat || 0) > 60 ? 'text-amber-500' : 'text-primary']">
+                {{ formatSeconds(slaveFailsafeStatus.seconds_since_heartbeat) }}
+              </span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">Heartbeat Count</span>
+              <span class="font-medium text-primary">{{ slaveFailsafeStatus.heartbeat_count || 0 }}</span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+              <span class="text-secondary">Timeout</span>
+              <span class="font-medium text-primary">{{ slaveFailsafeStatus.timeout_seconds || 60 }}s</span>
+            </div>
+            <div class="flex justify-between py-2">
+              <span class="text-secondary">Failsafe Triggered</span>
+              <span :class="['font-medium', slaveFailsafeStatus.failsafe_triggered ? 'text-red-500' : 'text-emerald-500']">
+                {{ slaveFailsafeStatus.failsafe_triggered ? 'Yes' : 'No' }}
+              </span>
+            </div>
+          </div>
+          <div v-else class="text-center py-4 text-muted">
+            Failsafe status not available
+          </div>
+        </Card>
+
+        <!-- Network & WiFi Card -->
+        <Card title="Network & WiFi">
+          <div v-if="slaveSystemInfo?.network_interfaces?.length" class="space-y-4">
+            <div
+              v-for="iface in slaveSystemInfo.network_interfaces"
+              :key="iface.interface"
+              class="p-3 rounded-lg bg-surface-hover"
+            >
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <WifiIcon v-if="iface.is_wifi" class="h-4 w-4 text-blue-500" />
+                  <GlobeAltIcon v-else class="h-4 w-4 text-emerald-500" />
+                  <span class="font-medium text-primary">{{ iface.interface }}</span>
+                </div>
+                <span v-if="iface.ip_address" class="font-mono text-sm text-secondary">{{ iface.ip_address }}</span>
+              </div>
+              <!-- WiFi Signal if available -->
+              <div v-if="iface.is_wifi && iface.wifi_ssid" class="mt-2">
+                <div class="flex justify-between items-center text-sm mb-1">
+                  <span class="text-muted">WiFi Signal</span>
+                  <span class="font-medium text-primary">{{ iface.wifi_ssid }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      :class="[
+                        'h-full rounded-full transition-all',
+                        (iface.wifi_signal_percent || 0) >= 75 ? 'bg-emerald-500' :
+                        (iface.wifi_signal_percent || 0) >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                      ]"
+                      :style="{ width: `${iface.wifi_signal_percent || 0}%` }"
+                    ></div>
+                  </div>
+                  <span class="text-xs text-muted w-12 text-right">{{ iface.wifi_signal_percent || 0 }}%</span>
+                </div>
+                <div v-if="iface.wifi_signal_dbm" class="text-xs text-muted mt-1">
+                  {{ iface.wifi_signal_dbm }} dBm
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-center py-4 text-muted">
+            Network information not available
+          </div>
+        </Card>
+      </div>
+
+      <!-- Connection Settings Card -->
+      <Card title="Connection Settings" subtitle="Configure GenSlave communication">
+        <div class="space-y-4">
+          <div class="flex gap-3 items-end flex-wrap">
+            <div class="flex-1 min-w-[250px]">
+              <label class="block text-sm font-medium text-secondary mb-1">GenSlave URL</label>
+              <input
+                v-model="slaveConfig.slave_api_url"
+                type="text"
+                placeholder="http://genslave.local:8001"
+                class="input"
+              />
+            </div>
+            <button
+              @click="testSlaveConnection"
+              :disabled="testingConnection"
+              class="btn-secondary flex items-center gap-2"
+            >
+              <BoltIcon v-if="!testingConnection" class="h-4 w-4" />
+              <ArrowPathIcon v-else class="h-4 w-4 animate-spin" />
+              Test
+            </button>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-secondary mb-1">Heartbeat Interval (seconds)</label>
+            <input
+              v-model.number="slaveConfig.heartbeat_interval_seconds"
+              type="number"
+              min="5"
+              max="60"
+              class="input w-48"
+            />
+            <p class="text-xs text-muted mt-1">How often GenMaster sends heartbeat to GenSlave</p>
+          </div>
+        </div>
+        <div class="flex justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <button @click="saveSlaveConfig" :disabled="savingSlaveConfig" class="btn-primary flex items-center gap-2">
+            <ArrowPathIcon v-if="savingSlaveConfig" class="h-4 w-4 animate-spin" />
+            <CheckCircleIcon v-else class="h-4 w-4" />
+            Save Settings
+          </button>
         </div>
       </Card>
 
-      <!-- Main Content -->
-      <template v-else-if="slaveDetails">
-        <!-- Quick Stats Row -->
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          <!-- Hostname -->
-          <Card class="col-span-1">
-            <div class="text-center">
-              <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Hostname</p>
-              <p class="text-lg font-bold text-gray-900 dark:text-white mt-1 truncate">
-                {{ slaveDetails.hostname || 'Unknown' }}
-              </p>
-            </div>
-          </Card>
-
-          <!-- IP Address -->
-          <Card class="col-span-1">
-            <div class="text-center">
-              <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">IP Address</p>
-              <p class="text-lg font-bold text-cyan-600 dark:text-cyan-400 mt-1 font-mono">
-                {{ slaveDetails.ip_address || 'N/A' }}
-              </p>
-            </div>
-          </Card>
-
-          <!-- Uptime -->
-          <Card class="col-span-1">
-            <div class="text-center">
-              <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Uptime</p>
-              <p class="text-lg font-bold text-gray-900 dark:text-white mt-1">
-                {{ formatUptime(slaveDetails.uptime_seconds) }}
-              </p>
-            </div>
-          </Card>
-
-          <!-- Temperature -->
-          <Card class="col-span-1">
-            <div class="text-center">
-              <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Temperature</p>
-              <p class="text-lg font-bold mt-1" :class="getTempClass(slaveDetails.temperature_celsius)">
-                {{ slaveDetails.temperature_celsius ? `${slaveDetails.temperature_celsius.toFixed(1)}°C` : 'N/A' }}
-              </p>
-            </div>
-          </Card>
-
-          <!-- WiFi Signal -->
-          <Card class="col-span-1">
-            <div class="text-center">
-              <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">WiFi Signal</p>
-              <div class="flex items-center justify-center mt-1">
-                <WifiIcon :strength="wifiSignalPercent" class="w-6 h-6 mr-1" />
-                <span class="text-lg font-bold" :class="getWifiClass(wifiSignalPercent)">
-                  {{ wifiSignalPercent !== null ? `${wifiSignalPercent}%` : 'N/A' }}
-                </span>
-              </div>
-            </div>
-          </Card>
-
-          <!-- Status -->
-          <Card class="col-span-1">
-            <div class="text-center">
-              <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</p>
-              <StatusBadge
-                :status="slaveDetails.status"
-                :text="slaveDetails.status"
-                class="mt-2"
-              />
-            </div>
-          </Card>
-        </div>
-
-        <!-- Resource Usage Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <!-- CPU Usage -->
-          <Card title="CPU Usage">
-            <div class="flex items-center justify-between">
-              <div class="relative w-24 h-24">
-                <svg class="w-full h-full" viewBox="0 0 100 100">
-                  <circle
-                    class="text-gray-200 dark:text-gray-700"
-                    stroke="currentColor"
-                    stroke-width="8"
-                    fill="transparent"
-                    r="42"
-                    cx="50"
-                    cy="50"
-                  />
-                  <circle
-                    :class="getProgressColorClass(slaveDetails.cpu_percent)"
-                    stroke="currentColor"
-                    stroke-width="8"
-                    stroke-linecap="round"
-                    fill="transparent"
-                    r="42"
-                    cx="50"
-                    cy="50"
-                    :stroke-dasharray="`${slaveDetails.cpu_percent * 2.64} 264`"
-                    transform="rotate(-90 50 50)"
-                    class="transition-all duration-500"
-                  />
-                </svg>
-                <div class="absolute inset-0 flex items-center justify-center">
-                  <span class="text-2xl font-bold">{{ slaveDetails.cpu_percent?.toFixed(0) || 0 }}%</span>
-                </div>
-              </div>
-              <div class="flex-1 ml-6">
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  Pi Zero 2W - ARM Cortex-A53
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <!-- Memory Usage -->
-          <Card title="Memory Usage">
-            <div class="flex items-center justify-between">
-              <div class="relative w-24 h-24">
-                <svg class="w-full h-full" viewBox="0 0 100 100">
-                  <circle
-                    class="text-gray-200 dark:text-gray-700"
-                    stroke="currentColor"
-                    stroke-width="8"
-                    fill="transparent"
-                    r="42"
-                    cx="50"
-                    cy="50"
-                  />
-                  <circle
-                    :class="getProgressColorClass(slaveDetails.ram_percent)"
-                    stroke="currentColor"
-                    stroke-width="8"
-                    stroke-linecap="round"
-                    fill="transparent"
-                    r="42"
-                    cx="50"
-                    cy="50"
-                    :stroke-dasharray="`${slaveDetails.ram_percent * 2.64} 264`"
-                    transform="rotate(-90 50 50)"
-                    class="transition-all duration-500"
-                  />
-                </svg>
-                <div class="absolute inset-0 flex items-center justify-center">
-                  <span class="text-2xl font-bold">{{ slaveDetails.ram_percent?.toFixed(0) || 0 }}%</span>
-                </div>
-              </div>
-              <div class="flex-1 ml-6 space-y-1">
-                <div class="flex justify-between text-sm">
-                  <span class="text-gray-500 dark:text-gray-400">Used</span>
-                  <span class="font-medium">{{ slaveDetails.ram_used_mb || 0 }} MB</span>
-                </div>
-                <div class="flex justify-between text-sm">
-                  <span class="text-gray-500 dark:text-gray-400">Available</span>
-                  <span class="font-medium">{{ slaveDetails.ram_available_mb || 0 }} MB</span>
-                </div>
-                <div class="flex justify-between text-sm">
-                  <span class="text-gray-500 dark:text-gray-400">Total</span>
-                  <span class="font-medium">{{ slaveDetails.ram_total_mb || 0 }} MB</span>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <!-- Disk Usage -->
-          <Card title="Disk Usage">
-            <div class="flex items-center justify-between">
-              <div class="relative w-24 h-24">
-                <svg class="w-full h-full" viewBox="0 0 100 100">
-                  <circle
-                    class="text-gray-200 dark:text-gray-700"
-                    stroke="currentColor"
-                    stroke-width="8"
-                    fill="transparent"
-                    r="42"
-                    cx="50"
-                    cy="50"
-                  />
-                  <circle
-                    :class="getProgressColorClass(slaveDetails.disk_percent)"
-                    stroke="currentColor"
-                    stroke-width="8"
-                    stroke-linecap="round"
-                    fill="transparent"
-                    r="42"
-                    cx="50"
-                    cy="50"
-                    :stroke-dasharray="`${slaveDetails.disk_percent * 2.64} 264`"
-                    transform="rotate(-90 50 50)"
-                    class="transition-all duration-500"
-                  />
-                </svg>
-                <div class="absolute inset-0 flex items-center justify-center">
-                  <span class="text-2xl font-bold">{{ slaveDetails.disk_percent?.toFixed(0) || 0 }}%</span>
-                </div>
-              </div>
-              <div class="flex-1 ml-6 space-y-1">
-                <div class="flex justify-between text-sm">
-                  <span class="text-gray-500 dark:text-gray-400">Used</span>
-                  <span class="font-medium">{{ slaveDetails.disk_used_gb?.toFixed(1) || 0 }} GB</span>
-                </div>
-                <div class="flex justify-between text-sm">
-                  <span class="text-gray-500 dark:text-gray-400">Free</span>
-                  <span class="font-medium">{{ slaveDetails.disk_free_gb?.toFixed(1) || 0 }} GB</span>
-                </div>
-                <div class="flex justify-between text-sm">
-                  <span class="text-gray-500 dark:text-gray-400">Total</span>
-                  <span class="font-medium">{{ slaveDetails.disk_total_gb?.toFixed(1) || 0 }} GB</span>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        <!-- Network Interfaces -->
-        <Card title="Network Interfaces">
-          <div class="space-y-4">
+      <!-- Warnings if any -->
+      <div v-if="slaveSystemInfo?.warnings?.length">
+        <Card title="Warnings" :padding="false">
+          <div class="divide-y divide-gray-200 dark:divide-gray-700">
             <div
-              v-for="iface in slaveDetails.network_interfaces"
-              :key="iface.interface"
-              class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
-            >
-              <div class="flex items-center space-x-4">
-                <div :class="[
-                  'w-10 h-10 rounded-full flex items-center justify-center',
-                  iface.is_wifi ? 'bg-cyan-100 dark:bg-cyan-900/30' : 'bg-blue-100 dark:bg-blue-900/30'
-                ]">
-                  <svg v-if="iface.is_wifi" class="w-5 h-5 text-cyan-600 dark:text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-                  </svg>
-                  <svg v-else class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-                  </svg>
-                </div>
-                <div>
-                  <p class="font-medium text-gray-900 dark:text-white">
-                    {{ iface.interface }}
-                    <span v-if="iface.wifi_ssid" class="text-sm text-gray-500 dark:text-gray-400 ml-2">
-                      ({{ iface.wifi_ssid }})
-                    </span>
-                  </p>
-                  <p class="text-sm text-gray-500 dark:text-gray-400 font-mono">
-                    {{ iface.ip_address || 'No IP' }}
-                  </p>
-                </div>
-              </div>
-              <div class="text-right">
-                <p v-if="iface.mac_address" class="text-xs text-gray-400 dark:text-gray-500 font-mono">
-                  {{ iface.mac_address }}
-                </p>
-                <div v-if="iface.is_wifi && iface.wifi_signal_percent !== null" class="flex items-center justify-end mt-1">
-                  <WifiIcon :strength="iface.wifi_signal_percent" class="w-4 h-4 mr-1" />
-                  <span class="text-sm font-medium" :class="getWifiClass(iface.wifi_signal_percent)">
-                    {{ iface.wifi_signal_dbm }} dBm ({{ iface.wifi_signal_percent }}%)
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="!slaveDetails.network_interfaces?.length" class="text-center py-8 text-gray-500 dark:text-gray-400">
-              No network interfaces found
-            </div>
-          </div>
-        </Card>
-
-        <!-- Warnings -->
-        <Card v-if="slaveDetails.warnings?.length" title="Warnings" class="border-amber-200 dark:border-amber-800">
-          <div class="space-y-2">
-            <div
-              v-for="(warning, index) in slaveDetails.warnings"
+              v-for="(warning, index) in slaveSystemInfo.warnings"
               :key="index"
-              class="flex items-center space-x-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg"
+              class="p-4 flex items-start gap-3"
             >
-              <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <span class="text-sm text-amber-700 dark:text-amber-300">{{ warning }}</span>
+              <ExclamationTriangleIcon class="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <p class="text-sm text-amber-700 dark:text-amber-400">{{ warning }}</p>
             </div>
           </div>
         </Card>
+      </div>
 
-        <!-- Connection Test -->
-        <Card title="Connection Test">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-600 dark:text-gray-400">
-                Test the heartbeat connection to GenSlave
-              </p>
-              <p v-if="lastTestResult" class="text-sm mt-1" :class="lastTestResult.success ? 'text-green-600' : 'text-red-600'">
-                Last test: {{ lastTestResult.success ? `OK (${lastTestResult.latency_ms}ms)` : lastTestResult.error }}
-              </p>
-            </div>
-            <Button
-              variant="primary"
-              @click="testConnection"
-              :loading="testing"
-            >
-              <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Test Connection
-            </Button>
-          </div>
-        </Card>
-      </template>
+      <!-- No data state -->
+      <Card v-if="!slaveSystemInfo && !slaveInfo.online">
+        <div class="text-center py-8 text-muted">
+          <ServerIcon class="h-12 w-12 mx-auto mb-3 opacity-50" />
+          <p>GenSlave is offline or unreachable</p>
+          <p class="text-sm mt-1">Check the connection settings and ensure GenSlave is running</p>
+          <button
+            @click="testSlaveConnection"
+            :disabled="testingConnection"
+            class="mt-4 btn-primary"
+          >
+            <BoltIcon class="h-4 w-4 mr-2" />
+            Test Connection
+          </button>
+        </div>
+      </Card>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useSystemStore } from '@/stores/system'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useNotificationStore } from '@/stores/notifications'
+import api, { genslaveApi, configApi } from '@/services/api'
 import Card from '@/components/common/Card.vue'
-import Button from '@/components/common/Button.vue'
-import StatusBadge from '@/components/common/StatusBadge.vue'
-import GenSlaveLoader from '@/components/common/GenSlaveLoader.vue'
+import HeartbeatLoader from '@/components/common/HeartbeatLoader.vue'
+import {
+  ArrowPathIcon,
+  CheckCircleIcon,
+  GlobeAltIcon,
+  WifiIcon,
+  BoltIcon,
+  ServerIcon,
+  ExclamationTriangleIcon,
+  ShieldExclamationIcon,
+} from '@heroicons/vue/24/outline'
 
-const systemStore = useSystemStore()
-const notifications = useNotificationStore()
+const notificationStore = useNotificationStore()
 
-const loading = ref(false)
-const testing = ref(false)
-const error = ref(null)
-const slaveDetails = ref(null)
-const lastTestResult = ref(null)
+// Loading state
+const slaveLoading = ref(false)
+const testingConnection = ref(false)
+const slaveLoadingMessages = [
+  'Connecting to GenSlave...',
+  'Fetching system info...',
+  'Checking relay status...',
+  'Reading failsafe state...',
+]
+const slaveLoadingMessageIndex = ref(0)
+let slaveLoadingInterval = null
+
+// GenSlave state
+const slaveInfo = ref({ online: false, last_heartbeat: null, details: null })
+
+// GenSlave comprehensive data
+const slaveSystemInfo = ref(null)  // GET /api/system
+const slaveHealthStatus = ref(null)  // GET /api/health
+const slaveFailsafeStatus = ref(null)  // GET /api/failsafe
+const slaveRelayState = ref(null)  // GET /api/relay/state
+const relayArmed = ref(false)
+const armingRelay = ref(false)
+
+// GenSlave connection settings
+const slaveConfig = ref({
+  slave_api_url: 'http://genslave.local:8001',
+  heartbeat_interval_seconds: 30,
+})
+const savingSlaveConfig = ref(false)
+
+// Polling
 let pollInterval = null
 
-// Computed properties
-const connectionStatus = computed(() => {
-  if (loading.value && !slaveDetails.value) return 'unknown'
-  if (error.value) return 'critical'
-  if (!slaveDetails.value) return 'unknown'
-  return slaveDetails.value.status || 'healthy'
-})
+// Load GenSlave info (comprehensive)
+async function loadSlaveInfo() {
+  slaveLoading.value = true
+  slaveLoadingMessageIndex.value = 0
 
-const connectionStatusText = computed(() => {
-  if (loading.value && !slaveDetails.value) return 'Connecting...'
-  if (error.value) return 'Offline'
-  if (!slaveDetails.value) return 'Unknown'
-  return slaveDetails.value.status === 'healthy' ? 'Online' : slaveDetails.value.status
-})
-
-const wifiSignalPercent = computed(() => {
-  const wifiIface = slaveDetails.value?.network_interfaces?.find(i => i.is_wifi)
-  return wifiIface?.wifi_signal_percent ?? null
-})
-
-// Helper functions
-function formatUptime(seconds) {
-  if (!seconds) return '0s'
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-
-  const parts = []
-  if (days > 0) parts.push(`${days}d`)
-  if (hours > 0) parts.push(`${hours}h`)
-  if (minutes > 0) parts.push(`${minutes}m`)
-
-  return parts.join(' ') || '< 1m'
-}
-
-function getProgressColorClass(percent) {
-  if (percent >= 90) return 'text-red-500'
-  if (percent >= 70) return 'text-amber-500'
-  return 'text-green-500'
-}
-
-function getTempClass(temp) {
-  if (!temp) return 'text-gray-500'
-  if (temp >= 80) return 'text-red-500'
-  if (temp >= 70) return 'text-amber-500'
-  return 'text-green-500'
-}
-
-function getWifiClass(percent) {
-  if (percent === null) return 'text-gray-500'
-  if (percent >= 70) return 'text-green-500'
-  if (percent >= 40) return 'text-amber-500'
-  return 'text-red-500'
-}
-
-// Actions
-async function refreshHealth() {
-  loading.value = true
-  error.value = null
+  // Start rotating loading messages
+  slaveLoadingInterval = setInterval(() => {
+    slaveLoadingMessageIndex.value = (slaveLoadingMessageIndex.value + 1) % slaveLoadingMessages.length
+  }, 1500)
 
   try {
-    slaveDetails.value = await systemStore.fetchSlaveDetails()
-  } catch (err) {
-    error.value = err.response?.data?.detail || err.message || 'Failed to connect to GenSlave'
-    notifications.error('Failed to fetch GenSlave health')
+    // Load config first
+    try {
+      const configRes = await configApi.get()
+      if (configRes.data) {
+        slaveConfig.value.slave_api_url = configRes.data.slave_api_url || slaveConfig.value.slave_api_url
+        slaveConfig.value.heartbeat_interval_seconds = configRes.data.heartbeat_interval_seconds || 30
+      }
+    } catch (e) {
+      console.warn('Failed to load config for GenSlave:', e)
+    }
+
+    // Load all GenSlave data in parallel with better error tracking
+    let systemError = null
+    let healthStatusError = null
+
+    const [healthRes, systemRes, healthStatusRes, failsafeRes, relayRes] = await Promise.all([
+      api.get('/health/slave').catch((e) => {
+        console.warn('Failed to get /health/slave:', e.response?.data || e.message)
+        return { data: { connection_status: 'disconnected' } }
+      }),
+      genslaveApi.getSystemInfo().catch((e) => {
+        systemError = e.response?.data?.detail || e.message
+        console.warn('Failed to get GenSlave system info:', systemError)
+        return { data: null }
+      }),
+      genslaveApi.getHealthStatus().catch((e) => {
+        healthStatusError = e.response?.data?.detail || e.message
+        console.warn('Failed to get GenSlave health status:', healthStatusError)
+        return { data: null }
+      }),
+      genslaveApi.getFailsafeStatus().catch((e) => {
+        console.warn('Failed to get GenSlave failsafe status:', e.response?.data?.detail || e.message)
+        return { data: null }
+      }),
+      genslaveApi.getRelayState().catch((e) => {
+        console.warn('Failed to get GenSlave relay state:', e.response?.data?.detail || e.message)
+        return { data: null }
+      }),
+    ])
+
+    // Check if we got system data - if not, GenSlave is likely unreachable
+    const isOnline = systemRes.data !== null
+
+    // Basic connection info
+    slaveInfo.value = {
+      online: isOnline,
+      last_heartbeat: healthRes.data?.last_heartbeat_received,
+      details: systemRes.data,
+      error: systemError,
+    }
+
+    // Comprehensive data
+    slaveSystemInfo.value = systemRes.data
+    slaveHealthStatus.value = healthStatusRes.data
+    slaveFailsafeStatus.value = failsafeRes.data
+    slaveRelayState.value = relayRes.data
+
+    // Update armed state from relay state or health status
+    relayArmed.value = relayRes.data?.armed || healthStatusRes.data?.armed || false
+
+    // Show error notification if we couldn't reach GenSlave (only on manual refresh)
+    if (!isOnline && systemError && !pollInterval) {
+      notificationStore.error(`GenSlave unreachable: ${systemError}`)
+    }
+  } catch (error) {
+    console.error('GenSlave info load failed:', error)
+    slaveInfo.value = { online: false, last_heartbeat: null, details: null, error: error.message }
+    slaveSystemInfo.value = null
+    slaveHealthStatus.value = null
+    slaveFailsafeStatus.value = null
+    slaveRelayState.value = null
   } finally {
-    loading.value = false
+    if (slaveLoadingInterval) {
+      clearInterval(slaveLoadingInterval)
+      slaveLoadingInterval = null
+    }
+    slaveLoading.value = false
   }
 }
 
-async function testConnection() {
-  testing.value = true
+// Test GenSlave connection
+async function testSlaveConnection() {
+  testingConnection.value = true
   try {
-    const result = await systemStore.testSlaveConnection()
-    lastTestResult.value = result
-    if (result.success) {
-      notifications.success(`Connection successful (${result.latency_ms}ms)`)
+    const response = await api.post('/health/test-slave')
+    if (response.data?.success) {
+      notificationStore.success(`Connection successful (${response.data.latency_ms || response.data.response_time_ms || 0}ms)`)
+      await loadSlaveInfo()
     } else {
-      notifications.error(`Connection failed: ${result.error}`)
+      notificationStore.error(`Connection failed: ${response.data?.error || 'Unknown error'}`)
+    }
+  } catch (error) {
+    notificationStore.error(`Connection failed: ${error.response?.data?.detail || error.message}`)
+  } finally {
+    testingConnection.value = false
+  }
+}
+
+// Toggle relay ARM/DISARM
+async function toggleRelayArm() {
+  armingRelay.value = true
+  try {
+    if (relayArmed.value) {
+      await genslaveApi.disarm()
+      relayArmed.value = false
+      notificationStore.success('Relay disarmed')
+    } else {
+      await genslaveApi.arm()
+      relayArmed.value = true
+      notificationStore.success('Relay armed - generator can now be started')
     }
   } catch (err) {
-    lastTestResult.value = { success: false, error: err.message }
-    notifications.error('Connection test failed')
+    notificationStore.error('Failed to toggle relay arm state')
+    console.error('Failed to toggle relay arm state:', err)
   } finally {
-    testing.value = false
+    armingRelay.value = false
   }
+}
+
+// Save GenSlave connection settings
+async function saveSlaveConfig() {
+  savingSlaveConfig.value = true
+  try {
+    await configApi.update({
+      slave_api_url: slaveConfig.value.slave_api_url,
+      heartbeat_interval_seconds: slaveConfig.value.heartbeat_interval_seconds,
+    })
+    notificationStore.success('GenSlave settings saved')
+  } catch (error) {
+    notificationStore.error('Failed to save GenSlave settings')
+  } finally {
+    savingSlaveConfig.value = false
+  }
+}
+
+// Format seconds to human readable
+function formatSeconds(seconds) {
+  if (!seconds || seconds <= 0) return '0s'
+  if (seconds < 60) return `${Math.round(seconds)}s`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`
+  const hours = Math.floor(seconds / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
+  return `${hours}h ${mins}m`
 }
 
 // Lifecycle
 onMounted(() => {
-  refreshHealth()
+  loadSlaveInfo()
   // Poll every 30 seconds
-  pollInterval = setInterval(refreshHealth, 30000)
+  pollInterval = setInterval(loadSlaveInfo, 30000)
 })
 
 onUnmounted(() => {
   if (pollInterval) {
     clearInterval(pollInterval)
   }
+  if (slaveLoadingInterval) {
+    clearInterval(slaveLoadingInterval)
+  }
 })
-
-// WifiIcon component (inline for simplicity)
-const WifiIcon = {
-  props: {
-    strength: {
-      type: Number,
-      default: null
-    }
-  },
-  template: `
-    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path v-if="strength === null" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="text-gray-400" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-      <template v-else>
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :class="strength >= 20 ? 'text-current' : 'text-gray-300 dark:text-gray-600'" d="M12 20h.01" />
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :class="strength >= 40 ? 'text-current' : 'text-gray-300 dark:text-gray-600'" d="M8.111 16.404a5.5 5.5 0 017.778 0" />
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :class="strength >= 60 ? 'text-current' : 'text-gray-300 dark:text-gray-600'" d="M4.93 13.333c3.904-3.905 10.236-3.905 14.141 0" />
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :class="strength >= 80 ? 'text-current' : 'text-gray-300 dark:text-gray-600'" d="M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-      </template>
-    </svg>
-  `
-}
 </script>
