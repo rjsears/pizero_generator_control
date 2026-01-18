@@ -185,6 +185,44 @@
         </div>
       </Card>
 
+      <!-- Run Time Settings -->
+      <Card title="Run Time Limits">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div>
+            <Input
+              v-model="runTimeConfig.min_run_minutes"
+              type="number"
+              label="Minimum Run Time (minutes)"
+              :min="1"
+              :max="120"
+            />
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Minimum duration for each generator run
+            </p>
+          </div>
+          <div>
+            <Input
+              v-model="runTimeConfig.max_run_minutes"
+              type="number"
+              label="Maximum Run Time (minutes)"
+              :min="30"
+              :max="1440"
+            />
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Maximum duration before automatic shutdown
+            </p>
+          </div>
+        </div>
+        <div class="flex justify-end mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <Button
+            :loading="savingRunTimeConfig"
+            @click="saveRunTimeConfig"
+          >
+            Save Run Time Settings
+          </Button>
+        </div>
+      </Card>
+
       <!-- Statistics -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -248,8 +286,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useGeneratorStore } from '@/stores/generator'
+import { useNotificationStore } from '@/stores/notifications'
 import configService from '@/services/config'
-import { genslaveApi } from '@/services/api'
+import { genslaveApi, configApi } from '@/services/api'
 import Card from '@/components/common/Card.vue'
 import Button from '@/components/common/Button.vue'
 import Input from '@/components/common/Input.vue'
@@ -258,8 +297,16 @@ import Modal from '@/components/common/Modal.vue'
 import { ShieldExclamationIcon } from '@heroicons/vue/24/outline'
 
 const generatorStore = useGeneratorStore()
+const notificationStore = useNotificationStore()
 
 const timedDuration = ref(30)
+
+// Run time config state
+const runTimeConfig = ref({
+  min_run_minutes: 5,
+  max_run_minutes: 480,
+})
+const savingRunTimeConfig = ref(false)
 
 // Relay arm/disarm state
 const relayArmed = ref(false)
@@ -368,6 +415,17 @@ onMounted(async () => {
   } catch {
     // Ignore errors
   }
+
+  // Load run time config
+  try {
+    const configRes = await configApi.get()
+    if (configRes.data) {
+      runTimeConfig.value.min_run_minutes = configRes.data.min_run_minutes || 5
+      runTimeConfig.value.max_run_minutes = configRes.data.max_run_minutes || 480
+    }
+  } catch {
+    // Use defaults
+  }
 })
 
 // Helper functions
@@ -435,6 +493,22 @@ async function handleOverrideToggle(enabled) {
     }
   } catch {
     overrideEnabled.value = !enabled
+  }
+}
+
+// Save run time configuration
+async function saveRunTimeConfig() {
+  savingRunTimeConfig.value = true
+  try {
+    await configApi.update({
+      min_run_minutes: runTimeConfig.value.min_run_minutes,
+      max_run_minutes: runTimeConfig.value.max_run_minutes,
+    })
+    notificationStore.success('Run time settings saved')
+  } catch (error) {
+    notificationStore.error('Failed to save run time settings')
+  } finally {
+    savingRunTimeConfig.value = false
   }
 }
 </script>
