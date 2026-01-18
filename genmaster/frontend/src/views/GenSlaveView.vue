@@ -471,9 +471,7 @@
 
             <!-- Set New API Key -->
             <div>
-              <label class="block text-sm font-medium text-secondary mb-1">
-                {{ apiSecret ? 'Change API Secret' : 'Set API Secret' }}
-              </label>
+              <label class="block text-sm font-medium text-secondary mb-1">Change API Secret</label>
               <div class="flex items-center gap-2">
                 <input
                   v-model="newApiSecret"
@@ -491,7 +489,7 @@
                   Generate
                 </button>
                 <button
-                  @click="saveApiSecret"
+                  @click="rotateApiKey"
                   :disabled="savingApiSecret || !newApiSecret"
                   class="btn-primary flex items-center gap-2"
                 >
@@ -500,7 +498,7 @@
                 </button>
               </div>
               <p class="text-xs text-muted mt-2">
-                Key rotation is automatic - updates both GenMaster and GenSlave simultaneously
+                Updates API key on both GenMaster and GenSlave simultaneously
               </p>
             </div>
           </div>
@@ -769,8 +767,8 @@ async function saveSlaveConfig() {
   }
 }
 
-// Save new API secret
-async function saveApiSecret() {
+// Rotate API key on both GenMaster and GenSlave
+async function rotateApiKey() {
   if (!newApiSecret.value.trim()) {
     notificationStore.error('Please enter a new API secret')
     return
@@ -783,7 +781,6 @@ async function saveApiSecret() {
 
   savingApiSecret.value = true
   try {
-    // Call the rotate endpoint which updates both GenSlave and GenMaster
     await api.post('/health/rotate-api-key', { new_key: newApiSecret.value })
     apiSecret.value = newApiSecret.value
     newApiSecret.value = ''
