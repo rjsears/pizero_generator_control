@@ -311,22 +311,29 @@ async def get_ssl_info() -> dict:
 
         return cert_info
 
-    # Try to get SSL info from nginx container
+    # Try to get SSL info from certbot or nginx container
     try:
         import docker
         client = docker.from_env()
 
-        # Find nginx container
+        # Find certbot container first (has openssl), fall back to nginx
+        cert_container = None
         nginx_container = None
         for container in client.containers.list():
-            if "genmaster_nginx" in container.name.lower():
+            name_lower = container.name.lower()
+            if "certbot" in name_lower:
+                cert_container = container
+            elif "genmaster_nginx" in name_lower:
                 nginx_container = container
-                break
 
-        if nginx_container:
+        # Use certbot container for openssl commands (nginx:alpine doesn't have openssl)
+        # Fall back to nginx just for listing directories
+        exec_container = cert_container or nginx_container
+
+        if exec_container:
             # List certificate directories
             try:
-                exit_code, output = nginx_container.exec_run(
+                exit_code, output = exec_container.exec_run(
                     "ls /etc/letsencrypt/live/",
                     demux=True
                 )
@@ -337,16 +344,25 @@ async def get_ssl_info() -> dict:
                     for domain in domains:
                         cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
 
-                        # Get certificate info using openssl
-                        exit_code, cert_output = nginx_container.exec_run(
-                            f"openssl x509 -in {cert_path} -noout -subject -issuer -dates -ext subjectAltName",
-                            demux=True
-                        )
+                        # Get certificate info using openssl (only works in certbot container)
+                        if cert_container:
+                            exit_code, cert_output = cert_container.exec_run(
+                                f"openssl x509 -in {cert_path} -noout -subject -issuer -dates -ext subjectAltName",
+                                demux=True
+                            )
 
-                        if exit_code == 0 and cert_output[0]:
-                            cert_str = cert_output[0].decode("utf-8")
-                            cert_info = parse_cert_output(cert_str, domain, cert_path)
-                            ssl_info["certificates"].append(cert_info)
+                            if exit_code == 0 and cert_output[0]:
+                                cert_str = cert_output[0].decode("utf-8")
+                                cert_info = parse_cert_output(cert_str, domain, cert_path)
+                                ssl_info["certificates"].append(cert_info)
+                        else:
+                            # Certbot not running - add basic info without openssl parsing
+                            ssl_info["certificates"].append({
+                                "domain": domain,
+                                "path": cert_path,
+                                "type": "Let's Encrypt",
+                                "warning": "Certbot container not running - unable to read certificate details"
+                            })
 
                     ssl_info["configured"] = len(ssl_info["certificates"]) > 0
 
