@@ -121,6 +121,66 @@ async def test_slave_connection(
     }
 
 
+@router.get("/slave/health")
+async def get_slave_health_status(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Get GenSlave quick health status.
+
+    Returns relay_state, failsafe_active, armed, mock_mode.
+    """
+    response = await slave_client.get_health_status()
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to get health status from GenSlave",
+        )
+
+    return response.data
+
+
+@router.get("/slave/failsafe")
+async def get_slave_failsafe(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Get GenSlave failsafe status.
+
+    Returns failsafe monitoring details.
+    """
+    response = await slave_client.get_failsafe_status()
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to get failsafe status from GenSlave",
+        )
+
+    return response.data
+
+
+@router.get("/slave/system")
+async def get_slave_full_system(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Get GenSlave full system information.
+
+    Returns CPU, RAM, disk, temp, uptime, network interfaces, WiFi.
+    """
+    response = await slave_client.get_system_health()
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to get system info from GenSlave",
+        )
+
+    return response.data
+
+
 # =========================================================================
 # Relay Arm/Disarm Endpoints (proxied to GenSlave)
 # =========================================================================

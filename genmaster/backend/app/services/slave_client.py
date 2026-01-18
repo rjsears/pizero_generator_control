@@ -198,6 +198,14 @@ class SlaveClient:
         """Get GenSlave system health metrics."""
         return await self._request("GET", "/api/system")
 
+    async def get_health_status(self) -> SlaveResponse:
+        """Get GenSlave quick health check."""
+        return await self._request("GET", "/api/health")
+
+    async def get_failsafe_status(self) -> SlaveResponse:
+        """Get GenSlave failsafe status."""
+        return await self._request("GET", "/api/failsafe")
+
     async def push_config(self, config: dict[str, Any]) -> SlaveResponse:
         """
         Push configuration to GenSlave.

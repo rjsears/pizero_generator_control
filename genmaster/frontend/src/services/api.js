@@ -122,11 +122,17 @@ export const generatorApi = {
 
 // GenMaster-specific: GenSlave API
 export const genslaveApi = {
+  // Basic status
   getStatus: () => api.get('/health/slave'),
-  getSlaves: () => api.get('/genslave/list'),
-  getSlave: (id) => api.get(`/genslave/${id}`),
-  sync: (id) => api.post(`/genslave/${id}/sync`),
-  restart: (id) => api.post(`/genslave/${id}/restart`),
+  getDetails: () => api.get('/health/slave/details'),
+  // Full system info (CPU, RAM, disk, temp, network, WiFi)
+  getSystemInfo: () => api.get('/health/slave/system'),
+  // Quick health check (relay_state, failsafe, armed, mock_mode)
+  getHealthStatus: () => api.get('/health/slave/health'),
+  // Failsafe status
+  getFailsafeStatus: () => api.get('/health/slave/failsafe'),
+  // Test connection
+  testConnection: () => api.post('/health/test-slave'),
   // Relay arm/disarm control (proxied through GenMaster to GenSlave)
   arm: () => api.post('/health/relay/arm'),
   disarm: () => api.post('/health/relay/disarm'),
@@ -194,12 +200,19 @@ export const emailApi = {
   previewTemplate: (data) => api.post('/email/templates/preview', data),
 }
 
+// Config API (system configuration at /config endpoint)
+export const configApi = {
+  get: () => api.get('/config/'),
+  update: (data) => api.put('/config/', data),
+}
+
 export const settingsApi = {
   list: (category) => api.get('/settings/', { params: { category } }),
   get: (key) => api.get(`/settings/${key}`),
   update: (key, data) => api.put(`/settings/${key}`, data),
-  getConfig: (type) => api.get(`/settings/config/${type}`),
-  updateConfig: (type, data) => api.put(`/settings/config/${type}`, data),
+  // Legacy aliases - use configApi instead
+  getConfig: () => api.get('/config/'),
+  updateConfig: (data) => api.put('/config/', data),
   // Environment variable management
   getEnvVariables: () => api.get('/settings/env'),
   getEnvVariable: (key) => api.get(`/settings/env/${key}`),
@@ -254,6 +267,7 @@ api.notifications = {
   getHistory: (params) => api.get('/notifications/history', { params }),
 }
 api.email = emailApi
+api.config = configApi
 api.settings = {
   ...settingsApi,
   getAll: () => api.get('/settings/'),

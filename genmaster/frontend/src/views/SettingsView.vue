@@ -72,17 +72,15 @@ const tabs = [
   { id: 'advanced', name: 'Advanced', icon: BugAntIcon, iconColor: 'text-amber-500', bgActive: 'bg-amber-500/15 dark:bg-amber-500/20', textActive: 'text-amber-700 dark:text-amber-400', borderActive: 'border-amber-500/30' },
 ]
 
-// Generator config state
+// Generator config state (field names match backend ConfigResponse)
 const config = ref({
   warmup_seconds: 30,
   cooldown_seconds: 60,
   min_run_minutes: 5,
   max_run_minutes: 480,
-  slave_url: 'http://genslave.local:8001',
   heartbeat_interval_seconds: 30,
 })
 const savingConfig = ref(false)
-const testingConnection = ref(false)
 
 // Security settings
 const securitySettings = ref({
@@ -170,24 +168,6 @@ async function saveConfig() {
     notificationStore.error('Failed to save generator settings')
   } finally {
     savingConfig.value = false
-  }
-}
-
-// Test GenSlave connection
-async function testConnection() {
-  testingConnection.value = true
-  try {
-    const response = await fetch('/api/health/test-slave', { method: 'POST' })
-    const result = await response.json()
-    if (result.success) {
-      notificationStore.success(`Connection successful (${result.latency_ms || 0}ms)`)
-    } else {
-      notificationStore.error(`Connection failed: ${result.error || 'Unknown error'}`)
-    }
-  } catch (err) {
-    notificationStore.error(`Connection failed: ${err.message}`)
-  } finally {
-    testingConnection.value = false
   }
 }
 
@@ -607,47 +587,6 @@ watch(activeTab, (tab) => {
           </div>
         </Card>
 
-        <Card title="GenSlave Connection" subtitle="Configure GenSlave communication">
-          <div class="space-y-4">
-            <div class="flex gap-3 items-end">
-              <div class="flex-1">
-                <label class="block text-sm font-medium text-secondary mb-1">GenSlave URL</label>
-                <input
-                  v-model="config.slave_url"
-                  type="text"
-                  placeholder="http://genslave.local:8001"
-                  class="input"
-                />
-              </div>
-              <button
-                @click="testConnection"
-                :disabled="testingConnection"
-                class="btn-secondary"
-              >
-                <BoltIcon v-if="!testingConnection" class="h-4 w-4 mr-2" />
-                <ArrowPathIcon v-else class="h-4 w-4 mr-2 animate-spin" />
-                Test
-              </button>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-secondary mb-1">Heartbeat Interval (seconds)</label>
-              <input
-                v-model.number="config.heartbeat_interval_seconds"
-                type="number"
-                min="5"
-                max="60"
-                class="input w-48"
-              />
-              <p class="text-xs text-muted mt-1">How often to check GenSlave connectivity</p>
-            </div>
-          </div>
-          <div class="flex justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <button @click="saveConfig" :disabled="savingConfig" class="btn-primary">
-              <CheckIcon class="h-4 w-4 mr-2" />
-              Save Settings
-            </button>
-          </div>
-        </Card>
       </div>
 
       <!-- Security Tab -->
