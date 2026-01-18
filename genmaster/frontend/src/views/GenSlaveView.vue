@@ -444,6 +444,77 @@
             />
             <p class="text-xs text-muted mt-1">How often GenMaster sends heartbeat to GenSlave</p>
           </div>
+
+          <!-- API Key Section -->
+          <div class="p-4 rounded-lg bg-surface-hover">
+            <div class="flex items-center gap-2 mb-3">
+              <KeyIcon class="h-5 w-5 text-primary" />
+              <h4 class="text-sm font-medium text-primary">API Authentication</h4>
+            </div>
+
+            <!-- Current API Key (masked) -->
+            <div v-if="apiSecret" class="mb-4">
+              <label class="block text-sm font-medium text-secondary mb-1">Current API Secret</label>
+              <div class="flex items-center gap-2">
+                <div class="input flex-1 font-mono bg-gray-100 dark:bg-gray-800 flex items-center justify-between">
+                  <span>{{ showApiSecret ? apiSecret : '••••••••••••••••••••••••••••••••' }}</span>
+                  <div class="flex items-center gap-1">
+                    <button
+                      @click="showApiSecret = !showApiSecret"
+                      class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                      title="Toggle visibility"
+                    >
+                      <EyeIcon v-if="!showApiSecret" class="h-4 w-4 text-secondary" />
+                      <EyeSlashIcon v-else class="h-4 w-4 text-secondary" />
+                    </button>
+                    <button
+                      @click="copyApiSecret"
+                      class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                      title="Copy to clipboard"
+                    >
+                      <ClipboardDocumentIcon class="h-4 w-4 text-secondary" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p class="text-xs text-muted mt-1">This key must match the API_SECRET in GenSlave's .env file</p>
+            </div>
+
+            <!-- Set New API Key -->
+            <div>
+              <label class="block text-sm font-medium text-secondary mb-1">
+                {{ apiSecret ? 'Change API Secret' : 'Set API Secret' }}
+              </label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="newApiSecret"
+                  type="text"
+                  placeholder="Enter new API secret"
+                  class="input flex-1 font-mono"
+                  @focus="isEditingConfig = true"
+                  @blur="isEditingConfig = false"
+                />
+                <button
+                  @click="generateApiSecret"
+                  class="btn-secondary"
+                  title="Generate random secret"
+                >
+                  Generate
+                </button>
+                <button
+                  @click="saveApiSecret"
+                  :disabled="savingApiSecret || !newApiSecret"
+                  class="btn-primary flex items-center gap-2"
+                >
+                  <ArrowPathIcon v-if="savingApiSecret" class="h-4 w-4 animate-spin" />
+                  <span v-else>Save</span>
+                </button>
+              </div>
+              <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                After changing: Update GenSlave's .env file with the new API_SECRET and restart the GenSlave container
+              </p>
+            </div>
+          </div>
         </div>
         <div class="flex justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
           <button @click="saveSlaveConfig" :disabled="savingSlaveConfig" class="btn-primary flex items-center gap-2">
@@ -487,15 +558,33 @@
         </div>
       </Card>
     </template>
+
+    <!-- Restart Container Dialog -->
+    <ConfirmDialog
+      v-model:open="showRestartDialog"
+      title="Restart Required"
+      message="The GenSlave IP address has been updated. The GenMaster container needs to restart for the /etc/hosts changes to take effect."
+      confirm-text="Restart Now"
+      cancel-text="Later"
+      :loading="restartingContainer"
+      @confirm="restartGenMasterContainer"
+    >
+      <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+        <p class="text-sm text-amber-700 dark:text-amber-300">
+          After restart, this page will reload automatically.
+        </p>
+      </div>
+    </ConfirmDialog>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useNotificationStore } from '@/stores/notifications'
-import api, { genslaveApi, configApi } from '@/services/api'
+import api, { genslaveApi, configApi, containersApi } from '@/services/api'
 import Card from '@/components/common/Card.vue'
 import HeartbeatLoader from '@/components/common/HeartbeatLoader.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import {
   ArrowPathIcon,
   CheckCircleIcon,
@@ -505,6 +594,10 @@ import {
   ServerIcon,
   ExclamationTriangleIcon,
   ShieldExclamationIcon,
+  ClipboardDocumentIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  KeyIcon,
 } from '@heroicons/vue/24/outline'
 
 const notificationStore = useNotificationStore()
@@ -541,6 +634,16 @@ const currentConfiguredIp = ref('')  // Current IP from database (for display)
 const savingSlaveConfig = ref(false)
 const isEditingConfig = ref(false)  // Prevent polling from overwriting user input
 
+// Restart dialog state
+const showRestartDialog = ref(false)
+const restartingContainer = ref(false)
+
+// API Key management
+const apiSecret = ref('')  // Current API secret from database
+const newApiSecret = ref('')  // New API secret to set
+const showApiSecret = ref(false)  // Toggle visibility
+const savingApiSecret = ref(false)
+
 // Polling
 let pollInterval = null
 
@@ -563,6 +666,7 @@ async function loadSlaveInfo() {
           slaveConfig.value.heartbeat_interval_seconds = configRes.data.heartbeat_interval_seconds || 30
           slaveConfig.value.genslave_ip = configRes.data.genslave_ip || ''
           currentConfiguredIp.value = configRes.data.genslave_ip || ''
+          apiSecret.value = configRes.data.slave_api_secret || ''
         }
       } catch (e) {
         console.warn('Failed to load config for GenSlave:', e)
@@ -680,6 +784,8 @@ async function toggleRelayArm() {
 // Save GenSlave connection settings
 async function saveSlaveConfig() {
   savingSlaveConfig.value = true
+  const ipChanged = slaveConfig.value.genslave_ip !== currentConfiguredIp.value
+
   try {
     // Hostname is always "genslave", URL is always http://genslave:8001
     await configApi.update({
@@ -691,11 +797,73 @@ async function saveSlaveConfig() {
     // Update the displayed current IP
     currentConfiguredIp.value = slaveConfig.value.genslave_ip
     notificationStore.success('GenSlave settings saved')
-    notificationStore.warning('Note: IP changes require container restart to update /etc/hosts')
+
+    // If IP changed, show restart dialog
+    if (ipChanged && slaveConfig.value.genslave_ip) {
+      showRestartDialog.value = true
+    }
   } catch (error) {
     notificationStore.error('Failed to save GenSlave settings')
   } finally {
     savingSlaveConfig.value = false
+  }
+}
+
+// Restart GenMaster container
+async function restartGenMasterContainer() {
+  restartingContainer.value = true
+  try {
+    await containersApi.restart('genmaster')
+    notificationStore.success('GenMaster container restarting...')
+    showRestartDialog.value = false
+    // The page will reload when container restarts
+  } catch (error) {
+    notificationStore.error('Failed to restart container: ' + (error.response?.data?.detail || error.message))
+  } finally {
+    restartingContainer.value = false
+  }
+}
+
+// Save new API secret
+async function saveApiSecret() {
+  if (!newApiSecret.value.trim()) {
+    notificationStore.error('Please enter a new API secret')
+    return
+  }
+
+  savingApiSecret.value = true
+  try {
+    await configApi.update({
+      slave_api_secret: newApiSecret.value,
+    })
+    apiSecret.value = newApiSecret.value
+    newApiSecret.value = ''
+    notificationStore.success('API secret updated')
+    notificationStore.warning('Important: Update GenSlave .env file with the new API_SECRET and restart the GenSlave container')
+  } catch (error) {
+    notificationStore.error('Failed to save API secret')
+  } finally {
+    savingApiSecret.value = false
+  }
+}
+
+// Generate random API secret
+function generateApiSecret() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  let secret = ''
+  for (let i = 0; i < 32; i++) {
+    secret += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  newApiSecret.value = secret
+}
+
+// Copy API secret to clipboard
+async function copyApiSecret() {
+  try {
+    await navigator.clipboard.writeText(apiSecret.value || newApiSecret.value)
+    notificationStore.success('API secret copied to clipboard')
+  } catch (error) {
+    notificationStore.error('Failed to copy to clipboard')
   }
 }
 

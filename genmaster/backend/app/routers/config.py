@@ -29,7 +29,7 @@ async def get_config(
     """
     Get system configuration.
 
-    Note: Secrets (slave_api_secret, webhook_secret) are not returned.
+    Includes slave_api_secret for admin configuration purposes.
     """
     result = await db.execute(select(Config).where(Config.id == 1))
     config = result.scalar_one_or_none()
@@ -41,6 +41,7 @@ async def get_config(
         heartbeat_interval_seconds=config.heartbeat_interval_seconds,
         heartbeat_failure_threshold=config.heartbeat_failure_threshold,
         slave_api_url=config.slave_api_url,
+        slave_api_secret=config.slave_api_secret,
         genslave_ip=config.genslave_ip,
         genslave_hostname=config.genslave_hostname,
         webhook_base_url=config.webhook_base_url,
@@ -90,6 +91,7 @@ async def update_config(
         heartbeat_interval_seconds=config.heartbeat_interval_seconds,
         heartbeat_failure_threshold=config.heartbeat_failure_threshold,
         slave_api_url=config.slave_api_url,
+        slave_api_secret=config.slave_api_secret,
         genslave_ip=config.genslave_ip,
         genslave_hostname=config.genslave_hostname,
         webhook_base_url=config.webhook_base_url,

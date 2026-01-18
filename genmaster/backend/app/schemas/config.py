@@ -29,9 +29,9 @@ class ConfigResponse(BaseModel):
 
     # GenSlave Connection
     slave_api_url: str = Field(description="GenSlave API URL")
+    slave_api_secret: str = Field(description="GenSlave API secret for authentication")
     genslave_ip: Optional[str] = Field(None, description="GenSlave IP address")
     genslave_hostname: str = Field(description="GenSlave hostname for /etc/hosts")
-    # Note: slave_api_secret is not exposed in responses for security
 
     # Webhook Settings
     webhook_base_url: Optional[str] = Field(None, description="Webhook destination URL")
