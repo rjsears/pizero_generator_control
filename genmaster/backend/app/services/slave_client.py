@@ -154,6 +154,16 @@ class SlaveClient:
         """Get current relay state."""
         return await self._request("GET", "/api/relay/state")
 
+    async def arm_relay(self) -> SlaveResponse:
+        """Arm the relay (enable remote generator control)."""
+        logger.info("Sending ARM command to GenSlave")
+        return await self._request("POST", "/api/relay/arm")
+
+    async def disarm_relay(self) -> SlaveResponse:
+        """Disarm the relay (disable remote generator control)."""
+        logger.info("Sending DISARM command to GenSlave")
+        return await self._request("POST", "/api/relay/disarm")
+
     async def heartbeat(
         self,
         timestamp: int,
@@ -187,6 +197,14 @@ class SlaveClient:
     async def get_system_health(self) -> SlaveResponse:
         """Get GenSlave system health metrics."""
         return await self._request("GET", "/api/system")
+
+    async def get_health_status(self) -> SlaveResponse:
+        """Get GenSlave quick health check."""
+        return await self._request("GET", "/api/health")
+
+    async def get_failsafe_status(self) -> SlaveResponse:
+        """Get GenSlave failsafe status."""
+        return await self._request("GET", "/api/failsafe")
 
     async def push_config(self, config: dict[str, Any]) -> SlaveResponse:
         """

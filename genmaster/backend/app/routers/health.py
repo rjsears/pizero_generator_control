@@ -121,6 +121,144 @@ async def test_slave_connection(
     }
 
 
+@router.get("/slave/health")
+async def get_slave_health_status(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Get GenSlave quick health status.
+
+    Returns relay_state, failsafe_active, armed, mock_mode.
+    """
+    response = await slave_client.get_health_status()
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to get health status from GenSlave",
+        )
+
+    return response.data
+
+
+@router.get("/slave/failsafe")
+async def get_slave_failsafe(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Get GenSlave failsafe status.
+
+    Returns failsafe monitoring details.
+    """
+    response = await slave_client.get_failsafe_status()
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to get failsafe status from GenSlave",
+        )
+
+    return response.data
+
+
+@router.get("/slave/system")
+async def get_slave_full_system(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Get GenSlave full system information.
+
+    Returns CPU, RAM, disk, temp, uptime, network interfaces, WiFi.
+    """
+    response = await slave_client.get_system_health()
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to get system info from GenSlave",
+        )
+
+    return response.data
+
+
+# =========================================================================
+# Relay Arm/Disarm Endpoints (proxied to GenSlave)
+# =========================================================================
+
+
+@router.post("/relay/arm")
+async def arm_relay(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Arm the relay on GenSlave.
+
+    Enables remote generator control via relay.
+    """
+    response = await slave_client.arm_relay()
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to arm relay on GenSlave",
+        )
+
+    return {
+        "success": True,
+        "armed": True,
+        "message": "Relay armed successfully",
+    }
+
+
+@router.post("/relay/disarm")
+async def disarm_relay(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Disarm the relay on GenSlave.
+
+    Disables remote generator control via relay.
+    """
+    response = await slave_client.disarm_relay()
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to disarm relay on GenSlave",
+        )
+
+    return {
+        "success": True,
+        "armed": False,
+        "message": "Relay disarmed successfully",
+    }
+
+
+@router.get("/relay/state")
+async def get_relay_arm_state(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Get current relay arm state from GenSlave.
+
+    Returns whether the relay is armed or disarmed.
+    """
+    response = await slave_client.get_relay_state()
+
+    if not response.success:
+        # Default to disarmed if we can't reach GenSlave
+        return {
+            "armed": False,
+            "error": response.error or "Failed to get relay state from GenSlave",
+        }
+
+    # The GenSlave /api/relay/state returns { "armed": bool, "relay_on": bool }
+    return {
+        "armed": response.data.get("armed", False) if response.data else False,
+        "relay_on": response.data.get("relay_on", False) if response.data else False,
+    }
+
+
 @router.post("/test/heartbeat", response_model=HeartbeatTestResponse)
 async def test_heartbeat(
     heartbeat_service=Depends(get_heartbeat_service),
