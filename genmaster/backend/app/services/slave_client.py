@@ -65,7 +65,7 @@ class SlaveClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 timeout=self.timeout,
-                headers={"X-GenControl-Secret": self.secret},
+                headers={"X-API-Key": self.secret},
             )
         return self._client
 
