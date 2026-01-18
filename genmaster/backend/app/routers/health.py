@@ -317,3 +317,63 @@ async def test_webhook(
         response_time_ms=result.response_time_ms,
         error=result.error,
     )
+
+
+@router.post("/rotate-api-key")
+async def rotate_api_key(
+    request: dict[str, Any],
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Rotate the API key on both GenSlave and GenMaster.
+
+    1. Calls GenSlave to rotate the key
+    2. If successful, updates GenMaster's database with the new key
+
+    Request body: { "new_key": "<new-api-key-min-16-chars>" }
+    """
+    new_key = request.get("new_key", "")
+
+    if not new_key or len(new_key) < 16:
+        raise HTTPException(
+            status_code=400,
+            detail="New API key must be at least 16 characters",
+        )
+
+    # Step 1: Rotate the key on GenSlave
+    response = await slave_client.rotate_api_key(new_key)
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to rotate API key on GenSlave",
+        )
+
+    # Step 2: Update GenMaster's database with the new key
+    from app.database import AsyncSessionLocal
+    from app.models import Config
+    from sqlalchemy.future import select
+
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Config).where(Config.id == 1))
+            config = result.scalar_one_or_none()
+            if config:
+                config.slave_api_secret = new_key
+                await db.commit()
+    except Exception as e:
+        # GenSlave key was rotated but GenMaster failed to update
+        # This is a bad state - log it and return error with instructions
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to update GenMaster config after GenSlave key rotation: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="GenSlave key rotated but failed to update GenMaster. "
+                   f"Manually set slave_api_secret to '{new_key}' in GenMaster config.",
+        )
+
+    return {
+        "success": True,
+        "message": "API key rotated successfully on both GenSlave and GenMaster",
+    }
