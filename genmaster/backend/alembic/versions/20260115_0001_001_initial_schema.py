@@ -227,7 +227,7 @@ def upgrade() -> None:
             "slave_api_url",
             sa.String(length=255),
             nullable=False,
-            server_default="http://genslave:8000",
+            server_default="http://genslave:8001",
         ),
         sa.Column(
             "slave_api_secret",
