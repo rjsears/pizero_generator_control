@@ -35,8 +35,9 @@ class NotificationService:
     at runtime without container restarts.
     """
 
-    # Database key for storing Apprise URLs
+    # Database keys
     DB_KEY = "apprise_urls"
+    DB_ENABLED_KEY = "notifications_enabled"
 
     def __init__(self):
         self._apprise: Optional[apprise.Apprise] = None
@@ -118,11 +119,43 @@ class NotificationService:
         urls = self.get_urls()
         return len(urls) > 0
 
+    def is_enabled(self) -> bool:
+        """Check if notifications are enabled.
+
+        Returns:
+            True if notifications are enabled (default: True).
+        """
+        enabled = db_service.get_setting(self.DB_ENABLED_KEY)
+        # Default to enabled if not set
+        if enabled is None:
+            return True
+        return enabled.lower() == "true"
+
+    def set_enabled(self, enabled: bool) -> bool:
+        """Enable or disable notifications.
+
+        Args:
+            enabled: True to enable, False to disable.
+
+        Returns:
+            True if successful.
+        """
+        try:
+            success = db_service.set_setting(self.DB_ENABLED_KEY, str(enabled).lower())
+            if success:
+                state = "enabled" if enabled else "disabled"
+                logger.info(f"Notifications {state}")
+            return success
+        except Exception as e:
+            logger.error(f"Failed to set notification enabled state: {e}")
+            return False
+
     async def send(
         self,
         title: str,
         body: str,
         notify_type: apprise.NotifyType = apprise.NotifyType.WARNING,
+        force: bool = False,
     ) -> bool:
         """Send a notification via all configured services.
 
@@ -130,10 +163,16 @@ class NotificationService:
             title: Notification title/subject.
             body: Notification body/message.
             notify_type: Type of notification (INFO, SUCCESS, WARNING, FAILURE).
+            force: If True, send even if notifications are disabled (for testing).
 
         Returns:
             True if at least one notification was sent successfully.
         """
+        # Check if notifications are enabled (unless forced)
+        if not force and not self.is_enabled():
+            logger.debug("Notifications disabled - skipping")
+            return False
+
         apobj = self._get_apprise_instance()
         if not apobj:
             logger.debug("No Apprise URLs configured - skipping notification")
@@ -185,6 +224,9 @@ class NotificationService:
     async def send_test(self) -> bool:
         """Send a test notification.
 
+        Test notifications are always sent, even if notifications are disabled.
+        This allows testing the configuration without enabling notifications.
+
         Returns:
             True if test notification was sent successfully.
         """
@@ -198,6 +240,7 @@ class NotificationService:
             title=title,
             body=body,
             notify_type=apprise.NotifyType.INFO,
+            force=True,  # Test notifications always send
         )
 
 

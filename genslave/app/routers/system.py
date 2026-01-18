@@ -120,6 +120,7 @@ class NotificationConfig(BaseModel):
         description="List of Apprise notification URLs (masked for security)",
     )
     configured: bool = Field(description="Whether any notification URLs are configured")
+    enabled: bool = Field(description="Whether notifications are enabled")
 
 
 class NotificationUpdateRequest(BaseModel):
@@ -143,6 +144,12 @@ class NotificationTestResponse(BaseModel):
     success: bool = Field(description="Whether the test notification was sent")
     message: str = Field(description="Status message")
     configured_services: int = Field(description="Number of configured notification services")
+
+
+class NotificationEnableRequest(BaseModel):
+    """Request to enable or disable notifications."""
+
+    enabled: bool = Field(description="True to enable, False to disable notifications")
 
 
 # =========================================================================
@@ -524,8 +531,8 @@ async def get_notifications() -> NotificationConfig:
     """
     Get current notification configuration.
 
-    Returns the configured Apprise URLs (masked for security) and
-    whether notifications are configured.
+    Returns the configured Apprise URLs (masked for security),
+    whether notifications are configured, and whether they are enabled.
     """
     urls = notification_service.get_urls()
     masked_urls = [_mask_url(url) for url in urls]
@@ -533,6 +540,7 @@ async def get_notifications() -> NotificationConfig:
     return NotificationConfig(
         apprise_urls=masked_urls,
         configured=len(urls) > 0,
+        enabled=notification_service.is_enabled(),
     )
 
 
@@ -617,4 +625,38 @@ async def test_notification() -> NotificationTestResponse:
             success=False,
             message=f"Error sending test notification: {str(e)}",
             configured_services=len(urls),
+        )
+
+
+@router.post("/notifications/enable", response_model=NotificationResponse)
+async def set_notifications_enabled(
+    request: NotificationEnableRequest,
+) -> NotificationResponse:
+    """
+    Enable or disable notifications.
+
+    When disabled, no notifications will be sent (except test notifications).
+    This allows temporarily muting notifications without removing the configuration.
+    """
+    try:
+        success = notification_service.set_enabled(request.enabled)
+
+        if success:
+            state = "enabled" if request.enabled else "disabled"
+            logger.info(f"Notifications {state} via API")
+            return NotificationResponse(
+                success=True,
+                message=f"Notifications {state}",
+            )
+        else:
+            return NotificationResponse(
+                success=False,
+                message="Failed to update notification state",
+            )
+
+    except Exception as e:
+        logger.error(f"Error setting notification state: {e}")
+        return NotificationResponse(
+            success=False,
+            message=f"Error: {str(e)}",
         )
