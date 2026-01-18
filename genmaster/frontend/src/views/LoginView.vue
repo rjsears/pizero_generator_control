@@ -1,14 +1,14 @@
 <!--
--=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-/management/frontend/src/views/LoginView.vue
+  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  /genmaster/frontend/src/views/LoginView.vue
 
-Part of the "n8n_nginx/n8n_management" suite
-Version 3.0.0 - January 1st, 2026
+  Part of the "RPi Generator Control" suite
+  Version 1.0.0 - January 15th, 2026
 
-Richard J. Sears
-richard@n8nmanagement.net
-https://github.com/rjsears
--=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  Richard J. Sears
+  richardjsears@protonmail.com
+  https://github.com/rjsears
+  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
 <script setup>
 import { ref, computed } from 'vue'
@@ -16,7 +16,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import { useNotificationStore } from '../stores/notifications'
-import { LockClosedIcon, UserIcon, EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline'
+import { UserIcon, EyeIcon, EyeSlashIcon, LockClosedIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -61,18 +61,10 @@ async function handleLogin() {
     <div class="w-full max-w-md">
       <!-- Logo/Title -->
       <div class="text-center mb-8">
-        <div
-          :class="[
-            'inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4',
-            'bg-blue-500/10'
-          ]"
-        >
-          <LockClosedIcon
-            :class="[
-              'h-8 w-8',
-              'text-blue-500'
-            ]"
-          />
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
+          <svg class="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
         </div>
         <h1
           :class="[
@@ -82,7 +74,7 @@ async function handleLogin() {
         >
           GenMaster
         </h1>
-        <p class="text-secondary mt-2">Sign in to your account</p>
+        <p class="text-secondary mt-2">Generator Control System</p>
       </div>
 
       <!-- Login Form -->
@@ -169,9 +161,11 @@ async function handleLogin() {
       </form>
 
       <!-- Footer -->
-      <p class="text-center text-sm text-muted mt-6">
-        GenMaster v1.0.0
-      </p>
+      <div class="text-center text-sm text-muted mt-6">
+        <p>GenMaster v1.0.0</p>
+        <p class="mt-1">Richard J. Sears</p>
+        <p>richardjsears@protonmail.com</p>
+      </div>
     </div>
   </div>
 </template>

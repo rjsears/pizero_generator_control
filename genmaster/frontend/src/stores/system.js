@@ -25,14 +25,16 @@ export const useSystemStore = defineStore('system', () => {
   const error = ref(null)
 
   // Getters
+  // Note: Backend returns ram_percent, disk_percent, temperature_celsius
   const cpuPercent = computed(() => health.value?.cpu_percent || 0)
-  const memoryPercent = computed(() => health.value?.memory_percent || 0)
+  const memoryPercent = computed(() => health.value?.ram_percent || 0)
   const diskPercent = computed(() => health.value?.disk_percent || 0)
-  const temperature = computed(() => health.value?.temperature || null)
+  const temperature = computed(() => health.value?.temperature_celsius || null)
   const uptime = computed(() => health.value?.uptime_seconds || 0)
 
-  const isSlaveOnline = computed(() => slaveHealth.value?.online || false)
-  const slaveLastSeen = computed(() => slaveHealth.value?.last_heartbeat || null)
+  // Note: Backend returns connection_status ("connected", "disconnected", "unknown")
+  const isSlaveOnline = computed(() => slaveHealth.value?.connection_status === 'connected')
+  const slaveLastSeen = computed(() => slaveHealth.value?.last_heartbeat_received || null)
 
   const victronInputActive = computed(() => victronStatus.value?.input_active || false)
   const victronLastChange = computed(() => victronStatus.value?.last_change || null)
@@ -54,7 +56,8 @@ export const useSystemStore = defineStore('system', () => {
     error.value = null
 
     try {
-      health.value = await systemService.getHealth()
+      const response = await systemService.getHealth()
+      health.value = response.data
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to fetch system health'
     } finally {
@@ -64,7 +67,8 @@ export const useSystemStore = defineStore('system', () => {
 
   async function fetchStatus() {
     try {
-      status.value = await systemService.getStatus()
+      const response = await systemService.getStatus()
+      status.value = response.data
       // Extract nested data
       if (status.value?.system) {
         health.value = status.value.system
@@ -82,7 +86,8 @@ export const useSystemStore = defineStore('system', () => {
 
   async function fetchSlaveHealth() {
     try {
-      slaveHealth.value = await systemService.getSlaveHealth()
+      const response = await systemService.getSlaveHealth()
+      slaveHealth.value = response.data
     } catch {
       slaveHealth.value = { online: false }
     }
@@ -90,9 +95,9 @@ export const useSystemStore = defineStore('system', () => {
 
   async function fetchSlaveDetails() {
     try {
-      const data = await systemService.getSlaveDetails()
-      slaveDetails.value = data
-      return data
+      const response = await systemService.getSlaveDetails()
+      slaveDetails.value = response.data
+      return response.data
     } catch (err) {
       slaveDetails.value = null
       throw err
@@ -101,7 +106,8 @@ export const useSystemStore = defineStore('system', () => {
 
   async function fetchVictronStatus() {
     try {
-      victronStatus.value = await systemService.getVictronStatus()
+      const response = await systemService.getVictronStatus()
+      victronStatus.value = response.data
     } catch {
       victronStatus.value = null
     }
@@ -124,7 +130,8 @@ export const useSystemStore = defineStore('system', () => {
     const notifications = useNotificationStore()
 
     try {
-      const result = await systemService.testSlave()
+      const response = await systemService.testSlave()
+      const result = response.data
       if (result.success) {
         notifications.success(`Slave connection OK (${result.response_time_ms}ms)`)
       } else {

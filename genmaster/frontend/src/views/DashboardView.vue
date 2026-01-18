@@ -196,73 +196,43 @@
           </div>
         </Card>
 
-        <!-- Container Status Card -->
-        <Card class="cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all" @click="router.push('/containers')">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-secondary">Containers</p>
-              <p class="text-2xl font-bold mt-1" :class="containerStatusClass">
-                {{ metricsStore.containersRunning }}/{{ metricsStore.containersTotal }}
-              </p>
+        <!-- Docker Containers Card - Indigo style like n8n_nginx -->
+        <Card :padding="false">
+          <div class="p-6">
+            <div class="flex items-start justify-between mb-4">
+              <div>
+                <p class="text-sm font-medium text-secondary uppercase tracking-wider">Docker Containers</p>
+                <p class="text-4xl font-black mt-2 text-indigo-500">
+                  {{ metricsStore.containersTotal }}
+                </p>
+                <p class="text-sm text-muted mt-1">{{ metricsStore.containersRunning }} running</p>
+              </div>
+              <div class="p-3 rounded-2xl bg-indigo-100 dark:bg-indigo-500/20">
+                <ServerIcon class="h-8 w-8 text-indigo-500" />
+              </div>
             </div>
-            <div :class="['w-12 h-12 rounded-full flex items-center justify-center', containerStatusBgClass]">
-              <ServerIcon class="w-6 h-6 text-white" />
-            </div>
-          </div>
-          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div class="flex items-center gap-4 text-sm">
-              <span class="text-green-500">{{ metricsStore.containersRunning }} running</span>
-              <span v-if="metricsStore.containersStopped > 0" class="text-gray-500">{{ metricsStore.containersStopped }} stopped</span>
-              <span v-if="metricsStore.containersUnhealthy > 0" class="text-red-500">{{ metricsStore.containersUnhealthy }} unhealthy</span>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <!-- Charts Row: CPU History & Memory History -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- CPU History Chart -->
-        <Card title="CPU History" subtitle="Last 60 minutes">
-          <MetricsLineChart
-            v-if="metricsStore.cpuHistory.length > 0"
-            :labels="chartLabels"
-            :datasets="[{
-              label: 'CPU %',
-              data: metricsStore.cpuHistory,
-              borderColor: 'rgb(59, 130, 246)',
-              backgroundColor: 'rgba(59, 130, 246, 0.1)',
-            }]"
-            :y-axis-max="100"
-            y-axis-label="%"
-            :height="180"
-          />
-          <div v-else class="h-[180px] flex items-center justify-center text-gray-400">
-            <div class="text-center">
-              <ChartBarIcon class="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p class="text-sm">Collecting metrics...</p>
-            </div>
-          </div>
-        </Card>
-
-        <!-- Memory History Chart -->
-        <Card title="Memory History" subtitle="Last 60 minutes">
-          <MetricsLineChart
-            v-if="metricsStore.memoryHistory.length > 0"
-            :labels="chartLabels"
-            :datasets="[{
-              label: 'Memory %',
-              data: metricsStore.memoryHistory,
-              borderColor: 'rgb(168, 85, 247)',
-              backgroundColor: 'rgba(168, 85, 247, 0.1)',
-            }]"
-            :y-axis-max="100"
-            y-axis-label="%"
-            :height="180"
-          />
-          <div v-else class="h-[180px] flex items-center justify-center text-gray-400">
-            <div class="text-center">
-              <ChartBarIcon class="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p class="text-sm">Collecting metrics...</p>
+            <div class="grid grid-cols-4 gap-2 pt-4 border-t border-gray-400 dark:border-gray-700">
+              <button @click="navigateToContainers('running')" class="text-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <p class="text-lg font-bold text-emerald-500">{{ metricsStore.containersRunning }}</p>
+                <p class="text-xs text-muted">Running</p>
+              </button>
+              <button @click="navigateToContainers('stopped')" class="text-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <p class="text-lg font-bold text-slate-500">{{ metricsStore.containersStopped }}</p>
+                <p class="text-xs text-muted">Stopped</p>
+              </button>
+              <button @click="navigateToContainers('healthy')" class="text-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <p class="text-lg font-bold text-teal-500">{{ metricsStore.containersHealthy }}</p>
+                <p class="text-xs text-muted">Healthy</p>
+              </button>
+              <button
+                @click="navigateToContainers('unhealthy')"
+                :class="['text-center p-2 rounded-lg transition-colors', metricsStore.containersUnhealthy > 0 ? 'bg-red-50 dark:bg-red-900/20 animate-pulse' : 'hover:bg-gray-100 dark:hover:bg-gray-800']"
+              >
+                <p :class="['text-lg font-bold', metricsStore.containersUnhealthy > 0 ? 'text-red-500' : 'text-gray-400']">
+                  {{ metricsStore.containersUnhealthy }}
+                </p>
+                <p class="text-xs text-muted">Unhealthy</p>
+              </button>
             </div>
           </div>
         </Card>
@@ -313,7 +283,6 @@ import { useSystemStore } from '@/stores/system'
 import { useMetricsStore } from '@/stores/metrics'
 import Card from '@/components/common/Card.vue'
 import Button from '@/components/common/Button.vue'
-import MetricsLineChart from '@/components/charts/MetricsLineChart.vue'
 import {
   BoltIcon,
   CpuChipIcon,
@@ -321,7 +290,6 @@ import {
   ServerStackIcon,
   CircleStackIcon,
   ServerIcon,
-  ChartBarIcon,
   SignalIcon,
 } from '@heroicons/vue/24/outline'
 
@@ -440,26 +408,10 @@ const formattedUptime = computed(() => {
   return `${minutes}m`
 })
 
-// Container status
-const containerStatusClass = computed(() => {
-  if (metricsStore.containersUnhealthy > 0) return 'text-red-500'
-  if (metricsStore.containersStopped > 0) return 'text-amber-500'
-  return 'text-green-500'
-})
-
-const containerStatusBgClass = computed(() => {
-  if (metricsStore.containersUnhealthy > 0) return 'bg-red-500'
-  if (metricsStore.containersStopped > 0) return 'bg-amber-500'
-  return 'bg-green-500'
-})
-
-// Chart labels
-const chartLabels = computed(() => {
-  return metricsStore.timestamps.map(ts => {
-    const date = new Date(ts * 1000)
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  })
-})
+// Navigate to containers view with filter
+function navigateToContainers(filter = null) {
+  router.push({ name: 'containers', query: filter ? { status: filter } : {} })
+}
 
 // Helper functions
 function formatMinutes(minutes) {
