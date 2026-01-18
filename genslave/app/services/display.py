@@ -156,11 +156,15 @@ class DisplayService:
             return ("???", self.YELLOW)
 
         relay_state = self._relay_service.get_state()
+        is_armed = self._relay_service.is_armed
 
         if relay_state:
             return ("RUNNING", self.GREEN)
         else:
-            return ("OFF", self.WHITE)
+            if is_armed:
+                return ("OFF ARMED", self.WHITE)
+            else:
+                return ("DISARMED", self.YELLOW)
 
     def update_display(self) -> None:
         """Update the display with current status."""
@@ -174,7 +178,7 @@ class DisplayService:
 
             # Try to use a built-in font, fall back to default
             try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 11)
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 13)
             except Exception:
                 font = ImageFont.load_default()
 
@@ -184,20 +188,20 @@ class DisplayService:
             cpu_temp = self._get_cpu_temp_f()
             ip_addr = self._get_ip_address()
 
-            # Line spacing for 4 lines on 80px height: ~18px per line
-            y_pos = 2
+            # Line spacing for 4 lines on 80px height: ~19px per line
+            y_pos = 1
 
             # Line 1: GenMaster status
-            draw.text((2, y_pos), "GenMaster: ", font=font, fill=self.WHITE)
-            draw.text((85, y_pos), link_text, font=font, fill=link_color)
+            draw.text((2, y_pos), "GenMaster:", font=font, fill=self.WHITE)
+            draw.text((90, y_pos), link_text, font=font, fill=link_color)
 
             # Line 2: Generator status
-            y_pos += 18
-            draw.text((2, y_pos), "Generator: ", font=font, fill=self.WHITE)
-            draw.text((85, y_pos), gen_text, font=font, fill=gen_color)
+            y_pos += 19
+            draw.text((2, y_pos), "Generator:", font=font, fill=self.WHITE)
+            draw.text((90, y_pos), gen_text, font=font, fill=gen_color)
 
             # Line 3: CPU temp
-            y_pos += 18
+            y_pos += 19
             # Color based on temp
             if cpu_temp > 170:
                 temp_color = self.RED
@@ -208,7 +212,7 @@ class DisplayService:
             draw.text((2, y_pos), f"CPU Temp: {cpu_temp:.1f}F", font=font, fill=temp_color)
 
             # Line 4: IP address
-            y_pos += 18
+            y_pos += 19
             draw.text((2, y_pos), f"IP: {ip_addr}", font=font, fill=self.WHITE)
 
             # Display the image
