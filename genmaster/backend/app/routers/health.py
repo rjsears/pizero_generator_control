@@ -60,8 +60,13 @@ async def get_slave_client():
         config = result.scalar_one_or_none()
 
     if config:
+        # Use IP directly in URL if available (no /etc/hosts needed, no restart required)
+        if config.genslave_ip:
+            base_url = f"http://{config.genslave_ip}:8001"
+        else:
+            base_url = config.slave_api_url
         return SlaveClient(
-            base_url=config.slave_api_url,
+            base_url=base_url,
             secret=config.slave_api_secret,
         )
     else:

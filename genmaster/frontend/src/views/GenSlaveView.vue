@@ -389,26 +389,13 @@
       <!-- Connection Settings Card -->
       <Card title="Connection Settings" subtitle="Configure GenSlave communication and network">
         <div class="space-y-6">
-          <!-- Host Resolution Section -->
+          <!-- GenSlave Connection Section -->
           <div class="p-4 rounded-lg bg-surface-hover">
-            <h4 class="text-sm font-medium text-primary mb-3">Host Resolution (Container /etc/hosts)</h4>
+            <h4 class="text-sm font-medium text-primary mb-3">GenSlave Connection</h4>
 
-            <!-- Current Configuration Display -->
-            <div class="mb-4 p-3 rounded bg-gray-100 dark:bg-gray-800">
-              <p class="text-xs text-muted mb-1">Current Configuration</p>
-              <p class="font-mono text-sm text-primary">
-                genslave → {{ currentConfiguredIp || 'Not configured' }}
-              </p>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-secondary mb-1">Hostname</label>
-                <div class="input bg-gray-100 dark:bg-gray-800 text-primary font-mono">genslave</div>
-                <p class="text-xs text-muted mt-1">Fixed hostname</p>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-secondary mb-1">New IP Address</label>
+                <label class="block text-sm font-medium text-secondary mb-1">GenSlave IP Address</label>
                 <input
                   v-model="slaveConfig.genslave_ip"
                   type="text"
@@ -417,16 +404,18 @@
                   @focus="isEditingConfig = true"
                   @blur="isEditingConfig = false"
                 />
-                <p class="text-xs text-muted mt-1">Enter new IP to update</p>
+                <p class="text-xs text-muted mt-1">IP address of the GenSlave device</p>
               </div>
               <div>
-                <label class="block text-sm font-medium text-secondary mb-1">API URL</label>
-                <div class="input bg-gray-100 dark:bg-gray-800 text-primary font-mono text-sm">http://genslave:8001</div>
-                <p class="text-xs text-muted mt-1">Auto-configured</p>
+                <label class="block text-sm font-medium text-secondary mb-1">API URL (auto-generated)</label>
+                <div class="input bg-gray-100 dark:bg-gray-800 text-primary font-mono text-sm">
+                  http://{{ slaveConfig.genslave_ip || currentConfiguredIp || '&lt;IP&gt;' }}:8001
+                </div>
+                <p class="text-xs text-muted mt-1">URL used to communicate with GenSlave</p>
               </div>
             </div>
-            <p class="text-xs text-amber-600 dark:text-amber-400 mt-3">
-              Note: IP changes require a container restart to update /etc/hosts
+            <p class="text-xs text-emerald-600 dark:text-emerald-400 mt-3">
+              IP changes take effect immediately - no restart required
             </p>
           </div>
 
@@ -559,32 +548,15 @@
       </Card>
     </template>
 
-    <!-- Restart Container Dialog -->
-    <ConfirmDialog
-      v-model:open="showRestartDialog"
-      title="Restart Required"
-      message="The GenSlave IP address has been updated. The GenMaster container needs to restart for the /etc/hosts changes to take effect."
-      confirm-text="Restart Now"
-      cancel-text="Later"
-      :loading="restartingContainer"
-      @confirm="restartGenMasterContainer"
-    >
-      <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-        <p class="text-sm text-amber-700 dark:text-amber-300">
-          After restart, this page will reload automatically.
-        </p>
-      </div>
-    </ConfirmDialog>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useNotificationStore } from '@/stores/notifications'
-import api, { genslaveApi, configApi, containersApi } from '@/services/api'
+import api, { genslaveApi, configApi } from '@/services/api'
 import Card from '@/components/common/Card.vue'
 import HeartbeatLoader from '@/components/common/HeartbeatLoader.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import {
   ArrowPathIcon,
   CheckCircleIcon,
@@ -634,9 +606,6 @@ const currentConfiguredIp = ref('')  // Current IP from database (for display)
 const savingSlaveConfig = ref(false)
 const isEditingConfig = ref(false)  // Prevent polling from overwriting user input
 
-// Restart dialog state
-const showRestartDialog = ref(false)
-const restartingContainer = ref(false)
 
 // API Key management
 const apiSecret = ref('')  // Current API secret from database
@@ -784,43 +753,19 @@ async function toggleRelayArm() {
 // Save GenSlave connection settings
 async function saveSlaveConfig() {
   savingSlaveConfig.value = true
-  const ipChanged = slaveConfig.value.genslave_ip !== currentConfiguredIp.value
 
   try {
-    // Hostname is always "genslave", URL is always http://genslave:8001
     await configApi.update({
-      slave_api_url: 'http://genslave:8001',
       heartbeat_interval_seconds: slaveConfig.value.heartbeat_interval_seconds,
       genslave_ip: slaveConfig.value.genslave_ip,
-      genslave_hostname: 'genslave',
     })
     // Update the displayed current IP
     currentConfiguredIp.value = slaveConfig.value.genslave_ip
-    notificationStore.success('GenSlave settings saved')
-
-    // If IP changed, show restart dialog
-    if (ipChanged && slaveConfig.value.genslave_ip) {
-      showRestartDialog.value = true
-    }
+    notificationStore.success('GenSlave settings saved - changes take effect immediately')
   } catch (error) {
     notificationStore.error('Failed to save GenSlave settings')
   } finally {
     savingSlaveConfig.value = false
-  }
-}
-
-// Restart GenMaster container
-async function restartGenMasterContainer() {
-  restartingContainer.value = true
-  try {
-    await containersApi.restart('genmaster')
-    notificationStore.success('GenMaster container restarting...')
-    showRestartDialog.value = false
-    // The page will reload when container restarts
-  } catch (error) {
-    notificationStore.error('Failed to restart container: ' + (error.response?.data?.detail || error.message))
-  } finally {
-    restartingContainer.value = false
   }
 }
 
