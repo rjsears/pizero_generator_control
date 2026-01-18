@@ -142,8 +142,6 @@ create_compose_file() {
 # https://github.com/rjsears
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-version: "3.8"
-
 services:
   genslave:
     image: rjsears/pizero_generator_control:genslave
