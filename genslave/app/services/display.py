@@ -162,7 +162,7 @@ class DisplayService:
             return ("RUNNING", self.GREEN)
         else:
             if is_armed:
-                return ("OFF ARMED", self.WHITE)
+                return (" ARMED", self.WHITE)
             else:
                 return ("DISARMED", self.YELLOW)
 
@@ -198,7 +198,7 @@ class DisplayService:
             # Line 2: Generator status
             y_pos += 19
             draw.text((2, y_pos), "Generator:", font=font, fill=self.WHITE)
-            draw.text((90, y_pos), gen_text, font=font, fill=gen_color)
+            draw.text((83, y_pos), gen_text, font=font, fill=gen_color)
 
             # Line 3: CPU temp
             y_pos += 19
