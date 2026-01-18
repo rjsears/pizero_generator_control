@@ -48,7 +48,8 @@
       "Bash(gh pr create --title \"GenSlave enhancements: API auth, documentation, and fixes\" --body \"$\\(cat <<''EOF''\n## Summary\n\nThis PR adds several enhancements to GenSlave:\n\n- **API Key Authentication**: All `/api/*` endpoints now require `X-API-Key` header authentication\n- **Comprehensive Documentation**: Complete README.md for GenSlave with full API reference\n- **GenSlave Configuration UI**: Move GenSlave settings to dedicated page in GenMaster\n- **Bug Fixes**: Migration SQL fixes and default port configuration\n\n## Changes\n\n### API Authentication\n- Add `auth.py` with X-API-Key header verification\n- Apply authentication to all API routers via dependencies\n- Keep root endpoint `/` public for basic health checks\n- Auth disabled if `GENSLAVE_API_SECRET` not configured \\(dev mode\\)\n\n### Documentation \\(genslave/README.md\\)\n- Hardware requirements\n- Installation instructions\n- Full configuration reference\n- Complete API endpoint documentation with examples\n- LCD display states explanation\n- Failsafe system documentation\n- Headless Pi management guide\n- Troubleshooting section\n\n### GenMaster UI\n- Move GenSlave tab from System page to dedicated GenSlave page\n- Add GenSlave IP/hostname configuration\n- Fix default port handling\n\n### Bug Fixes\n- Fix migration SQL bind parameter issues\n- Remove problematic UPDATE from migration\n\n## Test plan\n- [ ] Verify API endpoints reject requests without X-API-Key header\n- [ ] Verify API endpoints accept requests with valid X-API-Key\n- [ ] Verify GenSlave page loads correctly in GenMaster UI\n- [ ] Verify GenSlave configuration can be saved\n- [ ] Review README documentation for accuracy\n\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\nEOF\n\\)\")",
       "Bash(gh pr create:*)",
       "Bash(git cherry-pick:*)",
-      "Bash(gh pr merge:*)"
+      "Bash(gh pr merge:*)",
+      "Bash(docker buildx build:*)"
     ]
   }
 }
