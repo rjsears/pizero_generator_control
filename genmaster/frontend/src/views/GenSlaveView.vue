@@ -387,17 +387,49 @@
       </div>
 
       <!-- Connection Settings Card -->
-      <Card title="Connection Settings" subtitle="Configure GenSlave communication">
-        <div class="space-y-4">
+      <Card title="Connection Settings" subtitle="Configure GenSlave communication and network">
+        <div class="space-y-6">
+          <!-- Host Resolution Section -->
+          <div class="p-4 rounded-lg bg-surface-hover">
+            <h4 class="text-sm font-medium text-primary mb-3">Host Resolution (Container /etc/hosts)</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-secondary mb-1">GenSlave Hostname</label>
+                <input
+                  v-model="slaveConfig.genslave_hostname"
+                  type="text"
+                  placeholder="genslave"
+                  class="input"
+                />
+                <p class="text-xs text-muted mt-1">Hostname used in URL (e.g., genslave)</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-secondary mb-1">GenSlave IP Address</label>
+                <input
+                  v-model="slaveConfig.genslave_ip"
+                  type="text"
+                  placeholder="192.168.1.100"
+                  class="input"
+                />
+                <p class="text-xs text-muted mt-1">IP address for hostname resolution</p>
+              </div>
+            </div>
+            <p class="text-xs text-amber-600 dark:text-amber-400 mt-3">
+              Note: Changes to hostname/IP require a container restart to update /etc/hosts
+            </p>
+          </div>
+
+          <!-- URL and Connection Section -->
           <div class="flex gap-3 items-end flex-wrap">
             <div class="flex-1 min-w-[250px]">
               <label class="block text-sm font-medium text-secondary mb-1">GenSlave URL</label>
               <input
                 v-model="slaveConfig.slave_api_url"
                 type="text"
-                placeholder="http://genslave.local:8001"
+                placeholder="http://genslave:8001"
                 class="input"
               />
+              <p class="text-xs text-muted mt-1">Full URL to GenSlave API (uses hostname above)</p>
             </div>
             <button
               @click="testSlaveConnection"
@@ -409,6 +441,8 @@
               Test
             </button>
           </div>
+
+          <!-- Heartbeat Section -->
           <div>
             <label class="block text-sm font-medium text-secondary mb-1">Heartbeat Interval (seconds)</label>
             <input
@@ -510,8 +544,10 @@ const armingRelay = ref(false)
 
 // GenSlave connection settings
 const slaveConfig = ref({
-  slave_api_url: 'http://genslave.local:8001',
+  slave_api_url: 'http://genslave:8001',
   heartbeat_interval_seconds: 30,
+  genslave_ip: '',
+  genslave_hostname: 'genslave',
 })
 const savingSlaveConfig = ref(false)
 
@@ -535,6 +571,8 @@ async function loadSlaveInfo() {
       if (configRes.data) {
         slaveConfig.value.slave_api_url = configRes.data.slave_api_url || slaveConfig.value.slave_api_url
         slaveConfig.value.heartbeat_interval_seconds = configRes.data.heartbeat_interval_seconds || 30
+        slaveConfig.value.genslave_ip = configRes.data.genslave_ip || ''
+        slaveConfig.value.genslave_hostname = configRes.data.genslave_hostname || 'genslave'
       }
     } catch (e) {
       console.warn('Failed to load config for GenSlave:', e)
@@ -655,8 +693,11 @@ async function saveSlaveConfig() {
     await configApi.update({
       slave_api_url: slaveConfig.value.slave_api_url,
       heartbeat_interval_seconds: slaveConfig.value.heartbeat_interval_seconds,
+      genslave_ip: slaveConfig.value.genslave_ip,
+      genslave_hostname: slaveConfig.value.genslave_hostname,
     })
     notificationStore.success('GenSlave settings saved')
+    notificationStore.warning('Note: IP changes require container restart to update /etc/hosts')
   } catch (error) {
     notificationStore.error('Failed to save GenSlave settings')
   } finally {

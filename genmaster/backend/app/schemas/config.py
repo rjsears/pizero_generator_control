@@ -29,6 +29,8 @@ class ConfigResponse(BaseModel):
 
     # GenSlave Connection
     slave_api_url: str = Field(description="GenSlave API URL")
+    genslave_ip: Optional[str] = Field(None, description="GenSlave IP address")
+    genslave_hostname: str = Field(description="GenSlave hostname for /etc/hosts")
     # Note: slave_api_secret is not exposed in responses for security
 
     # Webhook Settings
@@ -72,6 +74,8 @@ class ConfigUpdateRequest(BaseModel):
     # GenSlave Connection
     slave_api_url: Optional[str] = Field(None, max_length=255)
     slave_api_secret: Optional[str] = Field(None, max_length=255)
+    genslave_ip: Optional[str] = Field(None, max_length=45)
+    genslave_hostname: Optional[str] = Field(None, max_length=50)
 
     # Webhook Settings
     webhook_base_url: Optional[str] = Field(None, max_length=255)

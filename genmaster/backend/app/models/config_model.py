@@ -40,9 +40,11 @@ class Config(Base):
 
     # GenSlave Connection
     slave_api_url: Mapped[str] = mapped_column(
-        nullable=False, default="http://genslave:8000"
+        nullable=False, default="http://genslave:8001"
     )
     slave_api_secret: Mapped[str] = mapped_column(nullable=False, default="change-me")
+    genslave_ip: Mapped[Optional[str]] = mapped_column(nullable=True)
+    genslave_hostname: Mapped[str] = mapped_column(nullable=False, default="genslave")
 
     # Webhook Settings
     webhook_base_url: Mapped[Optional[str]] = mapped_column(nullable=True)

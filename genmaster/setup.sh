@@ -67,6 +67,8 @@ INSTALL_PORTAINER=false
 GENSLAVE_ENABLED=true
 GENSLAVE_API_URL=""
 GENSLAVE_API_SECRET=""
+GENSLAVE_IP=""
+GENSLAVE_HOSTNAME="genslave"
 
 # Mock GPIO mode (auto-detected based on hardware)
 MOCK_GPIO_MODE=false
@@ -569,6 +571,8 @@ SAVED_SECRET_KEY="$SECRET_KEY"
 SAVED_GENSLAVE_ENABLED="$GENSLAVE_ENABLED"
 SAVED_GENSLAVE_API_URL="$GENSLAVE_API_URL"
 SAVED_GENSLAVE_API_SECRET="$GENSLAVE_API_SECRET"
+SAVED_GENSLAVE_IP="$GENSLAVE_IP"
+SAVED_GENSLAVE_HOSTNAME="$GENSLAVE_HOSTNAME"
 SAVED_WEBHOOK_URL="$WEBHOOK_URL"
 SAVED_WEBHOOK_SECRET="$WEBHOOK_SECRET"
 SAVED_INSTALL_PORTAINER="$INSTALL_PORTAINER"
@@ -598,6 +602,8 @@ load_state() {
         GENSLAVE_ENABLED="${SAVED_GENSLAVE_ENABLED:-true}"
         GENSLAVE_API_URL="${SAVED_GENSLAVE_API_URL:-}"
         GENSLAVE_API_SECRET="${SAVED_GENSLAVE_API_SECRET:-}"
+        GENSLAVE_IP="${SAVED_GENSLAVE_IP:-}"
+        GENSLAVE_HOSTNAME="${SAVED_GENSLAVE_HOSTNAME:-genslave}"
         WEBHOOK_URL="${SAVED_WEBHOOK_URL:-}"
         WEBHOOK_SECRET="${SAVED_WEBHOOK_SECRET:-}"
         INSTALL_PORTAINER="${SAVED_INSTALL_PORTAINER:-false}"
@@ -1574,34 +1580,39 @@ configure_genslave() {
         echo -e "  ${GRAY}Adding a hosts entry ensures reliable hostname resolution.${NC}"
         echo ""
 
-        local genslave_hostname=""
-        local genslave_ip=""
+        local input_hostname=""
+        local input_ip=""
 
         echo -ne "${WHITE}  GenSlave hostname (e.g., genslave)${NC}: "
-        read genslave_hostname
-        genslave_hostname="${genslave_hostname:-genslave}"
+        read input_hostname
+        input_hostname="${input_hostname:-genslave}"
 
         echo -ne "${WHITE}  GenSlave IP address (e.g., 192.168.1.100 or Tailscale IP)${NC}: "
-        read genslave_ip
+        read input_ip
 
-        if [ -n "$genslave_ip" ] && [ -n "$genslave_hostname" ]; then
-            # Check if entry already exists
-            if grep -q "^[^#]*${genslave_hostname}$\|^[^#]*${genslave_hostname} \|^[^#]* ${genslave_hostname}$" /etc/hosts 2>/dev/null; then
-                print_warning "Host entry for '${genslave_hostname}' already exists in /etc/hosts"
+        if [ -n "$input_ip" ] && [ -n "$input_hostname" ]; then
+            # Save to global variables for .env and docker-compose
+            GENSLAVE_IP="$input_ip"
+            GENSLAVE_HOSTNAME="$input_hostname"
+
+            # Check if entry already exists in host /etc/hosts
+            if grep -q "^[^#]*${input_hostname}$\|^[^#]*${input_hostname} \|^[^#]* ${input_hostname}$" /etc/hosts 2>/dev/null; then
+                print_warning "Host entry for '${input_hostname}' already exists in /etc/hosts"
                 if confirm_prompt "Update the existing entry?" "y"; then
                     # Remove old entry and add new one
-                    run_privileged sed -i "/[[:space:]]${genslave_hostname}$/d; /[[:space:]]${genslave_hostname}[[:space:]]/d" /etc/hosts
-                    echo "${genslave_ip}    ${genslave_hostname}" | run_privileged tee -a /etc/hosts > /dev/null
-                    print_success "Updated /etc/hosts: ${genslave_ip} -> ${genslave_hostname}"
+                    run_privileged sed -i "/[[:space:]]${input_hostname}$/d; /[[:space:]]${input_hostname}[[:space:]]/d" /etc/hosts
+                    echo "${input_ip}    ${input_hostname}" | run_privileged tee -a /etc/hosts > /dev/null
+                    print_success "Updated /etc/hosts: ${input_ip} -> ${input_hostname}"
                 fi
             else
-                echo "${genslave_ip}    ${genslave_hostname}" | run_privileged tee -a /etc/hosts > /dev/null
-                print_success "Added to /etc/hosts: ${genslave_ip} -> ${genslave_hostname}"
+                echo "${input_ip}    ${input_hostname}" | run_privileged tee -a /etc/hosts > /dev/null
+                print_success "Added to /etc/hosts: ${input_ip} -> ${input_hostname}"
             fi
 
             # Set default URL based on hostname
-            GENSLAVE_API_URL="http://${genslave_hostname}:8001"
+            GENSLAVE_API_URL="http://${input_hostname}:8001"
             print_info "Default GenSlave URL set to: ${GENSLAVE_API_URL}"
+            print_info "GenSlave IP saved: ${GENSLAVE_IP} (will be added to container /etc/hosts)"
         else
             print_warning "Skipping /etc/hosts entry (hostname or IP not provided)"
         fi
@@ -2371,6 +2382,8 @@ REDIS_PORT=6379
 GENSLAVE_ENABLED=${GENSLAVE_ENABLED}
 SLAVE_API_URL=${GENSLAVE_API_URL}
 SLAVE_API_SECRET=${GENSLAVE_API_SECRET}
+GENSLAVE_IP=${GENSLAVE_IP}
+GENSLAVE_HOSTNAME=${GENSLAVE_HOSTNAME:-genslave}
 
 # Webhook Configuration
 WEBHOOK_BASE_URL=${WEBHOOK_URL}
@@ -2538,9 +2551,13 @@ services:
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - WEBHOOK_ENABLED=${WEBHOOK_ENABLED:-false}
       - TZ=${TIMEZONE:-America/Los_Angeles}
+      - GENSLAVE_IP=${GENSLAVE_IP:-}
+      - GENSLAVE_HOSTNAME=${GENSLAVE_HOSTNAME:-genslave}
     volumes:
       - genmaster_logs:/app/logs
       - genmaster_data:/app/data
+    extra_hosts:
+      - "\${GENSLAVE_HOSTNAME:-genslave}:\${GENSLAVE_IP:-127.0.0.1}"
     networks:
       - genmaster-internal
     depends_on:
