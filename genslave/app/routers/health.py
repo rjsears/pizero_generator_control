@@ -97,6 +97,7 @@ class FailsafeStatus(BaseModel):
         None, description="GenMaster's heartbeat interval in seconds"
     )
     timeout_source: Literal["genmaster", "config"] = Field(
+        default="config",
         description="Source of timeout value (genmaster=dynamic, config=default)"
     )
 

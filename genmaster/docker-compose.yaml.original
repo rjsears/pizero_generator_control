@@ -1,0 +1,146 @@
+# =============================================================================
+# GenMaster Docker Compose Configuration
+# =============================================================================
+
+networks:
+  genmaster-internal:
+    driver: bridge
+    internal: true
+  genmaster-external:
+    driver: bridge
+
+volumes:
+  genmaster_db_data:
+  genmaster_redis_data:
+  genmaster_logs:
+  genmaster_data:
+  nginx_logs:
+  # SSL certificates (external, created by setup.sh)
+  letsencrypt:
+    external: true
+  certbot_data:
+  tailscale_state:
+  portainer_data:
+
+services:
+  # ===========================================================================
+  # PostgreSQL Database
+  # ===========================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: ${POSTGRES_CONTAINER:-genmaster_db}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-genmaster}
+      POSTGRES_USER: ${DATABASE_USER:-genmaster}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    volumes:
+      - genmaster_db_data:/var/lib/postgresql/data
+    networks:
+      - genmaster-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-genmaster}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # Redis Cache
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ${REDIS_CONTAINER:-genmaster_redis}
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - genmaster_redis_data:/data
+    networks:
+      - genmaster-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # GenMaster Application
+  # ===========================================================================
+  genmaster:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${GENMASTER_CONTAINER:-genmaster}
+    restart: unless-stopped
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - MOCK_GPIO_MODE=${MOCK_GPIO_MODE:-false}
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=${DATABASE_NAME:-genmaster}
+      - DATABASE_USER=${DATABASE_USER:-genmaster}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - GENSLAVE_ENABLED=${GENSLAVE_ENABLED:-true}
+      - SLAVE_API_URL=${SLAVE_API_URL}
+      - SLAVE_API_SECRET=${SLAVE_API_SECRET}
+      - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - WEBHOOK_ENABLED=${WEBHOOK_ENABLED:-false}
+      - TZ=${TIMEZONE:-America/Los_Angeles}
+      - GENSLAVE_IP=${GENSLAVE_IP:-}
+      - GENSLAVE_HOSTNAME=${GENSLAVE_HOSTNAME:-genslave}
+    volumes:
+      - genmaster_logs:/app/logs
+      - genmaster_data:/app/data
+    extra_hosts:
+      - "${GENSLAVE_HOSTNAME:-genslave}:${GENSLAVE_IP:-127.0.0.1}"
+    networks:
+      - genmaster-internal
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ===========================================================================
+  # Nginx Reverse Proxy
+  # ===========================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: ${NGINX_CONTAINER:-genmaster_nginx}
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_data:/var/www/certbot:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - genmaster-internal
+      - genmaster-external
+    depends_on:
+      - genmaster
+
+  # ===========================================================================
+  # Certbot (Let's Encrypt SSL)
+  # ===========================================================================
+  certbot:
+    image: ${DNS_CERTBOT_IMAGE:-certbot/certbot:latest}
+    container_name: genmaster_certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_data:/var/www/certbot
+      - ./certbot/${DNS_CREDENTIALS_FILE:-cloudflare.ini}:/credentials.ini:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew ${DNS_CERTBOT_FLAGS:-} --deploy-hook 'docker exec genmaster_nginx nginx -s reload' || true; sleep 12h & wait $${!}; done;"
+    networks:
+      - genmaster-internal

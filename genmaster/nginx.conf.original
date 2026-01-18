@@ -1,0 +1,290 @@
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# GenMaster Nginx Configuration
+# Version 1.0.0 - January 15th, 2026
+#
+# Reverse proxy configuration for GenMaster
+# SSL is handled by Cloudflare Tunnel
+#
+# Access Control:
+#   - Internal networks (localhost, Docker, Tailscale) have full access
+#   - External access (via Cloudflare Tunnel) is allowed with authentication
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+    use epoll;
+    multi_accept on;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    # =========================================================================
+    # Access Control via Geo Module
+    # Classifies requests as internal or external based on source IP
+    # =========================================================================
+    geo $access_level {
+        default          "external";
+
+        # Localhost
+        127.0.0.1/32     "internal";
+        ::1/128          "internal";
+
+        # Docker networks
+        10.0.0.0/8       "internal";
+        172.16.0.0/12    "internal";
+        192.168.0.0/16   "internal";
+
+        # Tailscale CGNAT range
+        100.64.0.0/10    "internal";
+    }
+
+    # Map to determine if access should be denied
+    # For GenMaster, we allow external access with authentication
+    # (The app itself handles auth, not nginx)
+    map $access_level $deny_external {
+        "internal"  0;
+        "external"  0;  # Allow external, app handles auth
+    }
+
+    # Logging format with timing information
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for" '
+                    'access=$access_level '
+                    'rt=$request_time uct="$upstream_connect_time" '
+                    'uht="$upstream_header_time" urt="$upstream_response_time"';
+
+    access_log /var/log/nginx/access.log main;
+
+    # Performance optimizations
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 50M;
+    client_body_buffer_size 10M;
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_min_length 256;
+    gzip_types text/plain text/css text/xml application/json application/javascript
+               application/rss+xml application/atom+xml image/svg+xml
+               application/x-font-ttf font/opentype;
+
+    # Rate limiting zones
+    limit_req_zone $binary_remote_addr zone=api:10m rate=30r/s;
+    limit_req_zone $binary_remote_addr zone=auth:10m rate=5r/m;
+
+    # Upstream to GenMaster FastAPI
+    upstream genmaster_backend {
+        server genmaster:8000;
+        keepalive 32;
+    }
+
+    # Upstream to Portainer (optional - only used if portainer profile is enabled)
+    upstream portainer_backend {
+        server portainer:9000;
+        keepalive 8;
+    }
+
+    # ==========================================================================
+    # Main Server Block
+    # ==========================================================================
+    server {
+        listen 80 default_server;
+        listen [::]:80 default_server;
+        server_name _;
+
+        # Security headers
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+        # Deny access to hidden files
+        location ~ /\. {
+            deny all;
+            access_log off;
+            log_not_found off;
+        }
+
+        # Health check endpoint (no auth required)
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+
+        # API health check (proxied to backend)
+        location = /api/health {
+            proxy_pass http://genmaster_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            access_log off;
+        }
+
+        # Authentication endpoints - strict rate limiting
+        location /api/auth/login {
+            limit_req zone=auth burst=3 nodelay;
+
+            proxy_pass http://genmaster_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+        }
+
+        # API routes - proxy to FastAPI with rate limiting
+        location /api/ {
+            limit_req zone=api burst=50 nodelay;
+
+            proxy_pass http://genmaster_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Timeouts
+            proxy_connect_timeout 300s;
+            proxy_send_timeout 300s;
+            proxy_read_timeout 300s;
+
+            # WebSocket support
+            proxy_buffering off;
+        }
+
+        # Backup downloads - larger timeout for file transfers
+        location /api/backup/download/ {
+            proxy_pass http://genmaster_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Longer timeouts for large file downloads
+            proxy_connect_timeout 600s;
+            proxy_send_timeout 600s;
+            proxy_read_timeout 600s;
+        }
+
+        # WebSocket endpoint
+        location /ws {
+            proxy_pass http://genmaster_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # WebSocket timeouts (24 hours)
+            proxy_read_timeout 86400;
+            proxy_send_timeout 86400;
+            proxy_buffering off;
+        }
+
+        # ======================================================================
+        # Portainer - Container Management UI (optional)
+        # Only accessible if portainer profile is enabled
+        # Access at: https://example.com/portainer/
+        # ======================================================================
+        location /portainer/ {
+            # Rewrite /portainer/ to / for Portainer
+            rewrite ^/portainer/(.*) /$1 break;
+
+            proxy_pass http://portainer_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Portainer WebSocket support
+            proxy_read_timeout 86400;
+            proxy_send_timeout 86400;
+            proxy_buffering off;
+
+            # Error page if Portainer is not running
+            error_page 502 503 504 = @portainer_unavailable;
+        }
+
+        # Portainer WebSocket endpoint
+        location /portainer/api/websocket/ {
+            rewrite ^/portainer/(.*) /$1 break;
+
+            proxy_pass http://portainer_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 86400;
+            proxy_buffering off;
+        }
+
+        # Fallback for Portainer when not available
+        location @portainer_unavailable {
+            default_type text/html;
+            return 503 '<!DOCTYPE html><html><head><title>Portainer Unavailable</title></head><body style="font-family: sans-serif; text-align: center; margin-top: 50px;"><h1>Portainer Not Available</h1><p>Portainer is not currently running. Start it with:</p><pre>docker compose --profile portainer up -d</pre><p><a href="/">Return to GenMaster</a></p></body></html>';
+        }
+
+        # Static files (Vue.js frontend served by FastAPI)
+        location / {
+            proxy_pass http://genmaster_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Cache static assets
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+                proxy_pass http://genmaster_backend;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                expires 1y;
+                add_header Cache-Control "public, immutable";
+                access_log off;
+            }
+
+            # Don't cache HTML (SPA routing)
+            location ~* \.html$ {
+                proxy_pass http://genmaster_backend;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                add_header Cache-Control "no-cache, no-store, must-revalidate";
+                add_header Pragma "no-cache";
+                add_header Expires "0";
+            }
+        }
+    }
+}
