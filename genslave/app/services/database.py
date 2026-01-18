@@ -11,7 +11,7 @@
 
 """Database service for GenSlave settings storage."""
 
-import asyncio
+import json
 import logging
 import sqlite3
 from datetime import datetime
@@ -90,6 +90,23 @@ class DatabaseService:
                     "No API secret configured! GenSlave API is unprotected. "
                     "Set GENSLAVE_API_SECRET in .env file."
                 )
+
+            # Check if Apprise URLs exist in DB
+            cursor.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                ("apprise_urls",)
+            )
+            row = cursor.fetchone()
+
+            if row:
+                self._cache["apprise_urls"] = row["value"]
+                logger.info("Apprise URLs loaded from database")
+            elif settings.APPRISE_URLS:
+                # Seed from environment variable (comma-separated -> JSON array)
+                urls = [u.strip() for u in settings.APPRISE_URLS.split(",") if u.strip()]
+                urls_json = json.dumps(urls)
+                self._set_setting_sync(conn, "apprise_urls", urls_json)
+                logger.info(f"Apprise URLs seeded from environment variable: {len(urls)} configured")
 
             self._initialized = True
             logger.info(f"Database initialized: {self._db_path}")

@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.services.database import db_service
+from app.services.notification import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,39 @@ class RotateKeyResponse(BaseModel):
 
     success: bool = Field(description="Whether the rotation was successful")
     message: str = Field(description="Status message")
+
+
+class NotificationConfig(BaseModel):
+    """Current notification configuration."""
+
+    apprise_urls: list[str] = Field(
+        default_factory=list,
+        description="List of Apprise notification URLs (masked for security)",
+    )
+    configured: bool = Field(description="Whether any notification URLs are configured")
+
+
+class NotificationUpdateRequest(BaseModel):
+    """Request to update notification configuration."""
+
+    apprise_urls: list[str] = Field(
+        description="List of Apprise notification URLs",
+    )
+
+
+class NotificationResponse(BaseModel):
+    """Response from notification operations."""
+
+    success: bool = Field(description="Whether the operation was successful")
+    message: str = Field(description="Status message")
+
+
+class NotificationTestResponse(BaseModel):
+    """Response from test notification."""
+
+    success: bool = Field(description="Whether the test notification was sent")
+    message: str = Field(description="Status message")
+    configured_services: int = Field(description="Number of configured notification services")
 
 
 # =========================================================================
@@ -458,4 +492,129 @@ async def rotate_api_key(request: RotateKeyRequest) -> RotateKeyResponse:
         return RotateKeyResponse(
             success=False,
             message=f"Error rotating API key: {str(e)}",
+        )
+
+
+# =========================================================================
+# Notification Endpoints
+# =========================================================================
+
+
+def _mask_url(url: str) -> str:
+    """Mask sensitive parts of an Apprise URL for display.
+
+    Shows the service type but hides tokens/credentials.
+    Example: tgram://123456:ABC...XYZ/chatid -> tgram://****/chatid
+    """
+    if "://" not in url:
+        return "****"
+
+    scheme, rest = url.split("://", 1)
+
+    # For most services, mask everything after ://
+    if "/" in rest:
+        parts = rest.split("/", 1)
+        return f"{scheme}://****/{ parts[1][:10]}..." if len(parts[1]) > 10 else f"{scheme}://****/{parts[1]}"
+    else:
+        return f"{scheme}://****"
+
+
+@router.get("/notifications", response_model=NotificationConfig)
+async def get_notifications() -> NotificationConfig:
+    """
+    Get current notification configuration.
+
+    Returns the configured Apprise URLs (masked for security) and
+    whether notifications are configured.
+    """
+    urls = notification_service.get_urls()
+    masked_urls = [_mask_url(url) for url in urls]
+
+    return NotificationConfig(
+        apprise_urls=masked_urls,
+        configured=len(urls) > 0,
+    )
+
+
+@router.post("/notifications", response_model=NotificationResponse)
+async def update_notifications(
+    request: NotificationUpdateRequest,
+) -> NotificationResponse:
+    """
+    Update notification configuration.
+
+    Accepts a list of Apprise URLs. Supports 80+ notification services:
+    - Telegram: tgram://bottoken/chatid
+    - Slack: slack://tokenA/tokenB/tokenC/channel
+    - Discord: discord://webhook_id/webhook_token
+    - Twilio: twilio://account_sid:auth_token@from_phone/to_phone
+    - Pushover: pover://user_key@api_token
+    - Email: mailto://user:pass@gmail.com
+    - And many more: https://github.com/caronc/apprise/wiki
+
+    The configuration is stored in the database and takes effect immediately.
+    """
+    try:
+        success = notification_service.set_urls(request.apprise_urls)
+
+        if success:
+            url_count = len([u for u in request.apprise_urls if u.strip()])
+            logger.info(f"Notification config updated: {url_count} URLs configured")
+            return NotificationResponse(
+                success=True,
+                message=f"Notification configuration updated. {url_count} service(s) configured.",
+            )
+        else:
+            return NotificationResponse(
+                success=False,
+                message="Failed to update notification configuration",
+            )
+
+    except Exception as e:
+        logger.error(f"Error updating notifications: {e}")
+        return NotificationResponse(
+            success=False,
+            message=f"Error updating notifications: {str(e)}",
+        )
+
+
+@router.post("/notifications/test", response_model=NotificationTestResponse)
+async def test_notification() -> NotificationTestResponse:
+    """
+    Send a test notification.
+
+    Sends a test message to all configured notification services.
+    Use this to verify your notification configuration is working.
+    """
+    urls = notification_service.get_urls()
+
+    if not urls:
+        return NotificationTestResponse(
+            success=False,
+            message="No notification services configured",
+            configured_services=0,
+        )
+
+    try:
+        success = await notification_service.send_test()
+
+        if success:
+            return NotificationTestResponse(
+                success=True,
+                message="Test notification sent successfully",
+                configured_services=len(urls),
+            )
+        else:
+            return NotificationTestResponse(
+                success=False,
+                message="Test notification may have failed - check your service configuration",
+                configured_services=len(urls),
+            )
+
+    except Exception as e:
+        logger.error(f"Error sending test notification: {e}")
+        return NotificationTestResponse(
+            success=False,
+            message=f"Error sending test notification: {str(e)}",
+            configured_services=len(urls),
         )

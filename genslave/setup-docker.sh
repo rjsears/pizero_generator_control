@@ -169,6 +169,7 @@ services:
       - FAILSAFE_TIMEOUT_SECONDS=30
       - MOCK_HAT_MODE=false
       - GENSLAVE_API_SECRET=${GENSLAVE_API_SECRET:-}
+      - APPRISE_URLS=${APPRISE_URLS:-}
       - WEBHOOK_URL=${WEBHOOK_URL:-}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
 
@@ -242,6 +243,41 @@ create_env_file() {
         fi
     done
 
+    # Optional: Configure notifications
+    echo ""
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║           Notification Configuration (Optional)           ║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}GenSlave can send notifications when failsafe triggers.${NC}"
+    echo -e "${YELLOW}Supports 80+ services via Apprise (Telegram, Slack, SMS, etc.)${NC}"
+    echo ""
+    echo -e "Common URL formats:"
+    echo -e "  ${CYAN}tgram://bottoken/chatid${NC}          - Telegram"
+    echo -e "  ${CYAN}slack://token/channel${NC}            - Slack"
+    echo -e "  ${CYAN}discord://webhook_id/token${NC}       - Discord"
+    echo -e "  ${CYAN}twilio://sid:token@from/to${NC}       - Twilio SMS"
+    echo -e "  ${CYAN}pover://user@token${NC}               - Pushover"
+    echo ""
+    echo -e "Full list: ${CYAN}https://github.com/caronc/apprise/wiki${NC}"
+    echo ""
+
+    APPRISE_URLS_INPUT=""
+    read -p "Configure notifications now? (y/N) " -n 1 -r
+    echo ""
+
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo ""
+        echo -e "Enter Apprise URL(s), comma-separated for multiple:"
+        read -p "> " APPRISE_URLS_INPUT
+
+        if [[ -n "$APPRISE_URLS_INPUT" ]]; then
+            log_success "Notification URL(s) configured"
+        fi
+    else
+        log_info "Skipping notification setup - can be configured later via GenMaster UI"
+    fi
+
     cat > "$INSTALL_DIR/.env" << EOF
 # GenSlave Environment Configuration
 # Created during setup - $(date)
@@ -253,7 +289,12 @@ GENSLAVE_API_SECRET=${API_SECRET_INPUT}
 # Failsafe timeout in seconds (relay turns off if no heartbeat received)
 FAILSAFE_TIMEOUT_SECONDS=30
 
-# Webhook URL for backup notifications (optional)
+# Apprise notification URLs (comma-separated)
+# Supports 80+ services: https://github.com/caronc/apprise/wiki
+# Can also be configured via GenMaster UI
+APPRISE_URLS=${APPRISE_URLS_INPUT}
+
+# Legacy webhook (replaced by Apprise)
 WEBHOOK_URL=
 WEBHOOK_SECRET=
 

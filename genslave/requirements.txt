@@ -17,6 +17,9 @@ pydantic>=1.10.0,<2.0.0  # Use 1.x - no Rust compilation needed for arm/v6
 # HTTP Client (for webhook notifications)
 httpx>=0.26.0
 
+# Multi-platform notifications (Twilio, Telegram, Slack, Discord, etc.)
+apprise>=1.7.0
+
 # System monitoring
 psutil>=5.9.0
 
