@@ -19,6 +19,30 @@
         <p class="text-gray-600 dark:text-gray-400 mt-1">Monitor and control the generator</p>
       </div>
 
+      <!-- Emergency Stop Banner -->
+      <div class="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-xl">
+        <div class="flex items-center gap-4">
+          <div class="p-3 rounded-xl bg-red-500/30">
+            <ExclamationTriangleIcon class="h-8 w-8 text-red-500" />
+          </div>
+          <div>
+            <h3 class="font-semibold text-red-800 dark:text-red-200">Emergency Stop</h3>
+            <p class="text-sm text-red-600 dark:text-red-400">
+              Immediately stop the generator and skip cooldown period.
+            </p>
+          </div>
+        </div>
+        <Button
+          variant="danger"
+          size="lg"
+          :disabled="!isRunning || actionLoading"
+          @click="handleEmergencyStop"
+        >
+          <ExclamationTriangleIcon class="h-5 w-5 mr-2" />
+          Emergency Stop
+        </Button>
+      </div>
+
       <!-- ARM/DISARM Banner -->
       <div
         :class="[
@@ -251,25 +275,6 @@
         </Card>
       </div>
 
-      <!-- Emergency Stop -->
-      <Card>
-        <div class="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
-          <div>
-            <h3 class="font-semibold text-red-800 dark:text-red-200">Emergency Stop</h3>
-            <p class="text-sm text-red-600 dark:text-red-400 mt-1">
-              Immediately stop the generator and skip cooldown period.
-            </p>
-          </div>
-          <Button
-            variant="danger"
-            :disabled="!isRunning || actionLoading"
-            @click="handleEmergencyStop"
-          >
-            Emergency Stop
-          </Button>
-        </div>
-      </Card>
-
     <!-- Confirm Modal -->
     <Modal v-model="showConfirm" :title="confirmTitle">
       <p class="text-gray-600 dark:text-gray-400">{{ confirmMessage }}</p>
@@ -294,7 +299,7 @@ import Button from '@/components/common/Button.vue'
 import Input from '@/components/common/Input.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Modal from '@/components/common/Modal.vue'
-import { ShieldExclamationIcon } from '@heroicons/vue/24/outline'
+import { ShieldExclamationIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
 
 const generatorStore = useGeneratorStore()
 const notificationStore = useNotificationStore()
