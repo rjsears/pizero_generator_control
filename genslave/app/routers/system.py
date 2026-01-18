@@ -65,6 +65,9 @@ class SystemInfo(BaseModel):
     temperature_celsius: Optional[float] = Field(
         None, description="CPU temperature in Celsius"
     )
+    temperature_fahrenheit: Optional[float] = Field(
+        None, description="CPU temperature in Fahrenheit"
+    )
     uptime_seconds: int = Field(description="System uptime in seconds")
     ip_address: Optional[str] = Field(None, description="Primary IP address")
     network_interfaces: list[NetworkInfo] = Field(
@@ -201,7 +204,9 @@ async def get_system_info() -> SystemInfo:
 
     # Temperature
     temperature = _get_cpu_temperature()
+    temperature_f = None
     if temperature:
+        temperature_f = round((temperature * 9 / 5) + 32, 1)
         if temperature > 80:
             warnings.append(f"Temperature critical: {temperature}°C")
             status = "critical"
@@ -227,6 +232,7 @@ async def get_system_info() -> SystemInfo:
         disk_free_gb=round(disk.free / (1024**3), 1),
         disk_percent=disk_percent,
         temperature_celsius=temperature,
+        temperature_fahrenheit=temperature_f,
         uptime_seconds=_get_uptime(),
         ip_address=primary_ip,
         network_interfaces=network_interfaces,
