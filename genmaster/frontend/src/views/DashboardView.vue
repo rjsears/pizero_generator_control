@@ -82,6 +82,36 @@
       </div>
     </div>
 
+    <!-- Emergency Stop Banner -->
+    <div class="rounded-xl p-4 border-2 bg-gradient-to-r from-red-500/10 to-orange-500/10 border-red-400">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="p-3 rounded-xl bg-red-500/20">
+            <ExclamationTriangleIcon class="h-6 w-6 text-red-500" />
+          </div>
+          <div>
+            <h3 class="font-semibold text-red-800 dark:text-red-200">Emergency Stop</h3>
+            <p class="text-sm text-red-600 dark:text-red-400">
+              Immediately stop the generator
+            </p>
+          </div>
+        </div>
+        <button
+          @click="handleEmergencyStop"
+          :disabled="!generatorStore.isRunning || emergencyStopLoading"
+          :class="[
+            'px-6 py-2 rounded-lg font-bold text-white transition-all',
+            generatorStore.isRunning && !emergencyStopLoading
+              ? 'bg-red-500 hover:bg-red-600 shadow-lg'
+              : 'bg-gray-400 cursor-not-allowed'
+          ]"
+        >
+          <span v-if="emergencyStopLoading">Stopping...</span>
+          <span v-else>EMERGENCY STOP</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Header -->
     <div>
       <h1 class="text-2xl font-bold text-primary">System Overview</h1>
@@ -361,6 +391,7 @@ import {
   ServerIcon,
   SignalIcon,
   ShieldExclamationIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/vue/24/outline'
 import { genslaveApi } from '@/services/api'
 
@@ -376,6 +407,21 @@ let refreshInterval = null
 // Relay arm/disarm state
 const relayArmed = ref(false)
 const armingRelay = ref(false)
+
+// Emergency stop state
+const emergencyStopLoading = ref(false)
+
+// Handle emergency stop
+async function handleEmergencyStop() {
+  emergencyStopLoading.value = true
+  try {
+    await generatorStore.emergencyStop()
+  } catch (err) {
+    console.error('Emergency stop failed:', err)
+  } finally {
+    emergencyStopLoading.value = false
+  }
+}
 
 // Toggle relay arm/disarm
 async function toggleRelayArm() {

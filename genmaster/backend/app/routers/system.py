@@ -311,22 +311,29 @@ async def get_ssl_info() -> dict:
 
         return cert_info
 
-    # Try to get SSL info from nginx container
+    # Try to get SSL info from certbot or nginx container
     try:
         import docker
         client = docker.from_env()
 
-        # Find nginx container
+        # Find certbot container first (has openssl), fall back to nginx
+        cert_container = None
         nginx_container = None
         for container in client.containers.list():
-            if "genmaster_nginx" in container.name.lower():
+            name_lower = container.name.lower()
+            if "certbot" in name_lower:
+                cert_container = container
+            elif "genmaster_nginx" in name_lower:
                 nginx_container = container
-                break
 
-        if nginx_container:
+        # Use certbot container for openssl commands (nginx:alpine doesn't have openssl)
+        # Fall back to nginx just for listing directories
+        exec_container = cert_container or nginx_container
+
+        if exec_container:
             # List certificate directories
             try:
-                exit_code, output = nginx_container.exec_run(
+                exit_code, output = exec_container.exec_run(
                     "ls /etc/letsencrypt/live/",
                     demux=True
                 )
@@ -337,16 +344,25 @@ async def get_ssl_info() -> dict:
                     for domain in domains:
                         cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
 
-                        # Get certificate info using openssl
-                        exit_code, cert_output = nginx_container.exec_run(
-                            f"openssl x509 -in {cert_path} -noout -subject -issuer -dates -ext subjectAltName",
-                            demux=True
-                        )
+                        # Get certificate info using openssl (only works in certbot container)
+                        if cert_container:
+                            exit_code, cert_output = cert_container.exec_run(
+                                f"openssl x509 -in {cert_path} -noout -subject -issuer -dates -ext subjectAltName",
+                                demux=True
+                            )
 
-                        if exit_code == 0 and cert_output[0]:
-                            cert_str = cert_output[0].decode("utf-8")
-                            cert_info = parse_cert_output(cert_str, domain, cert_path)
-                            ssl_info["certificates"].append(cert_info)
+                            if exit_code == 0 and cert_output[0]:
+                                cert_str = cert_output[0].decode("utf-8")
+                                cert_info = parse_cert_output(cert_str, domain, cert_path)
+                                ssl_info["certificates"].append(cert_info)
+                        else:
+                            # Certbot not running - add basic info without openssl parsing
+                            ssl_info["certificates"].append({
+                                "domain": domain,
+                                "path": cert_path,
+                                "type": "Let's Encrypt",
+                                "warning": "Certbot container not running - unable to read certificate details"
+                            })
 
                     ssl_info["configured"] = len(ssl_info["certificates"]) > 0
 
@@ -504,14 +520,18 @@ async def get_cloudflare_status() -> dict:
     Returns tunnel connection status, connector info, and health.
     """
     import logging
+    import re
 
     logger = logging.getLogger(__name__)
     result = {
-        "enabled": False,
+        "installed": False,
         "running": False,
-        "healthy": False,
-        "connector_id": None,
+        "connected": False,
         "version": None,
+        "tunnel_id": None,
+        "edge_locations": [],
+        "metrics": {},
+        "last_error": None,
         "error": None,
     }
 
@@ -522,31 +542,40 @@ async def get_cloudflare_status() -> dict:
         # Find cloudflared container
         try:
             container = client.containers.get("genmaster_cloudflared")
-            result["enabled"] = True
+            result["installed"] = True
             result["running"] = container.status == "running"
 
             if result["running"]:
                 # Try to get tunnel info from logs
                 try:
-                    logs = container.logs(tail=50).decode("utf-8")
-                    # Look for connection info in logs
+                    logs = container.logs(tail=100).decode("utf-8")
+                    edge_locs = set()
                     for line in logs.split("\n"):
+                        # Check for connection registration
                         if "Connection" in line and "registered" in line:
-                            result["healthy"] = True
-                        if "Connector ID" in line or "connectorId" in line.lower():
-                            # Extract connector ID from log line
-                            import re
+                            result["connected"] = True
+                            # Extract edge location (e.g., "DFW" from logs)
+                            loc_match = re.search(r'connIndex=\d+ ip=[\d.]+.*?location=(\w+)', line)
+                            if loc_match:
+                                edge_locs.add(loc_match.group(1))
+                        # Extract tunnel/connector ID
+                        if "tunnelID" in line or "Tunnel ID" in line:
                             match = re.search(r'[a-f0-9-]{36}', line)
                             if match:
-                                result["connector_id"] = match.group()
+                                result["tunnel_id"] = match.group()
+                        # Extract errors
+                        if "ERR" in line or "error" in line.lower():
+                            result["last_error"] = line.strip()[-200:]
+                    result["edge_locations"] = list(edge_locs)
                 except Exception:
                     pass
 
                 # Get image version
-                result["version"] = container.image.tags[0] if container.image.tags else None
+                if container.image.tags:
+                    result["version"] = container.image.tags[0].split(":")[-1]
 
         except docker.errors.NotFound:
-            result["enabled"] = False
+            result["installed"] = False
 
     except ImportError:
         result["error"] = "Docker SDK not installed"
@@ -568,15 +597,17 @@ async def get_tailscale_status() -> dict:
 
     logger = logging.getLogger(__name__)
     result = {
-        "enabled": False,
+        "installed": False,
         "running": False,
-        "connected": False,
+        "logged_in": False,
+        "tailscale_ip": None,
         "hostname": None,
-        "ip_addresses": [],
-        "version": None,
+        "dns_name": None,
+        "tailnet": None,
         "peers": [],
-        "exit_node": None,
-        "tailnet_name": None,
+        "peer_count": 0,
+        "online_peers": 0,
+        "version": None,
         "error": None,
     }
 
@@ -587,7 +618,7 @@ async def get_tailscale_status() -> dict:
         # Find tailscale container
         try:
             container = client.containers.get("genmaster_tailscale")
-            result["enabled"] = True
+            result["installed"] = True
             result["running"] = container.status == "running"
 
             if result["running"]:
@@ -600,47 +631,72 @@ async def get_tailscale_status() -> dict:
                     if exit_code == 0 and output[0]:
                         import json
                         status_data = json.loads(output[0].decode("utf-8"))
-                        result["connected"] = status_data.get("BackendState") == "Running"
+                        result["logged_in"] = status_data.get("BackendState") == "Running"
 
                         # Self info
                         self_info = status_data.get("Self", {})
                         result["hostname"] = self_info.get("HostName")
-                        result["ip_addresses"] = self_info.get("TailscaleIPs", [])
+                        ips = self_info.get("TailscaleIPs", [])
+                        result["tailscale_ip"] = ips[0] if ips else None
+                        result["dns_name"] = self_info.get("DNSName", "").rstrip(".")
 
                         # Tailnet name
-                        result["tailnet_name"] = status_data.get("CurrentTailnet", {}).get("Name")
+                        tailnet_data = status_data.get("CurrentTailnet", {})
+                        result["tailnet"] = tailnet_data.get("Name") or tailnet_data.get("MagicDNSSuffix", "").rstrip(".")
 
-                        # Exit node info
-                        if status_data.get("ExitNodeStatus"):
-                            result["exit_node"] = status_data.get("ExitNodeStatus", {}).get("ID")
+                        # Self as peer (for display)
+                        self_peer = {
+                            "id": self_info.get("ID"),
+                            "hostname": self_info.get("HostName"),
+                            "ip": ips[0] if ips else None,
+                            "online": True,
+                            "os": self_info.get("OS"),
+                            "is_self": True,
+                        }
 
                         # Peer info
                         peers_data = status_data.get("Peer", {})
+                        peers = [self_peer]
+                        online_count = 1  # Self is always online
+
                         for peer_id, peer_info in peers_data.items():
+                            peer_ips = peer_info.get("TailscaleIPs", [])
+                            is_online = peer_info.get("Online", False)
                             peer = {
                                 "id": peer_id,
                                 "hostname": peer_info.get("HostName"),
-                                "ip_addresses": peer_info.get("TailscaleIPs", []),
-                                "online": peer_info.get("Online", False),
+                                "ip": peer_ips[0] if peer_ips else None,
+                                "online": is_online,
                                 "os": peer_info.get("OS"),
-                                "last_seen": peer_info.get("LastSeen"),
-                                "is_exit_node": peer_info.get("ExitNode", False),
-                                "rx_bytes": peer_info.get("RxBytes", 0),
-                                "tx_bytes": peer_info.get("TxBytes", 0),
+                                "is_self": False,
                             }
-                            result["peers"].append(peer)
+                            peers.append(peer)
+                            if is_online:
+                                online_count += 1
 
-                        # Sort peers by online status then hostname
-                        result["peers"].sort(key=lambda p: (not p["online"], p["hostname"] or ""))
+                        # Sort: self first, then online, then offline
+                        peers.sort(key=lambda p: (not p.get("is_self"), not p["online"], p["hostname"] or ""))
+
+                        result["peers"] = peers
+                        result["peer_count"] = len(peers)
+                        result["online_peers"] = online_count
 
                 except Exception as e:
                     logger.debug(f"Failed to get tailscale status: {e}")
 
-                # Get image version
-                result["version"] = container.image.tags[0] if container.image.tags else None
+                # Get version from container exec
+                try:
+                    exit_code, output = container.exec_run(
+                        "tailscale version",
+                        demux=True
+                    )
+                    if exit_code == 0 and output[0]:
+                        result["version"] = output[0].decode("utf-8").strip().split("\n")[0]
+                except Exception:
+                    pass
 
         except docker.errors.NotFound:
-            result["enabled"] = False
+            result["installed"] = False
 
     except ImportError:
         result["error"] = "Docker SDK not installed"
@@ -744,29 +800,29 @@ async def get_network_info() -> dict:
         addrs = psutil.net_if_addrs()
         stats = psutil.net_if_stats()
 
-        for iface, addresses in addrs.items():
+        for iface, all_addresses in addrs.items():
             if iface == "lo":
                 continue
 
-            iface_info = {
-                "name": iface,
-                "ipv4": None,
-                "ipv6": None,
-                "mac": None,
-                "up": stats.get(iface, {}).isup if iface in stats else False,
-            }
+            # Build addresses array in the format frontend expects
+            addresses = []
+            is_up = stats.get(iface, type('', (), {'isup': False})()).isup if iface in stats else False
 
-            for addr in addresses:
+            for addr in all_addresses:
                 if addr.family == socket.AF_INET:
-                    iface_info["ipv4"] = addr.address
+                    addresses.append({"type": "ipv4", "address": addr.address})
                 elif addr.family == socket.AF_INET6:
                     if not addr.address.startswith("fe80"):  # Skip link-local
-                        iface_info["ipv6"] = addr.address
+                        addresses.append({"type": "ipv6", "address": addr.address})
                 elif addr.family == psutil.AF_LINK:
-                    iface_info["mac"] = addr.address
+                    addresses.append({"type": "mac", "address": addr.address})
 
-            if iface_info["ipv4"] or iface_info["ipv6"]:
-                result["interfaces"].append(iface_info)
+            if addresses:
+                result["interfaces"].append({
+                    "name": iface,
+                    "addresses": addresses,
+                    "up": is_up,
+                })
 
         # Get default gateway
         try:
@@ -783,7 +839,21 @@ async def get_network_info() -> dict:
                     if idx + 1 < len(parts):
                         result["gateway"] = parts[idx + 1]
         except Exception:
-            pass
+            # Fallback: try netstat or route command
+            try:
+                route = subprocess.run(
+                    ["route", "-n", "get", "default"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if route.returncode == 0:
+                    for line in route.stdout.split("\n"):
+                        if "gateway:" in line.lower():
+                            result["gateway"] = line.split(":")[-1].strip()
+                            break
+            except Exception:
+                pass
 
         # Get DNS servers from resolv.conf
         try:
@@ -853,14 +923,61 @@ async def get_timezone_info() -> dict:
 
 
 @router.get("/external-services")
-async def get_external_services_status() -> dict:
+async def get_external_services_status() -> list:
     """
-    Get status of all external services (Cloudflare, Tailscale).
-    """
-    cloudflare = await get_cloudflare_status()
-    tailscale = await get_tailscale_status()
+    Get list of external services configured via nginx proxy.
 
-    return {
-        "cloudflare": cloudflare,
-        "tailscale": tailscale,
-    }
+    Returns array of service objects with name, description, url, and running status.
+    """
+    import logging
+    import os
+
+    logger = logging.getLogger(__name__)
+    services = []
+
+    # Add configured external services
+    # These could come from a config file or database in future
+    # For now, return known services based on docker container status
+
+    try:
+        import docker
+        client = docker.from_env()
+
+        # Check for Portainer
+        try:
+            portainer = client.containers.get("genmaster_portainer")
+            services.append({
+                "name": "Portainer",
+                "description": "Docker container management",
+                "url": "/portainer/",
+                "running": portainer.status == "running",
+                "color": "bg-blue-100 dark:bg-blue-500/20",
+                "iconColor": "text-blue-500",
+            })
+        except Exception:
+            pass
+
+    except Exception as e:
+        logger.debug(f"Docker not available: {e}")
+        # Return services even if Docker isn't available
+        # Just mark them as not running
+
+    # Add any statically configured services from environment
+    # Format: SERVICE_NAME=description|url
+    for key, value in os.environ.items():
+        if key.startswith("EXTERNAL_SERVICE_"):
+            try:
+                parts = value.split("|")
+                if len(parts) >= 2:
+                    services.append({
+                        "name": key.replace("EXTERNAL_SERVICE_", "").replace("_", " ").title(),
+                        "description": parts[0],
+                        "url": parts[1],
+                        "running": True,
+                        "color": "bg-gray-100 dark:bg-gray-500/20",
+                        "iconColor": "text-gray-500",
+                    })
+            except Exception:
+                pass
+
+    return services

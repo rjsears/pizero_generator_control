@@ -33,9 +33,11 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const response = await api.post('/auth/login', credentials)
-      token.value = response.data.token
+      // Extract the access_token string from the token object
+      const accessToken = response.data.token.access_token
+      token.value = accessToken
       user.value = response.data.user
-      localStorage.setItem('auth_token', response.data.token)
+      localStorage.setItem('auth_token', accessToken)
       return true
     } catch (err) {
       error.value = err.response?.data?.detail || 'Login failed'

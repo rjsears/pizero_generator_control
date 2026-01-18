@@ -74,10 +74,6 @@ const tabs = [
 
 // Generator config state (field names match backend ConfigResponse)
 const config = ref({
-  warmup_seconds: 30,
-  cooldown_seconds: 60,
-  min_run_minutes: 5,
-  max_run_minutes: 480,
   heartbeat_interval_seconds: 30,
 })
 const savingConfig = ref(false)
@@ -531,62 +527,15 @@ watch(activeTab, (tab) => {
 
       <!-- Generator Tab -->
       <div v-if="activeTab === 'generator'" class="space-y-6">
-        <Card title="Generator Settings" subtitle="Configure generator timing and behavior">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label class="block text-sm font-medium text-secondary mb-1">Warmup Duration (seconds)</label>
-              <input
-                v-model.number="config.warmup_seconds"
-                type="number"
-                min="0"
-                max="300"
-                class="input"
-              />
-              <p class="text-xs text-muted mt-1">Time to wait after starting before considering 'running'</p>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-secondary mb-1">Cooldown Duration (seconds)</label>
-              <input
-                v-model.number="config.cooldown_seconds"
-                type="number"
-                min="0"
-                max="600"
-                class="input"
-              />
-              <p class="text-xs text-muted mt-1">Time to run unloaded after stopping</p>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-secondary mb-1">Minimum Run Time (minutes)</label>
-              <input
-                v-model.number="config.min_run_minutes"
-                type="number"
-                min="1"
-                max="120"
-                class="input"
-              />
-              <p class="text-xs text-muted mt-1">Minimum duration for each generator run</p>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-secondary mb-1">Maximum Run Time (minutes)</label>
-              <input
-                v-model.number="config.max_run_minutes"
-                type="number"
-                min="30"
-                max="1440"
-                class="input"
-              />
-              <p class="text-xs text-muted mt-1">Maximum duration before automatic shutdown</p>
-            </div>
-          </div>
-          <div class="flex justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <button @click="saveConfig" :disabled="savingConfig" class="btn-primary">
-              <ArrowPathIcon v-if="savingConfig" class="h-4 w-4 mr-2 animate-spin" />
-              <CheckIcon v-else class="h-4 w-4 mr-2" />
-              Save Settings
-            </button>
+        <Card>
+          <div class="text-center py-8 text-muted">
+            <p>Generator settings have been moved to:</p>
+            <ul class="mt-4 space-y-2">
+              <li><strong>Generator Control page</strong> - Min/Max run time settings</li>
+              <li><strong>System → GenSlave tab</strong> - Connection and heartbeat settings</li>
+            </ul>
           </div>
         </Card>
-
       </div>
 
       <!-- Security Tab -->

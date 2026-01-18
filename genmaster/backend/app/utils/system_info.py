@@ -111,9 +111,8 @@ def get_uptime() -> int:
     """
     Get Docker host uptime in seconds.
 
-    In LXC containers (like Proxmox), /proc/uptime and psutil.boot_time() return
-    the hypervisor uptime, not the container uptime. To get the correct LXC
-    container uptime, we calculate from PID 1's actual start time.
+    Reads the host's /proc/uptime by running a quick Docker command with
+    --pid=host to access the host's process namespace.
 
     Returns:
         Uptime in seconds
@@ -123,70 +122,38 @@ def get_uptime() -> int:
     uptime_seconds = 0
 
     try:
-        # Method 1: Calculate PID 1 start time from /proc/1/stat and /proc/stat
-        # This works in LXC because it measures when the LXC's init process started
         import docker
 
         docker_client = docker.from_env()
-        container = None
 
+        # Run a quick container with --pid=host to read host's /proc/uptime
+        # This gives us the actual host uptime, not container uptime
         try:
-            container = docker_client.containers.run(
+            result = docker_client.containers.run(
                 "alpine:latest",
-                command=[
-                    "sh",
-                    "-c",
-                    """
-                    # Get boot time (btime) from /proc/stat
-                    btime=$(grep -m1 '^btime ' /proc/stat | awk '{print $2}')
-                    # Get PID 1 start time (field 22) from /proc/1/stat - in clock ticks since boot
-                    starttime=$(cat /proc/1/stat | awk '{print $22}')
-                    # Get clock ticks per second
-                    clk_tck=$(getconf CLK_TCK)
-                    # Calculate PID 1 start time as epoch seconds
-                    echo $(( btime + starttime / clk_tck ))
-                    """,
-                ],
+                command=["cat", "/proc/uptime"],
                 pid_mode="host",
-                detach=True,
-                remove=False,
+                remove=True,
+                network_disabled=True,
             )
-
-            # Wait for container to complete
-            container.wait(timeout=30)
-            output = container.logs(stdout=True, stderr=False)
-            pid1_start_epoch = int(output.decode("utf-8").strip())
-            uptime_seconds = int(time.time() - pid1_start_epoch)
-
+            # /proc/uptime format: "seconds_up seconds_idle"
+            uptime_str = result.decode("utf-8").strip().split()[0]
+            uptime_seconds = int(float(uptime_str))
         except Exception as e:
-            logger.debug(f"Could not calculate host PID 1 start time: {e}")
-
-        finally:
-            if container:
-                try:
-                    container.remove(force=True)
-                except Exception:
-                    pass
+            logger.debug(f"Could not get host uptime via Docker: {e}")
 
     except Exception as e:
         logger.debug(f"Docker method failed: {e}")
 
-    # Fallback: try reading /proc/1/stat directly with /proc/uptime
-    if uptime_seconds <= 0 or uptime_seconds > 86400 * 365:  # Sanity check
+    # Fallback: read local /proc/uptime (will be container uptime in Docker)
+    if uptime_seconds <= 0:
         try:
-            with open("/proc/1/stat", "r") as f:
-                stat_parts = f.read().strip().split()
-            if len(stat_parts) >= 22:
-                with open("/proc/uptime", "r") as f:
-                    kernel_uptime = float(f.read().split()[0])
-                start_jiffies = int(stat_parts[21])  # 0-indexed, field 22 is index 21
-                # Assume 100 Hz (common value)
-                pid1_relative_start = start_jiffies / 100.0
-                uptime_seconds = int(kernel_uptime - pid1_relative_start)
+            with open("/proc/uptime", "r") as f:
+                uptime_seconds = int(float(f.read().split()[0]))
         except Exception as e:
-            logger.debug(f"Fallback PID 1 calculation failed: {e}")
+            logger.debug(f"Fallback /proc/uptime failed: {e}")
 
-    # Final fallback: use psutil (will show hypervisor uptime in LXC)
+    # Final fallback: use psutil
     if uptime_seconds <= 0:
         uptime_seconds = int(time.time() - psutil.boot_time())
 
