@@ -65,7 +65,7 @@ class SlaveClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 timeout=self.timeout,
-                headers={"X-GenControl-Secret": self.secret},
+                headers={"X-API-Key": self.secret},
             )
         return self._client
 
@@ -169,6 +169,7 @@ class SlaveClient:
         timestamp: int,
         generator_running: bool,
         armed: bool,
+        heartbeat_interval: int = 60,
         command: str = "none",
     ) -> SlaveResponse:
         """
@@ -178,6 +179,7 @@ class SlaveClient:
             timestamp: Current Unix timestamp
             generator_running: Whether generator is currently running
             armed: Whether automation is armed
+            heartbeat_interval: Interval between heartbeats in seconds
             command: Command to execute ("start", "stop", or "none")
 
         Returns:
@@ -188,6 +190,7 @@ class SlaveClient:
             "/api/heartbeat",
             json={
                 "timestamp": timestamp,
+                "heartbeat_interval": heartbeat_interval,
                 "generator_running": generator_running,
                 "command": command,
                 "armed": armed,
@@ -217,3 +220,15 @@ class SlaveClient:
             Response indicating success/failure
         """
         return await self._request("POST", "/api/config", json=config)
+
+    async def rotate_api_key(self, new_key: str) -> SlaveResponse:
+        """
+        Rotate the API key on GenSlave.
+
+        Args:
+            new_key: New API key (minimum 16 characters)
+
+        Returns:
+            Response indicating success/failure
+        """
+        return await self._request("POST", "/api/system/rotate-key", json={"new_key": new_key})

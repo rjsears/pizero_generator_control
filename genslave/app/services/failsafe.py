@@ -46,6 +46,10 @@ class FailsafeMonitor:
         self._running: bool = False
         self._task: Optional[asyncio.Task] = None
         self._relay_service = None  # Set by set_relay_service
+        # Dynamic timeout: updated from GenMaster's heartbeat_interval * 3
+        # Falls back to settings.FAILSAFE_TIMEOUT_SECONDS if not received
+        self._dynamic_timeout: Optional[int] = None
+        self._heartbeat_interval: Optional[int] = None
 
     def set_relay_service(self, relay_service) -> None:
         """Set the relay service for failsafe actions."""
@@ -64,6 +68,18 @@ class FailsafeMonitor:
         now = int(time.time())
         self._last_heartbeat = now
         self._heartbeat_count += 1
+
+        # Update dynamic timeout from GenMaster's heartbeat interval
+        heartbeat_interval = data.get("heartbeat_interval")
+        if heartbeat_interval is not None and heartbeat_interval > 0:
+            new_timeout = heartbeat_interval * 3
+            if new_timeout != self._dynamic_timeout:
+                logger.info(
+                    f"Failsafe timeout updated: {self._dynamic_timeout or settings.FAILSAFE_TIMEOUT_SECONDS}s -> "
+                    f"{new_timeout}s (heartbeat_interval={heartbeat_interval}s)"
+                )
+                self._dynamic_timeout = new_timeout
+                self._heartbeat_interval = heartbeat_interval
 
         # Clear failsafe if it was triggered
         if self._failsafe_triggered:
@@ -136,6 +152,16 @@ class FailsafeMonitor:
             except Exception as e:
                 logger.error(f"Error in failsafe monitor: {e}")
 
+    def _get_effective_timeout(self) -> int:
+        """Get the effective failsafe timeout.
+
+        Returns dynamic timeout if set from GenMaster, otherwise falls back
+        to settings.FAILSAFE_TIMEOUT_SECONDS.
+        """
+        if self._dynamic_timeout is not None:
+            return self._dynamic_timeout
+        return settings.FAILSAFE_TIMEOUT_SECONDS
+
     async def _check_heartbeat(self) -> None:
         """Check if heartbeat has timed out."""
         if self._last_heartbeat is None:
@@ -152,15 +178,16 @@ class FailsafeMonitor:
             return
 
         elapsed = int(time.time()) - self._last_heartbeat
+        timeout = self._get_effective_timeout()
 
-        if elapsed > settings.FAILSAFE_TIMEOUT_SECONDS:
+        if elapsed > timeout:
             await self._trigger_failsafe()
 
     async def _trigger_failsafe(self) -> None:
         """Trigger failsafe action - stop the generator."""
+        timeout = self._get_effective_timeout()
         logger.warning(
-            f"FAILSAFE TRIGGERED - No heartbeat for "
-            f"{settings.FAILSAFE_TIMEOUT_SECONDS}s"
+            f"FAILSAFE TRIGGERED - No heartbeat for {timeout}s"
         )
 
         self._failsafe_triggered = True
@@ -185,7 +212,8 @@ class FailsafeMonitor:
             "timestamp": int(time.time()),
             "data": {
                 "last_heartbeat": self._last_heartbeat,
-                "timeout_seconds": settings.FAILSAFE_TIMEOUT_SECONDS,
+                "timeout_seconds": self._get_effective_timeout(),
+                "heartbeat_interval": self._heartbeat_interval,
             },
             "source": "genslave",
         }
@@ -219,7 +247,9 @@ class FailsafeMonitor:
             "heartbeat_count": self._heartbeat_count,
             "failsafe_triggered": self._failsafe_triggered,
             "failsafe_triggered_at": self._failsafe_triggered_at,
-            "timeout_seconds": settings.FAILSAFE_TIMEOUT_SECONDS,
+            "timeout_seconds": self._get_effective_timeout(),
+            "heartbeat_interval": self._heartbeat_interval,
+            "timeout_source": "genmaster" if self._dynamic_timeout else "config",
         }
 
 

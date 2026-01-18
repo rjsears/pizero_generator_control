@@ -26,6 +26,47 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+async def _get_config_from_db():
+    """Get config from database."""
+    from app.database import AsyncSessionLocal
+    from app.models import Config
+    from sqlalchemy.future import select
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Config).where(Config.id == 1))
+        return result.scalar_one_or_none()
+
+
+async def _create_slave_client() -> SlaveClient:
+    """Create a SlaveClient with config from database."""
+    config = await _get_config_from_db()
+
+    if config:
+        # Use IP directly in URL if available
+        if config.genslave_ip:
+            base_url = f"http://{config.genslave_ip}:8001"
+        else:
+            base_url = config.slave_api_url
+        return SlaveClient(
+            base_url=base_url,
+            secret=config.slave_api_secret,
+        )
+    else:
+        # Fallback to settings
+        return SlaveClient(
+            base_url=settings.slave_api_url,
+            secret=settings.slave_api_secret,
+        )
+
+
+async def _get_heartbeat_interval() -> int:
+    """Get heartbeat interval from database config."""
+    config = await _get_config_from_db()
+    if config and config.heartbeat_interval_seconds:
+        return config.heartbeat_interval_seconds
+    return settings.heartbeat_interval_seconds
+
+
 @dataclass
 class HeartbeatResult:
     """Result of a heartbeat attempt."""
@@ -63,7 +104,7 @@ class HeartbeatService:
         self._running = False
         self._task: Optional[asyncio.Task] = None
         self._sequence = 0
-        self._client = SlaveClient()
+        self._client: Optional[SlaveClient] = None
 
     async def start(self) -> None:
         """Start the heartbeat loop."""
@@ -90,13 +131,14 @@ class HeartbeatService:
                 pass
             self._task = None
 
-        await self._client.close()
         logger.info("Heartbeat service stopped")
 
     async def _heartbeat_loop(self) -> None:
         """Main heartbeat loop."""
         while self._running:
             try:
+                # Get current interval from database (allows dynamic updates)
+                self.interval = await _get_heartbeat_interval()
                 await self._send_heartbeat()
             except Exception as e:
                 logger.error(f"Error in heartbeat loop: {e}")
@@ -109,17 +151,24 @@ class HeartbeatService:
         self._sequence += 1
         timestamp = int(time.time())
 
+        # Create fresh client with current database config
+        client = await _create_slave_client()
+
         # Get current master state to send
         generator_status = await self.state_machine.get_generator_status()
         is_armed = await self.state_machine.is_armed()
 
-        # Send heartbeat with armed state
-        response = await self._client.heartbeat(
+        # Send heartbeat with armed state and interval
+        response = await client.heartbeat(
             timestamp=timestamp,
             generator_running=generator_status.running,
             armed=is_armed,
+            heartbeat_interval=self.interval,
             command="none",  # Commands are sent separately, not via heartbeat
         )
+
+        # Close the client after use
+        await client.close()
 
         # Build result
         result = HeartbeatResult(
@@ -150,15 +199,24 @@ class HeartbeatService:
         """Send a single test heartbeat (doesn't affect sequence)."""
         timestamp = int(time.time())
 
+        # Create fresh client with current database config
+        client = await _create_slave_client()
+
+        # Get current interval from database
+        interval = await _get_heartbeat_interval()
+
         generator_status = await self.state_machine.get_generator_status()
         is_armed = await self.state_machine.is_armed()
 
-        response = await self._client.heartbeat(
+        response = await client.heartbeat(
             timestamp=timestamp,
             generator_running=generator_status.running,
             armed=is_armed,
+            heartbeat_interval=interval,
             command="none",
         )
+
+        await client.close()
 
         return HeartbeatResult(
             success=response.success,
