@@ -80,7 +80,7 @@ async function handleLogin() {
             'text-primary'
           ]"
         >
-          n8n Management
+          GenMaster
         </h1>
         <p class="text-secondary mt-2">Sign in to your account</p>
       </div>
@@ -170,7 +170,7 @@ async function handleLogin() {
 
       <!-- Footer -->
       <p class="text-center text-sm text-muted mt-6">
-        n8n Management Console v3.0
+        GenMaster v1.0.0
       </p>
     </div>
   </div>
