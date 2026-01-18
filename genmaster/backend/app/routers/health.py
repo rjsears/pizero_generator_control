@@ -121,6 +121,84 @@ async def test_slave_connection(
     }
 
 
+# =========================================================================
+# Relay Arm/Disarm Endpoints (proxied to GenSlave)
+# =========================================================================
+
+
+@router.post("/relay/arm")
+async def arm_relay(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Arm the relay on GenSlave.
+
+    Enables remote generator control via relay.
+    """
+    response = await slave_client.arm_relay()
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to arm relay on GenSlave",
+        )
+
+    return {
+        "success": True,
+        "armed": True,
+        "message": "Relay armed successfully",
+    }
+
+
+@router.post("/relay/disarm")
+async def disarm_relay(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Disarm the relay on GenSlave.
+
+    Disables remote generator control via relay.
+    """
+    response = await slave_client.disarm_relay()
+
+    if not response.success:
+        raise HTTPException(
+            status_code=502,
+            detail=response.error or "Failed to disarm relay on GenSlave",
+        )
+
+    return {
+        "success": True,
+        "armed": False,
+        "message": "Relay disarmed successfully",
+    }
+
+
+@router.get("/relay/state")
+async def get_relay_arm_state(
+    slave_client=Depends(get_slave_client),
+) -> dict[str, Any]:
+    """
+    Get current relay arm state from GenSlave.
+
+    Returns whether the relay is armed or disarmed.
+    """
+    response = await slave_client.get_relay_state()
+
+    if not response.success:
+        # Default to disarmed if we can't reach GenSlave
+        return {
+            "armed": False,
+            "error": response.error or "Failed to get relay state from GenSlave",
+        }
+
+    # The GenSlave /api/relay/state returns { "armed": bool, "relay_on": bool }
+    return {
+        "armed": response.data.get("armed", False) if response.data else False,
+        "relay_on": response.data.get("relay_on", False) if response.data else False,
+    }
+
+
 @router.post("/test/heartbeat", response_model=HeartbeatTestResponse)
 async def test_heartbeat(
     heartbeat_service=Depends(get_heartbeat_service),

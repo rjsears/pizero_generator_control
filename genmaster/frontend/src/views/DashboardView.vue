@@ -13,6 +13,75 @@
 
 <template>
   <div class="space-y-6">
+    <!-- ARM/DISARM Banner -->
+    <div
+      :class="[
+        'rounded-xl p-4 border-2 relative overflow-hidden transition-all',
+        relayArmed
+          ? 'bg-gradient-to-r from-red-500/20 to-red-500/10 border-red-500'
+          : 'bg-gradient-to-r from-gray-500/20 to-gray-500/10 border-gray-400 dark:border-gray-600'
+      ]"
+    >
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div
+            :class="[
+              'p-3 rounded-xl',
+              relayArmed ? 'bg-red-500/30' : 'bg-gray-500/30'
+            ]"
+          >
+            <ShieldExclamationIcon
+              :class="[
+                'h-8 w-8',
+                relayArmed ? 'text-red-500' : 'text-gray-500'
+              ]"
+            />
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-primary">
+              Generator Relay:
+              <span :class="relayArmed ? 'text-red-500' : 'text-gray-500'">
+                {{ relayArmed ? 'ARMED' : 'DISARMED' }}
+              </span>
+            </h2>
+            <p class="text-sm text-secondary">
+              {{ relayArmed ? 'Generator can be started via relay control' : 'Relay is disabled - generator cannot be started remotely' }}
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <button
+            @click="toggleRelayArm"
+            :disabled="armingRelay"
+            :class="[
+              'relative inline-flex h-8 w-16 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
+              relayArmed
+                ? 'bg-red-500 focus:ring-red-500'
+                : 'bg-gray-400 focus:ring-gray-500',
+              armingRelay ? 'opacity-50 cursor-not-allowed' : ''
+            ]"
+          >
+            <span
+              :class="[
+                'inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform',
+                relayArmed ? 'translate-x-9' : 'translate-x-1'
+              ]"
+            />
+          </button>
+          <span
+            :class="[
+              'px-3 py-1 rounded-full text-sm font-bold',
+              relayArmed
+                ? 'bg-red-500 text-white'
+                : 'bg-gray-400 text-white'
+            ]"
+          >
+            {{ relayArmed ? 'ARMED' : 'SAFE' }}
+          </span>
+        </div>
+      </div>
+    </div>
+
     <!-- Header -->
     <div>
       <h1 class="text-2xl font-bold text-primary">System Overview</h1>
@@ -291,7 +360,9 @@ import {
   CircleStackIcon,
   ServerIcon,
   SignalIcon,
+  ShieldExclamationIcon,
 } from '@heroicons/vue/24/outline'
+import { genslaveApi } from '@/services/api'
 
 const router = useRouter()
 const generatorStore = useGeneratorStore()
@@ -302,6 +373,39 @@ const loading = ref(true)
 const metricsAvailable = ref(false)
 let refreshInterval = null
 
+// Relay arm/disarm state
+const relayArmed = ref(false)
+const armingRelay = ref(false)
+
+// Toggle relay arm/disarm
+async function toggleRelayArm() {
+  armingRelay.value = true
+  try {
+    if (relayArmed.value) {
+      await genslaveApi.disarm()
+      relayArmed.value = false
+    } else {
+      await genslaveApi.arm()
+      relayArmed.value = true
+    }
+  } catch (err) {
+    console.error('Failed to toggle relay arm state:', err)
+  } finally {
+    armingRelay.value = false
+  }
+}
+
+// Fetch relay state
+async function fetchRelayState() {
+  try {
+    const response = await genslaveApi.getRelayState()
+    relayArmed.value = response.data?.armed || false
+  } catch (err) {
+    // Default to disarmed if we can't reach GenSlave
+    relayArmed.value = false
+  }
+}
+
 // Fetch data on mount and set up polling
 onMounted(async () => {
   try {
@@ -310,6 +414,7 @@ onMounted(async () => {
       systemStore.fetchSlaveHealth(),
       systemStore.fetchVictronStatus(),
       metricsStore.fetchDashboardMetrics(),
+      fetchRelayState(),
     ])
     metricsAvailable.value = true
   } catch (err) {

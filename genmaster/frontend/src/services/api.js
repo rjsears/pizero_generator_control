@@ -122,11 +122,15 @@ export const generatorApi = {
 
 // GenMaster-specific: GenSlave API
 export const genslaveApi = {
-  getStatus: () => api.get('/genslave/status'),
+  getStatus: () => api.get('/health/slave'),
   getSlaves: () => api.get('/genslave/list'),
   getSlave: (id) => api.get(`/genslave/${id}`),
   sync: (id) => api.post(`/genslave/${id}/sync`),
   restart: (id) => api.post(`/genslave/${id}/restart`),
+  // Relay arm/disarm control (proxied through GenMaster to GenSlave)
+  arm: () => api.post('/health/relay/arm'),
+  disarm: () => api.post('/health/relay/disarm'),
+  getRelayState: () => api.get('/health/relay/state'),
 }
 
 // GenMaster-specific: Schedule API
