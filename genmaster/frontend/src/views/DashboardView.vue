@@ -13,94 +13,96 @@
 
 <template>
   <div class="space-y-6">
-    <!-- ARM/DISARM Banner -->
-    <div
-      :class="[
-        'rounded-xl p-4 border-2 relative overflow-hidden transition-all',
-        relayArmed
-          ? 'bg-gradient-to-r from-red-500/20 to-red-500/10 border-red-500'
-          : 'bg-gradient-to-r from-gray-500/20 to-gray-500/10 border-gray-400 dark:border-gray-600'
-      ]"
-    >
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <div
+    <!-- Control Bar: GenSlave Status | Relay Armed | Emergency Stop -->
+    <div class="flex flex-wrap items-center gap-4 p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-card">
+      <!-- GenSlave Online Status -->
+      <div class="flex items-center gap-3">
+        <div
+          :class="[
+            'p-2 rounded-lg',
+            slaveOnline ? 'bg-emerald-500/20' : 'bg-red-500/20'
+          ]"
+        >
+          <ServerIcon
             :class="[
-              'p-3 rounded-xl',
-              relayArmed ? 'bg-red-500/30' : 'bg-gray-500/30'
+              'h-5 w-5',
+              slaveOnline ? 'text-emerald-500' : 'text-red-500'
             ]"
-          >
-            <ShieldExclamationIcon
-              :class="[
-                'h-8 w-8',
-                relayArmed ? 'text-red-500' : 'text-gray-500'
-              ]"
-            />
-          </div>
-          <div>
-            <h2 class="text-xl font-bold text-primary">
-              Generator Relay:
-              <span :class="relayArmed ? 'text-red-500' : 'text-gray-500'">
-                {{ relayArmed ? 'ARMED' : 'DISARMED' }}
-              </span>
-            </h2>
-            <p class="text-sm text-secondary">
-              {{ relayArmed ? 'Generator can be started via relay control' : 'Relay is disabled - generator cannot be started remotely' }}
-            </p>
-          </div>
+          />
         </div>
-        <div class="flex items-center gap-4">
-          <button
-            @click="toggleRelayArm"
-            :disabled="armingRelay"
+        <div>
+          <p class="text-xs text-secondary">GenSlave</p>
+          <p
             :class="[
-              'relative inline-flex h-8 w-16 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-              relayArmed
-                ? 'bg-red-500 focus:ring-red-500'
-                : 'bg-gray-400 focus:ring-gray-500',
-              armingRelay ? 'opacity-50 cursor-not-allowed' : ''
+              'font-bold text-sm',
+              slaveOnline ? 'text-emerald-500' : 'text-red-500'
             ]"
           >
-            <span
-              :class="[
-                'inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform',
-                relayArmed ? 'translate-x-9' : 'translate-x-1'
-              ]"
-            />
-          </button>
-          <span
-            :class="[
-              'px-3 py-1 rounded-full text-sm font-bold',
-              relayArmed
-                ? 'bg-red-500 text-white'
-                : 'bg-gray-400 text-white'
-            ]"
-          >
-            {{ relayArmed ? 'ARMED' : 'SAFE' }}
-          </span>
+            {{ slaveOnline ? 'ONLINE' : 'OFFLINE' }}
+          </p>
         </div>
       </div>
-    </div>
 
-    <!-- Emergency Stop Banner -->
-    <div class="rounded-xl p-4 border-2 bg-gradient-to-r from-red-500/10 to-orange-500/10 border-red-400">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <div class="p-3 rounded-xl bg-red-500/20">
-            <ExclamationTriangleIcon class="h-6 w-6 text-red-500" />
-          </div>
-          <div>
-            <h3 class="font-semibold text-red-800 dark:text-red-200">Emergency Stop</h3>
-            <p class="text-sm text-red-600 dark:text-red-400">
-              Immediately stop the generator
-            </p>
-          </div>
+      <div class="w-px h-10 bg-gray-300 dark:bg-gray-600" />
+
+      <!-- Relay Armed Status -->
+      <div class="flex items-center gap-3">
+        <div
+          :class="[
+            'p-2 rounded-lg',
+            relayArmed ? 'bg-red-500/20' : 'bg-gray-500/20'
+          ]"
+        >
+          <ShieldExclamationIcon
+            :class="[
+              'h-5 w-5',
+              relayArmed ? 'text-red-500' : 'text-gray-500'
+            ]"
+          />
+        </div>
+        <div>
+          <p class="text-xs text-secondary">Relay</p>
+          <p
+            :class="[
+              'font-bold text-sm',
+              relayArmed ? 'text-red-500' : 'text-gray-500'
+            ]"
+          >
+            {{ relayArmed ? 'ARMED' : 'DISARMED' }}
+          </p>
+        </div>
+        <button
+          @click="toggleRelayArm"
+          :disabled="armingRelay || !slaveOnline"
+          :class="[
+            'relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
+            relayArmed
+              ? 'bg-red-500 focus:ring-red-500'
+              : 'bg-gray-400 focus:ring-gray-500',
+            (armingRelay || !slaveOnline) ? 'opacity-50 cursor-not-allowed' : ''
+          ]"
+        >
+          <span
+            :class="[
+              'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform',
+              relayArmed ? 'translate-x-7' : 'translate-x-1'
+            ]"
+          />
+        </button>
+      </div>
+
+      <div class="w-px h-10 bg-gray-300 dark:bg-gray-600" />
+
+      <!-- Emergency Stop -->
+      <div class="flex items-center gap-3">
+        <div class="p-2 rounded-lg bg-red-500/20">
+          <ExclamationTriangleIcon class="h-5 w-5 text-red-500" />
         </div>
         <button
           @click="handleEmergencyStop"
           :disabled="!generatorStore.isRunning || emergencyStopLoading"
           :class="[
-            'px-6 py-2 rounded-lg font-bold text-white transition-all',
+            'px-4 py-1.5 rounded-lg font-bold text-sm text-white transition-all',
             generatorStore.isRunning && !emergencyStopLoading
               ? 'bg-red-500 hover:bg-red-600 shadow-lg'
               : 'bg-gray-400 cursor-not-allowed'
