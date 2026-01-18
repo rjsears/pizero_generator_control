@@ -15,9 +15,10 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import verify_api_key
 from app.config import settings
 from app.routers import relay_router, health_router, system_router
 from app.services.relay import relay_service
@@ -97,10 +98,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(health_router)
-app.include_router(relay_router)
-app.include_router(system_router)
+# Include routers with API key authentication
+# All API endpoints require X-API-Key header (if API_SECRET is configured)
+api_key_dependency = [Depends(verify_api_key)]
+app.include_router(health_router, dependencies=api_key_dependency)
+app.include_router(relay_router, dependencies=api_key_dependency)
+app.include_router(system_router, dependencies=api_key_dependency)
 
 
 @app.get("/")
