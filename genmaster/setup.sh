@@ -1746,10 +1746,12 @@ validate_genslave() {
         fi
     fi
 
-    # Test API health endpoint
+    # Test API health endpoint with API key
     print_info "Testing GenSlave API health..."
     local health_url="${GENSLAVE_API_URL}/api/health"
-    local health_response=$(curl -s --connect-timeout 10 --max-time 15 "$health_url" 2>/dev/null)
+    local health_response=$(curl -s --connect-timeout 10 --max-time 15 \
+        -H "X-API-Key: ${GENSLAVE_API_SECRET}" \
+        "$health_url" 2>/dev/null)
 
     if [ -n "$health_response" ]; then
         if echo "$health_response" | grep -qi "healthy\|ok\|status"; then
