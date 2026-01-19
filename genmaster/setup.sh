@@ -2554,6 +2554,7 @@ services:
     restart: unless-stopped
     networks:
       - genmaster-internal
+      - genmaster-external
     environment:
       - APP_ENV=${APP_ENV:-production}
       - MOCK_GPIO_MODE=${MOCK_GPIO_MODE:-false}
