@@ -2709,7 +2709,7 @@ EOF
 
     # Add Portainer if enabled
     if [ "$INSTALL_PORTAINER" = true ]; then
-        cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
+        cat >> "${SCRIPT_DIR}/docker-compose.yaml" << EOF
 
   # ===========================================================================
   # Portainer Container Management
@@ -2718,7 +2718,7 @@ EOF
     image: portainer/portainer-ce:latest
     container_name: genmaster_portainer
     restart: unless-stopped
-    command: --base-url /portainer
+    command: --base-url /portainer --csrf-origins "https://${DOMAIN}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
@@ -2842,6 +2842,10 @@ EOF
             }
             proxy_pass http://genmaster_portainer:9000/;
             proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
             proxy_set_header Connection "";
         }
 EOF
