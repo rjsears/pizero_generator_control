@@ -221,6 +221,29 @@ class NotificationService:
             notify_type=apprise.NotifyType.FAILURE,
         )
 
+    async def send_heartbeat_restored_alert(self) -> bool:
+        """Send a notification when heartbeat is restored but relay needs re-arming.
+
+        This is sent after a failsafe event when communication with GenMaster
+        is restored, but the relay is still disarmed and needs manual re-arming.
+
+        Returns:
+            True if notification was sent.
+        """
+        title = "GenSlave Communication Restored"
+        body = (
+            "Communication with GenMaster has been restored.\n\n"
+            "The relay is currently DISARMED after the failsafe event.\n\n"
+            "Please re-arm the relay from the GenMaster dashboard to "
+            "resume generator control."
+        )
+
+        return await self.send(
+            title=title,
+            body=body,
+            notify_type=apprise.NotifyType.WARNING,
+        )
+
     async def send_test(self) -> bool:
         """Send a test notification.
 

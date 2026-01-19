@@ -761,58 +761,32 @@ configure_tailscale() {
 configure_environment() {
     print_section "Environment Configuration"
 
-    print_step "1" "Configuring GenMaster host entry..."
+    print_step "1" "Configuring GenMaster connection..."
     echo ""
-    echo -e "  ${GRAY}Adding a hosts entry ensures reliable hostname resolution.${NC}"
+    echo -e "  ${GRAY}Enter the IP address of your GenMaster server.${NC}"
+    echo -e "  ${GRAY}This can be a local IP (e.g., 192.168.1.50) or Tailscale IP.${NC}"
     echo ""
 
-    local genmaster_hostname=""
     local genmaster_ip=""
 
-    echo -ne "  ${WHITE}GenMaster hostname (e.g., genmaster)${NC}: "
-    read genmaster_hostname
-    genmaster_hostname="${genmaster_hostname:-genmaster}"
-
-    echo -ne "  ${WHITE}GenMaster IP address (e.g., 192.168.1.50 or Tailscale IP)${NC}: "
+    echo -ne "  ${WHITE}GenMaster IP address${NC}: "
     read genmaster_ip
 
-    if [ -n "$genmaster_ip" ] && [ -n "$genmaster_hostname" ]; then
-        # Check if entry already exists
-        if grep -q "^[^#]*[[:space:]]${genmaster_hostname}$\|^[^#]*[[:space:]]${genmaster_hostname}[[:space:]]" /etc/hosts 2>/dev/null; then
-            print_warning "Host entry for '${genmaster_hostname}' already exists in /etc/hosts"
-            if confirm "Update the existing entry?" "y"; then
-                # Remove old entry and add new one
-                sed -i "/[[:space:]]${genmaster_hostname}$/d; /[[:space:]]${genmaster_hostname}[[:space:]]/d" /etc/hosts
-                echo "${genmaster_ip}    ${genmaster_hostname}" >> /etc/hosts
-                print_success "Updated /etc/hosts: ${genmaster_ip} -> ${genmaster_hostname}"
-            fi
-        else
-            echo "${genmaster_ip}    ${genmaster_hostname}" >> /etc/hosts
-            print_success "Added to /etc/hosts: ${genmaster_ip} -> ${genmaster_hostname}"
-        fi
-
-        # Set default URL based on hostname
-        MASTER_API_URL="http://${genmaster_hostname}:8000"
-        print_info "Default GenMaster URL set to: ${MASTER_API_URL}"
+    if [ -n "$genmaster_ip" ]; then
+        MASTER_API_URL="http://${genmaster_ip}:8000"
+        print_success "GenMaster API URL set to: ${MASTER_API_URL}"
     else
-        print_warning "Skipping /etc/hosts entry (hostname or IP not provided)"
+        print_warning "No IP provided - you'll need to set MASTER_API_URL in .env manually"
+        MASTER_API_URL=""
     fi
 
     echo ""
-    print_step "2" "Gathering GenMaster connection details..."
+    print_step "2" "Confirm GenMaster API URL..."
 
-    if [ "$ENABLE_TAILSCALE" = true ]; then
-        if [ -n "$MASTER_API_URL" ]; then
-            prompt_input "GenMaster API URL (Tailscale hostname)" "$MASTER_API_URL" MASTER_API_URL
-        else
-            prompt_input "GenMaster API URL (Tailscale hostname)" "http://genmaster:8000" MASTER_API_URL
-        fi
+    if [ -n "$MASTER_API_URL" ]; then
+        prompt_input "GenMaster API URL" "$MASTER_API_URL" MASTER_API_URL
     else
-        if [ -n "$MASTER_API_URL" ]; then
-            prompt_input "GenMaster API URL" "$MASTER_API_URL" MASTER_API_URL
-        else
-            prompt_input "GenMaster API URL" "" MASTER_API_URL
-        fi
+        prompt_input "GenMaster API URL" "http://192.168.1.50:8000" MASTER_API_URL
     fi
 
     print_step "3" "Configuring API secret..."
