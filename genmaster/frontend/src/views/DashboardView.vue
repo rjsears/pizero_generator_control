@@ -13,105 +13,121 @@
 
 <template>
   <div class="space-y-6">
-    <!-- Control Bar: GenSlave Status | Relay Armed | Emergency Stop -->
-    <div class="flex flex-wrap items-center gap-4 p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-card">
+    <!-- Control Row: GenSlave Status | Relay Armed | Emergency Stop -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <!-- GenSlave Online Status -->
-      <div class="flex items-center gap-3">
-        <div
-          :class="[
-            'p-2 rounded-lg',
-            slaveOnline ? 'bg-emerald-500/20' : 'bg-red-500/20'
-          ]"
-        >
-          <ServerIcon
-            :class="[
-              'h-5 w-5',
-              slaveOnline ? 'text-emerald-500' : 'text-red-500'
-            ]"
-          />
+      <Card :padding="false">
+        <div class="p-4">
+          <div class="flex items-center gap-3">
+            <div
+              :class="[
+                'p-2 rounded-lg',
+                slaveOnline ? 'bg-emerald-100 dark:bg-emerald-500/20' : 'bg-red-100 dark:bg-red-500/20'
+              ]"
+            >
+              <ServerIcon
+                :class="[
+                  'h-5 w-5',
+                  slaveOnline ? 'text-emerald-500' : 'text-red-500'
+                ]"
+              />
+            </div>
+            <div>
+              <p class="text-sm text-secondary">GenSlave</p>
+              <p
+                :class="[
+                  'text-xl font-bold',
+                  slaveOnline ? 'text-emerald-500' : 'text-red-500'
+                ]"
+              >
+                {{ slaveOnline ? 'Online' : 'Offline' }}
+              </p>
+            </div>
+          </div>
         </div>
-        <div>
-          <p class="text-xs text-secondary">GenSlave</p>
-          <p
-            :class="[
-              'font-bold text-sm',
-              slaveOnline ? 'text-emerald-500' : 'text-red-500'
-            ]"
-          >
-            {{ slaveOnline ? 'ONLINE' : 'OFFLINE' }}
-          </p>
-        </div>
-      </div>
-
-      <div class="w-px h-10 bg-gray-300 dark:bg-gray-600" />
+      </Card>
 
       <!-- Relay Armed Status -->
-      <div class="flex items-center gap-3">
-        <div
-          :class="[
-            'p-2 rounded-lg',
-            relayArmed ? 'bg-red-500/20' : 'bg-gray-500/20'
-          ]"
-        >
-          <ShieldExclamationIcon
-            :class="[
-              'h-5 w-5',
-              relayArmed ? 'text-red-500' : 'text-gray-500'
-            ]"
-          />
+      <Card :padding="false">
+        <div class="p-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div
+                :class="[
+                  'p-2 rounded-lg',
+                  relayArmed ? 'bg-red-100 dark:bg-red-500/20' : 'bg-gray-100 dark:bg-gray-500/20'
+                ]"
+              >
+                <ShieldExclamationIcon
+                  :class="[
+                    'h-5 w-5',
+                    relayArmed ? 'text-red-500' : 'text-gray-500'
+                  ]"
+                />
+              </div>
+              <div>
+                <p class="text-sm text-secondary">Relay</p>
+                <p
+                  :class="[
+                    'text-xl font-bold',
+                    relayArmed ? 'text-red-500' : 'text-gray-500'
+                  ]"
+                >
+                  {{ relayArmed ? 'Armed' : 'Disarmed' }}
+                </p>
+              </div>
+            </div>
+            <button
+              @click="toggleRelayArm"
+              :disabled="armingRelay || !slaveOnline"
+              :class="[
+                'relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
+                relayArmed
+                  ? 'bg-red-500 focus:ring-red-500'
+                  : 'bg-gray-400 focus:ring-gray-500',
+                (armingRelay || !slaveOnline) ? 'opacity-50 cursor-not-allowed' : ''
+              ]"
+            >
+              <span
+                :class="[
+                  'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform',
+                  relayArmed ? 'translate-x-7' : 'translate-x-1'
+                ]"
+              />
+            </button>
+          </div>
         </div>
-        <div>
-          <p class="text-xs text-secondary">Relay</p>
-          <p
-            :class="[
-              'font-bold text-sm',
-              relayArmed ? 'text-red-500' : 'text-gray-500'
-            ]"
-          >
-            {{ relayArmed ? 'ARMED' : 'DISARMED' }}
-          </p>
-        </div>
-        <button
-          @click="toggleRelayArm"
-          :disabled="armingRelay || !slaveOnline"
-          :class="[
-            'relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-            relayArmed
-              ? 'bg-red-500 focus:ring-red-500'
-              : 'bg-gray-400 focus:ring-gray-500',
-            (armingRelay || !slaveOnline) ? 'opacity-50 cursor-not-allowed' : ''
-          ]"
-        >
-          <span
-            :class="[
-              'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform',
-              relayArmed ? 'translate-x-7' : 'translate-x-1'
-            ]"
-          />
-        </button>
-      </div>
-
-      <div class="w-px h-10 bg-gray-300 dark:bg-gray-600" />
+      </Card>
 
       <!-- Emergency Stop -->
-      <div class="flex items-center gap-3">
-        <div class="p-2 rounded-lg bg-red-500/20">
-          <ExclamationTriangleIcon class="h-5 w-5 text-red-500" />
+      <Card :padding="false">
+        <div class="p-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-lg bg-red-100 dark:bg-red-500/20">
+                <ExclamationTriangleIcon class="h-5 w-5 text-red-500" />
+              </div>
+              <div>
+                <p class="text-sm text-secondary">Emergency</p>
+                <p class="text-xl font-bold text-red-500">Stop</p>
+              </div>
+            </div>
+            <button
+              @click="handleEmergencyStop"
+              :disabled="!generatorStore.isRunning || emergencyStopLoading"
+              :class="[
+                'px-4 py-2 rounded-lg font-bold text-sm text-white transition-all',
+                generatorStore.isRunning && !emergencyStopLoading
+                  ? 'bg-red-500 hover:bg-red-600 shadow-lg'
+                  : 'bg-gray-400 cursor-not-allowed'
+              ]"
+            >
+              <span v-if="emergencyStopLoading">Stopping...</span>
+              <span v-else>STOP</span>
+            </button>
+          </div>
         </div>
-        <button
-          @click="handleEmergencyStop"
-          :disabled="!generatorStore.isRunning || emergencyStopLoading"
-          :class="[
-            'px-4 py-1.5 rounded-lg font-bold text-sm text-white transition-all',
-            generatorStore.isRunning && !emergencyStopLoading
-              ? 'bg-red-500 hover:bg-red-600 shadow-lg'
-              : 'bg-gray-400 cursor-not-allowed'
-          ]"
-        >
-          <span v-if="emergencyStopLoading">Stopping...</span>
-          <span v-else>EMERGENCY STOP</span>
-        </button>
-      </div>
+      </Card>
     </div>
 
     <!-- Header -->
