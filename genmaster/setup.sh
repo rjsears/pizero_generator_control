@@ -2547,24 +2547,25 @@ services:
   # ===========================================================================
   # GenMaster Application
   # ===========================================================================
-  # Uses host networking to allow direct communication with GenSlave on the LAN.
-  # Database and Redis are accessed via localhost (ports exposed above).
+  # Uses Docker bridge networking for container-to-container communication.
+  # Connects to database and Redis via service names (db, redis).
   genmaster:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: ${GENMASTER_CONTAINER:-genmaster}
     restart: unless-stopped
-    network_mode: host
+    networks:
+      - genmaster-internal
     environment:
       - APP_ENV=${APP_ENV:-production}
       - MOCK_GPIO_MODE=${MOCK_GPIO_MODE:-false}
-      - DATABASE_HOST=127.0.0.1
+      - DATABASE_HOST=db
       - DATABASE_PORT=5432
       - DATABASE_NAME=${DATABASE_NAME:-genmaster}
       - DATABASE_USER=${DATABASE_USER:-genmaster}
       - DATABASE_PASSWORD=${DATABASE_PASSWORD}
-      - REDIS_URL=redis://127.0.0.1:6379/0
+      - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
       - GENSLAVE_ENABLED=${GENSLAVE_ENABLED:-true}
       - SLAVE_API_URL=${SLAVE_API_URL}
@@ -2597,7 +2598,7 @@ services:
   # ===========================================================================
   # Nginx Reverse Proxy
   # ===========================================================================
-  # Uses host.docker.internal to reach GenMaster on host network
+  # Reverse proxy for GenMaster application with SSL termination.
   nginx:
     image: nginx:alpine
     container_name: ${NGINX_CONTAINER:-genmaster_nginx}
@@ -2605,8 +2606,6 @@ services:
     ports:
       - "443:443"
       - "80:80"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - letsencrypt:/etc/letsencrypt:ro
@@ -2783,7 +2782,7 @@ $(echo -e "$internal_ips")
     }
 
     upstream genmaster {
-        server host.docker.internal:8000;
+        server genmaster:8000;
         keepalive 32;
     }
 
