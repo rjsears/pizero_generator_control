@@ -216,55 +216,96 @@
         </Card>
       </div>
 
-      <!-- Generator Status Row: Generator, GenSlave, Victron -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <!-- Generator Status -->
-        <Card>
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-secondary">Generator</p>
-              <p class="text-2xl font-bold mt-1" :class="generatorStateClass">
-                {{ generatorStateText }}
+      <!-- Generator Status Row: Generator and Victron -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Generator Status - Enhanced with animated icon -->
+        <Card :padding="false">
+          <div class="p-6">
+            <div class="flex items-start gap-6">
+              <!-- Animated Generator Icon -->
+              <div
+                :class="[
+                  'relative w-20 h-20 rounded-2xl flex items-center justify-center transition-all duration-500',
+                  generatorStore.isRunning ? 'bg-gradient-to-br from-green-400 to-green-600 shadow-lg shadow-green-500/30' : 'bg-gradient-to-br from-gray-400 to-gray-600'
+                ]"
+              >
+                <!-- Pulsing ring when running -->
+                <div
+                  v-if="generatorStore.isRunning"
+                  class="absolute inset-0 rounded-2xl bg-green-400 animate-ping opacity-20"
+                />
+                <!-- Spinning cog when running -->
+                <CogIcon
+                  :class="[
+                    'w-10 h-10 text-white relative z-10',
+                    generatorStore.isRunning ? 'animate-spin-slow' : ''
+                  ]"
+                />
+              </div>
+
+              <!-- Status Info -->
+              <div class="flex-1">
+                <p class="text-sm font-medium text-secondary uppercase tracking-wider">Generator Status</p>
+                <p class="text-3xl font-black mt-1" :class="generatorStateClass">
+                  {{ generatorStateText }}
+                </p>
+
+                <!-- Trigger reason and runtime -->
+                <div class="mt-3 flex flex-wrap gap-3">
+                  <!-- Trigger Badge -->
+                  <div
+                    v-if="generatorTrigger && generatorStore.isRunning"
+                    :class="[
+                      'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold',
+                      triggerBadgeClass
+                    ]"
+                  >
+                    <component :is="triggerIcon" class="w-3.5 h-3.5" />
+                    {{ triggerLabel }}
+                  </div>
+
+                  <!-- Runtime Badge -->
+                  <div
+                    v-if="generatorStore.isRunning"
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300"
+                  >
+                    <ClockIcon class="w-3.5 h-3.5" />
+                    {{ formatMinutes(generatorStore.runTimeMinutes) }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Runtime bar when running -->
+            <div v-if="generatorStore.isRunning" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div class="flex items-center justify-between text-sm mb-2">
+                <span class="text-secondary">Runtime</span>
+                <span class="font-medium text-primary">{{ formatMinutes(generatorStore.runTimeMinutes) }}</span>
+              </div>
+              <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  class="h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full transition-all animate-pulse"
+                  :style="{ width: `${Math.min((generatorStore.runTimeMinutes / 120) * 100, 100)}%` }"
+                />
+              </div>
+            </div>
+
+            <!-- Last run info when stopped -->
+            <div v-else class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <p class="text-sm text-secondary">
+                <span class="text-muted">Generator is idle</span>
               </p>
             </div>
-            <div :class="['w-12 h-12 rounded-full flex items-center justify-center', generatorIconBgClass]">
-              <BoltIcon class="w-6 h-6 text-white" />
-            </div>
-          </div>
-          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <p class="text-sm text-secondary">
-              Run time: {{ formatMinutes(generatorStore.runTimeMinutes) }}
-            </p>
           </div>
         </Card>
 
-        <!-- GenSlave Status -->
+        <!-- Victron Status - GPIO17 input from Victron Cerbo -->
         <Card>
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-secondary">GenSlave</p>
-              <p class="text-2xl font-bold mt-1" :class="slaveOnline ? 'text-green-500' : 'text-red-500'">
-                {{ slaveOnline ? 'Online' : 'Offline' }}
-              </p>
-            </div>
-            <div :class="['w-12 h-12 rounded-full flex items-center justify-center', slaveOnline ? 'bg-green-500' : 'bg-red-500']">
-              <CpuChipIcon class="w-6 h-6 text-white" />
-            </div>
-          </div>
-          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <p class="text-sm text-secondary">
-              Last seen: {{ lastSeenText }}
-            </p>
-          </div>
-        </Card>
-
-        <!-- Victron Status -->
-        <Card>
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-secondary">Victron Status</p>
+              <p class="text-sm text-secondary">Victron Command</p>
               <p class="text-2xl font-bold mt-1" :class="victronActive ? 'text-green-500' : 'text-gray-500'">
-                {{ victronActive ? 'Signal Active' : 'No Signal' }}
+                {{ victronActive ? 'Generator Run' : 'Generator Stop' }}
               </p>
             </div>
             <div :class="['w-12 h-12 rounded-full flex items-center justify-center', victronActive ? 'bg-green-500' : 'bg-gray-400']">
@@ -272,69 +313,7 @@
             </div>
           </div>
           <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <p class="text-sm text-secondary">GPIO17 input</p>
-          </div>
-        </Card>
-      </div>
-
-      <!-- System & Containers Row -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- System Uptime Card -->
-        <Card>
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-secondary">System Uptime</p>
-              <p class="text-2xl font-bold mt-1 text-blue-500">
-                {{ formattedUptime }}
-              </p>
-            </div>
-            <div class="w-12 h-12 rounded-full flex items-center justify-center bg-blue-500">
-              <ClockIcon class="w-6 h-6 text-white" />
-            </div>
-          </div>
-          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <p class="text-sm text-secondary">Since last boot</p>
-          </div>
-        </Card>
-
-        <!-- Docker Containers Card - Indigo style like n8n_nginx -->
-        <Card :padding="false">
-          <div class="p-6">
-            <div class="flex items-start justify-between mb-4">
-              <div>
-                <p class="text-sm font-medium text-secondary uppercase tracking-wider">Docker Containers</p>
-                <p class="text-4xl font-black mt-2 text-indigo-500">
-                  {{ metricsStore.containersTotal }}
-                </p>
-                <p class="text-sm text-muted mt-1">{{ metricsStore.containersRunning }} running</p>
-              </div>
-              <div class="p-3 rounded-2xl bg-indigo-100 dark:bg-indigo-500/20">
-                <ServerIcon class="h-8 w-8 text-indigo-500" />
-              </div>
-            </div>
-            <div class="grid grid-cols-4 gap-2 pt-4 border-t border-gray-400 dark:border-gray-700">
-              <button @click="navigateToContainers('running')" class="text-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                <p class="text-lg font-bold text-emerald-500">{{ metricsStore.containersRunning }}</p>
-                <p class="text-xs text-muted">Running</p>
-              </button>
-              <button @click="navigateToContainers('stopped')" class="text-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                <p class="text-lg font-bold text-slate-500">{{ metricsStore.containersStopped }}</p>
-                <p class="text-xs text-muted">Stopped</p>
-              </button>
-              <button @click="navigateToContainers('healthy')" class="text-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                <p class="text-lg font-bold text-teal-500">{{ metricsStore.containersHealthy }}</p>
-                <p class="text-xs text-muted">Healthy</p>
-              </button>
-              <button
-                @click="navigateToContainers('unhealthy')"
-                :class="['text-center p-2 rounded-lg transition-colors', metricsStore.containersUnhealthy > 0 ? 'bg-red-50 dark:bg-red-900/20 animate-pulse' : 'hover:bg-gray-100 dark:hover:bg-gray-800']"
-              >
-                <p :class="['text-lg font-bold', metricsStore.containersUnhealthy > 0 ? 'text-red-500' : 'text-gray-400']">
-                  {{ metricsStore.containersUnhealthy }}
-                </p>
-                <p class="text-xs text-muted">Unhealthy</p>
-              </button>
-            </div>
+            <p class="text-sm text-secondary">GPIO17 {{ victronActive ? 'HIGH' : 'LOW' }}</p>
           </div>
         </Card>
       </div>
@@ -361,6 +340,10 @@ import {
   SignalIcon,
   ShieldExclamationIcon,
   ExclamationTriangleIcon,
+  CogIcon,
+  CalendarIcon,
+  HandRaisedIcon,
+  BoltSlashIcon,
 } from '@heroicons/vue/24/outline'
 import { genslaveApi } from '@/services/api'
 
@@ -430,6 +413,7 @@ onMounted(async () => {
       systemStore.fetchVictronStatus(),
       metricsStore.fetchDashboardMetrics(),
       fetchRelayState(),
+      generatorStore.fetchState(),
     ])
     metricsAvailable.value = true
   } catch (err) {
@@ -507,8 +491,41 @@ const lastSeenText = computed(() => {
   return date.toLocaleTimeString()
 })
 
-// Victron status
+// Victron status - GPIO17 high means Victron is requesting generator to run
 const victronActive = computed(() => systemStore.victronInputActive)
+
+// Generator trigger info
+const generatorTrigger = computed(() => generatorStore.state?.trigger || 'idle')
+
+const triggerLabel = computed(() => {
+  const labels = {
+    victron: 'Victron Request',
+    manual: 'Manual Start',
+    scheduled: 'Scheduled Run',
+    idle: 'Idle',
+  }
+  return labels[generatorTrigger.value] || generatorTrigger.value
+})
+
+const triggerBadgeClass = computed(() => {
+  const classes = {
+    victron: 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300',
+    manual: 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300',
+    scheduled: 'bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-300',
+    idle: 'bg-gray-100 dark:bg-gray-500/20 text-gray-700 dark:text-gray-300',
+  }
+  return classes[generatorTrigger.value] || classes.idle
+})
+
+const triggerIcon = computed(() => {
+  const icons = {
+    victron: BoltIcon,
+    manual: HandRaisedIcon,
+    scheduled: CalendarIcon,
+    idle: BoltSlashIcon,
+  }
+  return icons[generatorTrigger.value] || BoltSlashIcon
+})
 
 // Uptime
 const formattedUptime = computed(() => {
@@ -559,3 +576,19 @@ async function stopGenerator() {
   await generatorStore.stop()
 }
 </script>
+
+<style scoped>
+/* Slow spin animation for generator cog when running */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+</style>
