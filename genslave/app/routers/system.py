@@ -39,6 +39,7 @@ class NetworkInfo(BaseModel):
 
     interface: str = Field(description="Interface name")
     ip_address: Optional[str] = Field(None, description="IP address")
+    netmask: Optional[str] = Field(None, description="Network mask")
     mac_address: Optional[str] = Field(None, description="MAC address")
     is_wifi: bool = Field(default=False, description="Whether this is a WiFi interface")
     wifi_ssid: Optional[str] = Field(None, description="Connected WiFi SSID")
@@ -70,6 +71,10 @@ class SystemInfo(BaseModel):
     )
     uptime_seconds: int = Field(description="System uptime in seconds")
     ip_address: Optional[str] = Field(None, description="Primary IP address")
+    default_gateway: Optional[str] = Field(None, description="Default gateway IP address")
+    dns_servers: list[str] = Field(
+        default_factory=list, description="DNS server IP addresses"
+    )
     network_interfaces: list[NetworkInfo] = Field(
         default_factory=list, description="Network interface details"
     )
@@ -170,8 +175,8 @@ async def get_system_info() -> SystemInfo:
     warnings = []
     status = "healthy"
 
-    # CPU usage
-    cpu_percent = psutil.cpu_percent(interval=0.1)
+    # CPU usage - use interval=None for cached non-blocking value
+    cpu_percent = psutil.cpu_percent(interval=None)
     if cpu_percent > 90:
         warnings.append(f"CPU usage critical: {cpu_percent}%")
         status = "critical"
@@ -387,12 +392,14 @@ def _get_network_interfaces() -> list[NetworkInfo]:
                 continue
 
             ip_address = None
+            netmask = None
             mac_address = None
 
             for addr in addrs:
                 # IPv4 address
                 if addr.family.name == "AF_INET":
                     ip_address = addr.address
+                    netmask = addr.netmask
                 # MAC address
                 elif addr.family.name == "AF_PACKET":
                     mac_address = addr.address
@@ -414,6 +421,7 @@ def _get_network_interfaces() -> list[NetworkInfo]:
                 NetworkInfo(
                     interface=iface_name,
                     ip_address=ip_address,
+                    netmask=netmask,
                     mac_address=mac_address,
                     is_wifi=is_wifi,
                     wifi_ssid=wifi_ssid,
