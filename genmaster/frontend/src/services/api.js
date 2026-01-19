@@ -93,6 +93,10 @@ export const systemApi = {
   terminalTargets: () => api.get('/system/terminal/targets'),
   externalServices: () => api.get('/system/external-services'),
   debug: () => api.get('/system/debug'),
+  // Automation arm/disarm (GenMaster state machine control)
+  getArmStatus: () => api.get('/system/arm'),
+  arm: (source = 'web') => api.post('/system/arm', { source }),
+  disarm: (source = 'web') => api.post('/system/disarm', { source }),
   // Host metrics from database cache (collected via psutil + Docker API)
   hostMetricsCached: (historyMinutes = 60) => api.get('/system/host-metrics/cached', { params: { history_minutes: historyMinutes } }),
 
