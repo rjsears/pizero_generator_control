@@ -46,10 +46,18 @@ curl -fsSL https://raw.githubusercontent.com/rjsears/pizero_generator_control/ma
 |-----------|-------------|
 | **genmaster** | FastAPI backend + Vue.js frontend |
 | **db** | PostgreSQL 16 database |
+| **redis** | Cache and session storage |
 | **nginx** | Reverse proxy with SSL termination |
 | **tailscale** | (Optional) VPN for secure connectivity |
 | **cloudflared** | (Optional) Cloudflare Tunnel for public access |
 | **portainer** | (Optional) Container management UI |
+
+### Docker Networking
+
+All services communicate via Docker bridge networking using service names:
+- GenMaster connects to PostgreSQL via `db:5432`
+- GenMaster connects to Redis via `redis:6379`
+- Nginx proxies to GenMaster via `genmaster:8000`
 
 ## Docker Socket Access
 

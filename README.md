@@ -239,11 +239,12 @@ The setup wizard will:
 4. **System checks** - Verify memory, disk, ports, network connectivity
 5. **Install Docker** if needed (with platform-specific guidance for macOS/WSL)
 6. **Domain validation** - DNS resolution, IP matching, connectivity tests
-7. **Configure GenSlave** - URL, API secret, connection validation
-8. **Configure timezone** - Default America/Phoenix with host sync option
-9. **Optional services** - Tailscale VPN, Cloudflare Tunnel, Portainer
-10. **Generate configs** - .env, docker-compose.yml, nginx.conf
-11. **Deploy stack** - Start all containers
+7. **Configure GenSlave** - IP address, API secret (prominently displayed for copying)
+8. **Connection validation** - Retries 3 times with 10-second delays if GenSlave is starting
+9. **Configure timezone** - Default America/Phoenix with host sync option
+10. **Optional services** - Tailscale VPN, Cloudflare Tunnel, Portainer
+11. **Generate configs** - .env, docker-compose.yml, nginx.conf
+12. **Deploy stack** - Start all containers
 
 ### Setup Command Line Options
 
@@ -662,6 +663,7 @@ This disables heartbeat service and suppresses slave offline warnings.
 | **Container won't start** | Run `docker compose logs <container>` for details |
 | **Database connection failed** | Check `DATABASE_PASSWORD` matches in both services |
 | **LXC Docker issues** | Ensure `lxc.apparmor.profile: unconfined` is set in Proxmox |
+| **API key mismatch** | Update GenSlave's `.env` then run `docker-compose up -d --force-recreate genslave` |
 
 ### GenSlave Connection Management
 
@@ -674,10 +676,11 @@ This disables heartbeat service and suppresses slave offline warnings.
 ```
 
 The `--genslave` option performs comprehensive validation:
-- DNS resolution of hostname
+- DNS resolution / IP address verification
 - Ping connectivity test
 - TCP port availability check
-- API health endpoint test (`/api/health`)
+- API health endpoint test with API key authentication
+- **Automatic retry**: If GenSlave doesn't respond, retries 3 times with 10-second delays (allows time for container restart)
 
 ### Useful Commands
 
