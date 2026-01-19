@@ -568,9 +568,12 @@ If you need to change the API key (e.g., security rotation):
    sudo nano /opt/genslave/.env
    # Change: GENSLAVE_API_SECRET=new-secret-here
    cd /opt/genslave
-   sudo docker-compose up -d
+   sudo docker-compose up -d --force-recreate genslave
    ```
-3. **Verify** the new key works:
+   **Note:** The `--force-recreate` flag ensures the container restarts with the new environment variable.
+
+3. **Wait 30-60 seconds** for the container to fully start
+4. **Verify** the new key works:
    ```bash
    curl -H "X-API-Key: new-secret-here" http://localhost:8001/api/health
    ```
@@ -769,6 +772,7 @@ genslave/
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0.1 | 2026-01-19 | Changed notification terminology from "Automation" to "Relay"; Added heartbeat restored notification |
 | 1.0.0 | 2026-01-18 | Initial release with API authentication, LCD display |
 
 ---
