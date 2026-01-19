@@ -73,6 +73,9 @@ GENSLAVE_HOSTNAME="genslave"
 # Mock GPIO mode (auto-detected based on hardware)
 MOCK_GPIO_MODE=false
 
+# Docker socket group ID (auto-detected for container management)
+DOCKER_GID="999"
+
 # Admin user configuration
 ADMIN_USERNAME="admin"
 ADMIN_PASSWORD=""
@@ -1087,6 +1090,15 @@ check_and_install_docker() {
     else
         DOCKER_SUDO="sudo"
         print_info "Docker commands will use sudo"
+    fi
+
+    # Detect Docker socket group ID for container access
+    if [ -S /var/run/docker.sock ]; then
+        DOCKER_GID=$(stat -c '%g' /var/run/docker.sock 2>/dev/null || stat -f '%g' /var/run/docker.sock 2>/dev/null || echo "999")
+        print_success "Docker socket group ID: $DOCKER_GID"
+    else
+        DOCKER_GID="999"
+        print_warning "Docker socket not found, using default GID 999"
     fi
 }
 
@@ -2408,6 +2420,9 @@ POSTGRES_CONTAINER=${POSTGRES_CONTAINER:-genmaster_db}
 GENMASTER_CONTAINER=${GENMASTER_CONTAINER:-genmaster}
 NGINX_CONTAINER=${NGINX_CONTAINER:-genmaster_nginx}
 REDIS_CONTAINER=${REDIS_CONTAINER:-genmaster_redis}
+
+# Docker Socket Access (for container management UI)
+DOCKER_GID=${DOCKER_GID:-999}
 EOF
 
     # Add Cloudflare Tunnel if enabled
@@ -2560,9 +2575,13 @@ services:
       - TZ=${TIMEZONE:-America/Los_Angeles}
       - GENSLAVE_IP=${GENSLAVE_IP:-}
       - GENSLAVE_HOSTNAME=${GENSLAVE_HOSTNAME:-genslave}
+      - DOCKER_GID=${DOCKER_GID:-999}
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       - genmaster_logs:/app/logs
       - genmaster_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       db:
         condition: service_healthy

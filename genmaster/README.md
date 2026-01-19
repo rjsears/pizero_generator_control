@@ -49,6 +49,27 @@ curl -fsSL https://raw.githubusercontent.com/rjsears/pizero_generator_control/ma
 | **nginx** | Reverse proxy with SSL termination |
 | **tailscale** | (Optional) VPN for secure connectivity |
 | **cloudflared** | (Optional) Cloudflare Tunnel for public access |
+| **portainer** | (Optional) Container management UI |
+
+## Docker Socket Access
+
+The Containers tab in the web UI requires access to the Docker socket. The setup script automatically:
+1. Detects the Docker socket group ID
+2. Mounts `/var/run/docker.sock` into the genmaster container
+3. Adds the container to the correct group for socket access
+
+If you're manually configuring docker-compose.yaml, add these to the genmaster service:
+
+```yaml
+genmaster:
+  ...
+  group_add:
+    - "${DOCKER_GID:-999}"  # Use your host's docker group ID
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+```
+
+Find your Docker group ID with: `stat -c '%g' /var/run/docker.sock`
 
 ## Supported Platforms
 
