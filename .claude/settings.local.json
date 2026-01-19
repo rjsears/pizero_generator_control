@@ -50,7 +50,8 @@
       "Bash(git cherry-pick:*)",
       "Bash(gh pr merge:*)",
       "Bash(docker buildx build:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(gh pr edit:*)"
     ]
   }
 }

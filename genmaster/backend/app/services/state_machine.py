@@ -57,6 +57,25 @@ class StateMachine:
         """Set the webhook service for notifications."""
         self._webhook_service = webhook_service
 
+    async def _get_slave_client(self):
+        """Get a SlaveClient instance with current config."""
+        from app.models import Config
+        from app.services.slave_client import SlaveClient
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Config).where(Config.id == 1))
+            config = result.scalar_one_or_none()
+
+        if config:
+            if config.genslave_ip:
+                base_url = f"http://{config.genslave_ip}:8001"
+            else:
+                base_url = config.slave_api_url
+            return SlaveClient(base_url=base_url, secret=config.slave_api_secret)
+        else:
+            from app.config import settings
+            return SlaveClient(base_url=settings.slave_api_url, secret=settings.slave_api_secret)
+
     async def initialize(self) -> None:
         """
         Initialize state machine from database.
@@ -273,6 +292,14 @@ class StateMachine:
                     raise ValueError("Cannot start - GenSlave is disconnected")
                 raise ValueError("Generator cannot be started in current state")
 
+            # Turn on the relay via GenSlave
+            slave_client = await self._get_slave_client()
+            relay_response = await slave_client.relay_on()
+            if not relay_response.success:
+                raise ValueError(f"Failed to turn on relay: {relay_response.error}")
+
+            logger.info("GenSlave relay turned ON")
+
             # Create run record
             start_time = int(time.time())
             run = GeneratorRun(
@@ -330,6 +357,15 @@ class StateMachine:
             if not state.generator_running:
                 logger.warning("Attempted to stop generator that isn't running")
                 return None
+
+            # Turn off the relay via GenSlave
+            slave_client = await self._get_slave_client()
+            relay_response = await slave_client.relay_off()
+            if not relay_response.success:
+                logger.error(f"Failed to turn off relay: {relay_response.error}")
+                # Continue anyway to update state - relay may already be off
+
+            logger.info("GenSlave relay turned OFF")
 
             stop_time = int(time.time())
             run_id = state.current_run_id
