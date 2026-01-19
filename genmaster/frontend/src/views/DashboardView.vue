@@ -13,105 +13,174 @@
 
 <template>
   <div class="space-y-6">
-    <!-- Control Bar: GenSlave Status | Relay Armed | Emergency Stop -->
-    <div class="flex flex-wrap items-center gap-4 p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-card">
+    <!-- Control Row: GenSlave | Automation | Generator | Emergency Stop -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
       <!-- GenSlave Online Status -->
-      <div class="flex items-center gap-3">
-        <div
-          :class="[
-            'p-2 rounded-lg',
-            slaveOnline ? 'bg-emerald-500/20' : 'bg-red-500/20'
-          ]"
-        >
-          <ServerIcon
-            :class="[
-              'h-5 w-5',
-              slaveOnline ? 'text-emerald-500' : 'text-red-500'
-            ]"
-          />
+      <Card :padding="false">
+        <div class="p-4">
+          <div class="flex items-center gap-3">
+            <div
+              :class="[
+                'p-2 rounded-lg',
+                slaveOnline ? 'bg-emerald-100 dark:bg-emerald-500/20' : 'bg-red-100 dark:bg-red-500/20'
+              ]"
+            >
+              <ServerIcon
+                :class="[
+                  'h-5 w-5',
+                  slaveOnline ? 'text-emerald-500' : 'text-red-500'
+                ]"
+              />
+            </div>
+            <div>
+              <p class="text-sm text-secondary">GenSlave</p>
+              <p
+                :class="[
+                  'text-xl font-bold',
+                  slaveOnline ? 'text-emerald-500' : 'text-red-500'
+                ]"
+              >
+                {{ slaveOnline ? 'Online' : 'Offline' }}
+              </p>
+            </div>
+          </div>
         </div>
-        <div>
-          <p class="text-xs text-secondary">GenSlave</p>
-          <p
-            :class="[
-              'font-bold text-sm',
-              slaveOnline ? 'text-emerald-500' : 'text-red-500'
-            ]"
-          >
-            {{ slaveOnline ? 'ONLINE' : 'OFFLINE' }}
-          </p>
-        </div>
-      </div>
+      </Card>
 
-      <div class="w-px h-10 bg-gray-300 dark:bg-gray-600" />
-
-      <!-- Relay Armed Status -->
-      <div class="flex items-center gap-3">
-        <div
-          :class="[
-            'p-2 rounded-lg',
-            relayArmed ? 'bg-red-500/20' : 'bg-gray-500/20'
-          ]"
-        >
-          <ShieldExclamationIcon
-            :class="[
-              'h-5 w-5',
-              relayArmed ? 'text-red-500' : 'text-gray-500'
-            ]"
-          />
+      <!-- Automation Armed Status (GenMaster) -->
+      <Card :padding="false">
+        <div class="p-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div
+                :class="[
+                  'p-2 rounded-lg',
+                  automationArmed ? 'bg-amber-100 dark:bg-amber-500/20' : 'bg-gray-100 dark:bg-gray-500/20'
+                ]"
+              >
+                <ShieldExclamationIcon
+                  :class="[
+                    'h-5 w-5',
+                    automationArmed ? 'text-amber-500' : 'text-gray-500'
+                  ]"
+                />
+              </div>
+              <div>
+                <p class="text-sm text-secondary">Automation</p>
+                <p
+                  :class="[
+                    'text-xl font-bold',
+                    automationArmed ? 'text-amber-500' : 'text-gray-500'
+                  ]"
+                >
+                  {{ automationArmed ? 'Armed' : 'Disarmed' }}
+                </p>
+              </div>
+            </div>
+            <button
+              @click="toggleAutomationArm"
+              :disabled="armingAutomation"
+              :class="[
+                'relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
+                automationArmed
+                  ? 'bg-amber-500 focus:ring-amber-500'
+                  : 'bg-gray-400 focus:ring-gray-500',
+                armingAutomation ? 'opacity-50 cursor-not-allowed' : ''
+              ]"
+            >
+              <span
+                :class="[
+                  'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform',
+                  automationArmed ? 'translate-x-7' : 'translate-x-1'
+                ]"
+              />
+            </button>
+          </div>
         </div>
-        <div>
-          <p class="text-xs text-secondary">Relay</p>
-          <p
-            :class="[
-              'font-bold text-sm',
-              relayArmed ? 'text-red-500' : 'text-gray-500'
-            ]"
-          >
-            {{ relayArmed ? 'ARMED' : 'DISARMED' }}
-          </p>
-        </div>
-        <button
-          @click="toggleRelayArm"
-          :disabled="armingRelay || !slaveOnline"
-          :class="[
-            'relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-            relayArmed
-              ? 'bg-red-500 focus:ring-red-500'
-              : 'bg-gray-400 focus:ring-gray-500',
-            (armingRelay || !slaveOnline) ? 'opacity-50 cursor-not-allowed' : ''
-          ]"
-        >
-          <span
-            :class="[
-              'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform',
-              relayArmed ? 'translate-x-7' : 'translate-x-1'
-            ]"
-          />
-        </button>
-      </div>
+      </Card>
 
-      <div class="w-px h-10 bg-gray-300 dark:bg-gray-600" />
+      <!-- Generator Start/Stop Toggle -->
+      <Card :padding="false">
+        <div class="p-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div
+                :class="[
+                  'p-2 rounded-lg',
+                  generatorStore.isRunning ? 'bg-green-100 dark:bg-green-500/20' : 'bg-gray-100 dark:bg-gray-500/20'
+                ]"
+              >
+                <BoltIcon
+                  :class="[
+                    'h-5 w-5',
+                    generatorStore.isRunning ? 'text-green-500' : 'text-gray-500'
+                  ]"
+                />
+              </div>
+              <div>
+                <p class="text-sm text-secondary">Generator</p>
+                <p
+                  :class="[
+                    'text-xl font-bold',
+                    generatorStore.isRunning ? 'text-green-500' : 'text-gray-500'
+                  ]"
+                >
+                  {{ generatorStore.isRunning ? 'Running' : 'Stopped' }}
+                </p>
+              </div>
+            </div>
+            <button
+              @click="toggleGenerator"
+              :disabled="generatorToggleLoading || !automationArmed"
+              :class="[
+                'relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
+                generatorStore.isRunning
+                  ? 'bg-green-500 focus:ring-green-500'
+                  : 'bg-gray-400 focus:ring-gray-500',
+                (generatorToggleLoading || !automationArmed) ? 'opacity-50 cursor-not-allowed' : ''
+              ]"
+              :title="!automationArmed ? 'Automation must be armed to control generator' : ''"
+            >
+              <span
+                :class="[
+                  'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform',
+                  generatorStore.isRunning ? 'translate-x-7' : 'translate-x-1'
+                ]"
+              />
+            </button>
+          </div>
+        </div>
+      </Card>
 
       <!-- Emergency Stop -->
-      <div class="flex items-center gap-3">
-        <div class="p-2 rounded-lg bg-red-500/20">
-          <ExclamationTriangleIcon class="h-5 w-5 text-red-500" />
+      <Card :padding="false">
+        <div class="p-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-lg bg-red-100 dark:bg-red-500/20">
+                <ExclamationTriangleIcon class="h-5 w-5 text-red-500" />
+              </div>
+              <div>
+                <p class="text-sm text-secondary">Emergency</p>
+                <p class="text-xl font-bold text-red-500">Stop</p>
+              </div>
+            </div>
+            <button
+              @click="handleEmergencyStop"
+              :disabled="!generatorStore.isRunning || emergencyStopLoading"
+              :class="[
+                'px-4 py-2 rounded-lg font-bold text-sm text-white transition-all',
+                generatorStore.isRunning && !emergencyStopLoading
+                  ? 'bg-red-500 hover:bg-red-600 shadow-lg'
+                  : 'bg-gray-400 cursor-not-allowed'
+              ]"
+            >
+              <span v-if="emergencyStopLoading">...</span>
+              <span v-else>STOP</span>
+            </button>
+          </div>
         </div>
-        <button
-          @click="handleEmergencyStop"
-          :disabled="!generatorStore.isRunning || emergencyStopLoading"
-          :class="[
-            'px-4 py-1.5 rounded-lg font-bold text-sm text-white transition-all',
-            generatorStore.isRunning && !emergencyStopLoading
-              ? 'bg-red-500 hover:bg-red-600 shadow-lg'
-              : 'bg-gray-400 cursor-not-allowed'
-          ]"
-        >
-          <span v-if="emergencyStopLoading">Stopping...</span>
-          <span v-else>EMERGENCY STOP</span>
-        </button>
-      </div>
+      </Card>
     </div>
 
     <!-- Header -->
@@ -345,7 +414,7 @@ import {
   HandRaisedIcon,
   BoltSlashIcon,
 } from '@heroicons/vue/24/outline'
-import { genslaveApi } from '@/services/api'
+import { genslaveApi, systemApi } from '@/services/api'
 
 const router = useRouter()
 const generatorStore = useGeneratorStore()
@@ -356,9 +425,12 @@ const loading = ref(true)
 const metricsAvailable = ref(false)
 let refreshInterval = null
 
-// Relay arm/disarm state
-const relayArmed = ref(false)
-const armingRelay = ref(false)
+// Automation arm/disarm state (GenMaster)
+const automationArmed = ref(false)
+const armingAutomation = ref(false)
+
+// Generator toggle state
+const generatorToggleLoading = ref(false)
 
 // Emergency stop state
 const emergencyStopLoading = ref(false)
@@ -375,32 +447,50 @@ async function handleEmergencyStop() {
   }
 }
 
-// Toggle relay arm/disarm
-async function toggleRelayArm() {
-  armingRelay.value = true
+// Toggle automation arm/disarm (GenMaster)
+async function toggleAutomationArm() {
+  armingAutomation.value = true
   try {
-    if (relayArmed.value) {
-      await genslaveApi.disarm()
-      relayArmed.value = false
+    if (automationArmed.value) {
+      await systemApi.disarm()
+      automationArmed.value = false
     } else {
-      await genslaveApi.arm()
-      relayArmed.value = true
+      await systemApi.arm()
+      automationArmed.value = true
     }
   } catch (err) {
-    console.error('Failed to toggle relay arm state:', err)
+    console.error('Failed to toggle automation arm state:', err)
   } finally {
-    armingRelay.value = false
+    armingAutomation.value = false
   }
 }
 
-// Fetch relay state
-async function fetchRelayState() {
+// Toggle generator start/stop
+async function toggleGenerator() {
+  generatorToggleLoading.value = true
   try {
-    const response = await genslaveApi.getRelayState()
-    relayArmed.value = response.data?.armed || false
+    if (generatorStore.isRunning) {
+      await generatorStore.stop('manual')
+    } else {
+      await generatorStore.start(null, 'manual')
+    }
+    // Refresh state after action
+    await generatorStore.fetchState()
   } catch (err) {
-    // Default to disarmed if we can't reach GenSlave
-    relayArmed.value = false
+    console.error('Failed to toggle generator:', err)
+  } finally {
+    generatorToggleLoading.value = false
+  }
+}
+
+// Fetch automation status
+async function fetchAutomationStatus() {
+  try {
+    const response = await systemApi.getArmStatus()
+    automationArmed.value = response.data?.armed || false
+  } catch (err) {
+    console.error('Failed to fetch automation status:', err)
+    automationArmed.value = false
   }
 }
 
@@ -412,7 +502,7 @@ onMounted(async () => {
       systemStore.fetchSlaveHealth(),
       systemStore.fetchVictronStatus(),
       metricsStore.fetchDashboardMetrics(),
-      fetchRelayState(),
+      fetchAutomationStatus(),
       generatorStore.fetchState(),
     ])
     metricsAvailable.value = true

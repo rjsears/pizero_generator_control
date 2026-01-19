@@ -155,11 +155,14 @@ async def receive_heartbeat(request: HeartbeatRequest) -> HeartbeatResponse:
 
     The failsafe monitor uses this to track GenMaster connectivity.
     """
-    # NOTE: We intentionally do NOT sync armed state from GenMaster heartbeat.
-    # GenSlave's relay armed state is controlled independently via /api/relay/arm
-    # and /api/relay/disarm endpoints. The heartbeat's "armed" field is informational
-    # only - it tells GenSlave what GenMaster's automation state is, but does not
-    # change GenSlave's relay armed state.
+    # Sync armed state from GenMaster if provided and mismatched
+    if request.armed is not None:
+        if request.armed and not relay_service.is_armed:
+            relay_service.arm(source="genmaster_sync")
+            logger.info("Armed via GenMaster heartbeat sync")
+        elif not request.armed and relay_service.is_armed:
+            relay_service.disarm(source="genmaster_sync")
+            logger.info("Disarmed via GenMaster heartbeat sync")
 
     # Record heartbeat and process command
     response = failsafe_monitor.record_heartbeat({
