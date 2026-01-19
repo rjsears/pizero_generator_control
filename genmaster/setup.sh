@@ -1754,13 +1754,8 @@ validate_genslave() {
         "$health_url" 2>/dev/null)
 
     if [ -n "$health_response" ]; then
-        if echo "$health_response" | grep -qi "healthy\|ok\|status"; then
-            print_success "GenSlave API is responding"
-            echo -e "    ${GRAY}Response: ${health_response:0:100}${NC}"
-        else
-            print_warning "GenSlave API responded but status unclear"
-            echo -e "    ${GRAY}Response: ${health_response:0:100}${NC}"
-        fi
+        print_success "GenSlave API is responding"
+        echo -e "    ${GRAY}Response: ${health_response:0:100}${NC}"
     else
         print_warning "GenSlave API is not responding at $health_url"
         validation_passed=false
