@@ -1,33 +1,30 @@
 <!--
--=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-/genmaster/frontend/src/views/ContainersView.vue
+  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  /genmaster/frontend/src/views/ContainersView.vue
 
-Part of the "RPi Generator Control" suite
-Version 2.0.0 - January 18th, 2026
+  Part of the "RPi Generator Control" suite
+  Version 1.0.0 - January 18th, 2026
 
-Richard J. Sears
-richardjsears@protonmail.com
-https://github.com/rjsears
--=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  Richard J. Sears
+  richardjsears@protonmail.com
+  https://github.com/rjsears
+  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { useContainerStore } from '../stores/containers'
-import { useNotificationStore } from '../stores/notifications'
-import api from '../services/api'
-import { formatBytes } from '../utils/formatters'
-import { usePoll } from '../composables/usePoll'
-import { POLLING } from '../config/constants'
-import Card from '../components/common/Card.vue'
-import StatusBadge from '../components/common/StatusBadge.vue'
-import ContainerStackLoader from '../components/common/ContainerStackLoader.vue'
-import EmptyState from '../components/common/EmptyState.vue'
-import ConfirmDialog from '../components/common/ConfirmDialog.vue'
-import LoadingSpinner from '../components/common/LoadingSpinner.vue'
-import ContainerTerminal from '../components/containers/ContainerTerminal.vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useContainersStore } from '@/stores/containers'
+import { useNotificationStore } from '@/stores/notifications'
+import { usePoll } from '@/composables/usePoll'
+import { formatBytes } from '@/utils/formatters'
+import { POLLING } from '@/config/constants'
+import Card from '@/components/common/Card.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import ContainerStackLoader from '@/components/common/ContainerStackLoader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import {
-  ServerIcon,
+  ServerStackIcon,
   PlayIcon,
   StopIcon,
   ArrowPathIcon,
@@ -40,6 +37,7 @@ import {
   ExclamationTriangleIcon,
   SignalIcon,
   ArrowDownTrayIcon,
+  ArrowUpTrayIcon,
   Square3Stack3DIcon,
   HeartIcon,
   TrashIcon,
@@ -52,8 +50,7 @@ import {
   XMarkIcon,
 } from '@heroicons/vue/24/outline'
 
-const router = useRouter()
-const containerStore = useContainerStore()
+const containersStore = useContainersStore()
 const notificationStore = useNotificationStore()
 
 const loading = ref(true)
@@ -73,81 +70,7 @@ const logsDialog = ref({
 })
 const expandedContainers = ref({})
 
-// Terminal modal
-const showTerminalModal = ref(false)
-const terminalContainer = ref(null)
-
-// Toggle container expand/collapse
-function toggleContainer(containerId) {
-  expandedContainers.value[containerId] = !expandedContainers.value[containerId]
-}
-
-// Check if container is expanded
-function isExpanded(containerId) {
-  return !!expandedContainers.value[containerId]
-}
-
-// Check if all filtered containers are expanded
-const allExpanded = computed(() => {
-  if (filteredContainers.value.length === 0) return false
-  return filteredContainers.value.every(c => expandedContainers.value[c.id])
-})
-
-// Toggle all containers expand/collapse
-function toggleAllContainers() {
-  const shouldExpand = !allExpanded.value
-  filteredContainers.value.forEach(container => {
-    expandedContainers.value[container.id] = shouldExpand
-  })
-}
-
-// Critical containers that require danger zone warning when stopping
-const criticalContainers = {
-  'genmaster': {
-    title: 'This action will cause the loss of all management!',
-    description: 'If you stop this container, you will lose access to this management interface. You can start it again from the command line by running: docker compose up -d genmaster'
-  },
-  'genmaster_nginx': {
-    title: 'This action may cause the loss of connectivity to GenMaster!',
-    description: 'If you stop this container, you may lose access to the web interface. You can start it again by running: docker compose up -d nginx'
-  },
-  'genmaster_db': {
-    title: 'This action will cause database connectivity loss!',
-    description: 'If you stop this container, GenMaster will lose database connectivity and may malfunction. You can start it again by running: docker compose up -d db'
-  },
-  'genmaster_redis': {
-    title: 'This action may cause caching issues!',
-    description: 'If you stop this container, GenMaster may experience caching issues. You can start it again by running: docker compose up -d redis'
-  },
-  'genmaster_cloudflared': {
-    title: 'This action may cause the loss of external connectivity!',
-    description: 'If you stop this container, you will lose access to GenMaster from outside your network. You can start it again by running: docker compose up -d cloudflared'
-  },
-  'genmaster_tailscale': {
-    title: 'This action may cause the loss of VPN connectivity!',
-    description: 'If you stop this container, you may lose Tailscale VPN access. You can start it again by running: docker compose up -d tailscale'
-  },
-}
-
-// Danger zone stop dialog for critical containers
-const dangerStopDialog = ref({ open: false, container: null, loading: false })
-
-function isCriticalContainer(containerName) {
-  return containerName in criticalContainers
-}
-
-function getCriticalWarning(containerName) {
-  return criticalContainers[containerName] || { title: '', description: '' }
-}
-
-// Stopped containers popup
-const stoppedContainersDialog = ref({ open: false })
-const removeConfirmDialog = ref({ open: false, container: null, loading: false })
-
-// Recreate container dialog
-const recreateDialog = ref({ open: false, container: null, loading: false })
-
-// Funny loading messages for containers
+// Funny loading messages
 const allContainerMessages = [
   'Waking up the containers...',
   'Asking Docker who\'s home...',
@@ -171,7 +94,7 @@ const allContainerMessages = [
   'Bribing containers with more memory...',
   'Checking if nginx is still angry...',
   'Verifying PostgreSQL had its morning coffee...',
-  'Making sure GenMaster is behaving...',
+  'Making sure the generator isn\'t plotting...',
   'Inspecting the container cargo...',
 ]
 const containerLoadingMessages = ref([])
@@ -183,13 +106,83 @@ function shuffleContainerMessages() {
   containerLoadingMessages.value = shuffled.slice(0, 12)
 }
 
+// Container expand/collapse
+function toggleContainer(containerId) {
+  expandedContainers.value[containerId] = !expandedContainers.value[containerId]
+}
+
+function isExpanded(containerId) {
+  return !!expandedContainers.value[containerId]
+}
+
+const allExpanded = computed(() => {
+  if (filteredContainers.value.length === 0) return false
+  return filteredContainers.value.every(c => expandedContainers.value[c.id])
+})
+
+function toggleAllContainers() {
+  const shouldExpand = !allExpanded.value
+  filteredContainers.value.forEach(container => {
+    expandedContainers.value[container.id] = shouldExpand
+  })
+}
+
+// Critical containers with danger zone warnings (GenMaster specific)
+const criticalContainers = {
+  'genmaster': {
+    title: 'This action will cause the loss of all management!',
+    description: 'If you stop this container, you will lose access to this management interface. You can start it again from the command line by running: docker compose up -d genmaster from the pizero_generator_control directory on the docker host.'
+  },
+  'genmaster_cloudflared': {
+    title: 'This action may cause the loss of connectivity to GenMaster from outside your network!',
+    description: 'If you stop this container, you will lose access to GenMaster from outside your network. It will still be accessible from within your network at its local IP address. You can start it again by running: docker compose up -d genmaster_cloudflared from the pizero_generator_control directory on the docker host.'
+  },
+  'genmaster_nginx': {
+    title: 'This action may cause the loss of connectivity to GenMaster!',
+    description: 'If you stop this container, you may lose access to your GenMaster instance. You can start it again by running: docker compose up -d genmaster_nginx from the pizero_generator_control directory on the docker host.'
+  },
+  'genmaster_db': {
+    title: 'This action may cause features that require database access to fail!',
+    description: 'If you stop this container, scheduled runs and history features will fail. You can start it again by running: docker compose up -d genmaster_db from the pizero_generator_control directory on the docker host.'
+  },
+  'genmaster_redis': {
+    title: 'This action may cause caching and session features to fail!',
+    description: 'If you stop this container, caching and real-time updates may stop working. You can start it again by running: docker compose up -d genmaster_redis from the pizero_generator_control directory on the docker host.'
+  },
+  'genmaster_tailscale': {
+    title: 'This action may cause the loss of connectivity to GenMaster host server!',
+    description: 'If you stop this container, you may lose access to your GenMaster docker host if you are using Tailscale exclusively for connectivity. GenMaster will still be accessible via CloudFlare or from within your network. You can start it again by running: docker compose up -d genmaster_tailscale from the pizero_generator_control directory on the docker host.'
+  },
+}
+
+const dangerStopDialog = ref({ open: false, container: null, loading: false })
+
+function isCriticalContainer(containerName) {
+  return containerName in criticalContainers
+}
+
+function getCriticalWarning(containerName) {
+  return criticalContainers[containerName] || { title: '', description: '' }
+}
+
+// Stopped containers and removal dialogs
+const stoppedContainersDialog = ref({ open: false })
+const removeConfirmDialog = ref({ open: false, container: null, loading: false })
+const recreateDialog = ref({ open: false, container: null, loading: false })
+
 // Filters
 const filterStatus = ref('all')
-const containerTypeFilter = ref('all')  // 'all', 'genmaster', 'external'
+const containerTypeFilter = ref('all')
 
-// Merge containers with their stats
+// Check if container is a GenMaster project container
+function isProjectContainer(container) {
+  const projectPrefixes = ['genmaster', 'portainer']
+  return projectPrefixes.some(prefix => container.name.toLowerCase().startsWith(prefix))
+}
+
+// Merge containers with stats
 const containersWithStats = computed(() => {
-  return containerStore.containers.map(container => {
+  return containersStore.containers.map(container => {
     const stats = containerStats.value[container.name] || {}
     return {
       ...container,
@@ -200,28 +193,24 @@ const containersWithStats = computed(() => {
       memory_mb: stats.memory_usage ? Math.round(stats.memory_usage / (1024 * 1024)) : 0,
       network_rx: stats.network_rx || 0,
       network_tx: stats.network_tx || 0,
-      is_project: container.name?.startsWith('genmaster') || false,
+      is_project: isProjectContainer(container),
     }
   })
 })
 
-// Check if there are any non-project containers
 const hasNonProjectContainers = computed(() => {
   return containersWithStats.value.some(c => !c.is_project)
 })
 
-// Filter containers by type first, then by status
 const filteredContainers = computed(() => {
   let filtered = containersWithStats.value
 
-  // Filter by container type
   if (containerTypeFilter.value === 'genmaster') {
     filtered = filtered.filter(c => c.is_project)
   } else if (containerTypeFilter.value === 'external') {
     filtered = filtered.filter(c => !c.is_project)
   }
 
-  // Then filter by status
   if (filterStatus.value === 'running') {
     filtered = filtered.filter(c => c.status === 'running')
   } else if (filterStatus.value === 'stopped') {
@@ -231,7 +220,6 @@ const filteredContainers = computed(() => {
   return filtered
 })
 
-// Stats - always show ALL containers (no filtering)
 const stats = computed(() => {
   const all = containersWithStats.value
   return {
@@ -242,38 +230,34 @@ const stats = computed(() => {
   }
 })
 
-// Get list of stopped containers
 const stoppedContainers = computed(() => {
   return containersWithStats.value.filter(c => c.status !== 'running')
 })
 
-// Open stopped containers popup
 function openStoppedContainersDialog() {
   if (stats.value.stopped > 0) {
     stoppedContainersDialog.value.open = true
   }
 }
 
-// Prompt to remove a container
 function promptRemoveContainer(container) {
   removeConfirmDialog.value = { open: true, container, loading: false }
 }
 
-// Prompt to recreate a container
 function promptRecreateContainer(container) {
   recreateDialog.value = { open: true, container, loading: false }
 }
 
-// Confirm recreate (without pull)
 async function confirmRecreate() {
   const container = recreateDialog.value.container
   if (!container) return
 
   recreateDialog.value.loading = true
   try {
-    await containerStore.recreateContainer(container.name, false)
+    await containersStore.recreateContainer(container.name, false)
     notificationStore.success(`Container ${container.name} recreated successfully`)
     recreateDialog.value.open = false
+    await loadData()
   } catch (error) {
     notificationStore.error(error.response?.data?.detail || `Failed to recreate ${container.name}`)
   } finally {
@@ -281,16 +265,16 @@ async function confirmRecreate() {
   }
 }
 
-// Confirm recreate with pull
 async function confirmRecreateWithPull() {
   const container = recreateDialog.value.container
   if (!container) return
 
   recreateDialog.value.loading = true
   try {
-    await containerStore.recreateContainer(container.name, true)
+    await containersStore.recreateContainer(container.name, true)
     notificationStore.success(`Container ${container.name} pulled and recreated successfully`)
     recreateDialog.value.open = false
+    await loadData()
   } catch (error) {
     notificationStore.error(error.response?.data?.detail || `Failed to recreate ${container.name}`)
   } finally {
@@ -298,20 +282,19 @@ async function confirmRecreateWithPull() {
   }
 }
 
-// Confirm and remove container
 async function confirmRemoveContainer() {
   const container = removeConfirmDialog.value.container
   if (!container) return
 
   removeConfirmDialog.value.loading = true
   try {
-    await containerStore.removeContainer(container.name)
+    await containersStore.removeContainer(container.name)
     notificationStore.success(`Container ${container.name} removed successfully`)
     removeConfirmDialog.value.open = false
-    // If no more stopped containers, close the stopped dialog too
     if (stoppedContainers.value.length <= 1) {
       stoppedContainersDialog.value.open = false
     }
+    await loadData()
   } catch (error) {
     notificationStore.error(error.response?.data?.detail || `Failed to remove ${container.name}`)
   } finally {
@@ -323,7 +306,7 @@ function getStatusIcon(container) {
   if (container.health === 'unhealthy') return ExclamationTriangleIcon
   if (container.status === 'running') return CheckCircleIcon
   if (container.status === 'exited' || container.status === 'stopped') return XCircleIcon
-  return ServerIcon
+  return ServerStackIcon
 }
 
 function getStatusColor(container) {
@@ -359,7 +342,6 @@ function getHealthBadgeClass(health) {
 }
 
 async function performAction(container, action) {
-  // For critical containers being stopped, show danger zone dialog
   if (action === 'stop' && isCriticalContainer(container.name)) {
     dangerStopDialog.value = { open: true, container, loading: false }
     return
@@ -373,10 +355,9 @@ async function confirmDangerStop() {
 
   dangerStopDialog.value.loading = true
   try {
-    await containerStore.stopContainer(container.name)
+    await containersStore.stopContainer(container.name)
     notificationStore.success(`Container ${container.name} stopped`)
     dangerStopDialog.value.open = false
-    // Refresh data
     await loadData()
   } catch (error) {
     notificationStore.error(`Failed to stop container: ${error.response?.data?.detail || error.message}`)
@@ -393,20 +374,19 @@ async function confirmAction() {
   try {
     switch (action) {
       case 'start':
-        await containerStore.startContainer(container.name)
+        await containersStore.startContainer(container.name)
         notificationStore.success(`Container ${container.name} started`)
         break
       case 'stop':
-        await containerStore.stopContainer(container.name)
+        await containersStore.stopContainer(container.name)
         notificationStore.success(`Container ${container.name} stopped`)
         break
       case 'restart':
-        await containerStore.restartContainer(container.name)
+        await containersStore.restartContainer(container.name)
         notificationStore.success(`Container ${container.name} restarted`)
         break
     }
     actionDialog.value.open = false
-    // Refresh data
     await loadData()
   } catch (error) {
     notificationStore.error(`Failed to ${action} container`)
@@ -416,7 +396,6 @@ async function confirmAction() {
 }
 
 async function viewLogs(container) {
-  // Stop any existing follow interval
   if (logsDialog.value.followInterval) {
     clearInterval(logsDialog.value.followInterval)
     logsDialog.value.followInterval = null
@@ -440,19 +419,15 @@ async function viewLogs(container) {
 async function fetchLogs() {
   logsDialog.value.loading = true
   try {
-    const params = {
-      lines: logsDialog.value.lines,
-    }
-    if (logsDialog.value.since) {
-      params.since = logsDialog.value.since
-    }
-    const logs = await containerStore.getContainerLogs(
+    const logs = await containersStore.getContainerLogs(
       logsDialog.value.container.name,
-      params
+      logsDialog.value.lines,
+      logsDialog.value.since || undefined
     )
-    logsDialog.value.logs = logs
+    logsDialog.value.logs = logs || 'No logs available'
     applyLogFilter()
   } catch (error) {
+    logsDialog.value.logs = 'Failed to fetch logs'
     notificationStore.error('Failed to fetch logs')
   } finally {
     logsDialog.value.loading = false
@@ -474,15 +449,15 @@ function toggleLogFollow() {
   logsDialog.value.follow = !logsDialog.value.follow
 
   if (logsDialog.value.follow) {
-    // Start following - fetch logs every 2 seconds
     logsDialog.value.followInterval = setInterval(async () => {
       if (logsDialog.value.open && logsDialog.value.container) {
         try {
-          const logs = await containerStore.getContainerLogs(
+          const logs = await containersStore.getContainerLogs(
             logsDialog.value.container.name,
-            { lines: logsDialog.value.lines, since: logsDialog.value.since }
+            logsDialog.value.lines,
+            logsDialog.value.since || undefined
           )
-          logsDialog.value.logs = logs
+          logsDialog.value.logs = logs || 'No logs available'
           applyLogFilter()
         } catch (error) {
           console.error('Failed to refresh logs:', error)
@@ -490,7 +465,6 @@ function toggleLogFollow() {
       }
     }, 2000)
   } else {
-    // Stop following
     if (logsDialog.value.followInterval) {
       clearInterval(logsDialog.value.followInterval)
       logsDialog.value.followInterval = null
@@ -499,7 +473,6 @@ function toggleLogFollow() {
 }
 
 function closeLogs() {
-  // Clean up follow interval
   if (logsDialog.value.followInterval) {
     clearInterval(logsDialog.value.followInterval)
     logsDialog.value.followInterval = null
@@ -508,16 +481,11 @@ function closeLogs() {
   logsDialog.value.follow = false
 }
 
-function openTerminal(container) {
-  terminalContainer.value = container
-  showTerminalModal.value = true
-}
-
 async function fetchStats() {
   try {
-    const response = await api.get('/containers/stats')
+    await containersStore.fetchStats()
     const statsMap = {}
-    for (const stat of response.data) {
+    for (const stat of containersStore.stats) {
       statsMap[stat.name] = stat
     }
     containerStats.value = statsMap
@@ -531,20 +499,18 @@ async function loadData() {
   containerLoadingMessageIndex.value = 0
   shuffleContainerMessages()
 
-  // Start rotating messages every 2 seconds
   containerLoadingInterval = setInterval(() => {
     containerLoadingMessageIndex.value = (containerLoadingMessageIndex.value + 1) % containerLoadingMessages.value.length
   }, 2000)
 
   try {
     await Promise.all([
-      containerStore.fetchContainers(),
+      containersStore.fetchContainers(true),
       fetchStats(),
     ])
   } catch (error) {
     notificationStore.error('Failed to load containers')
   } finally {
-    // Stop rotating messages
     if (containerLoadingInterval) {
       clearInterval(containerLoadingInterval)
       containerLoadingInterval = null
@@ -553,17 +519,26 @@ async function loadData() {
   }
 }
 
-// Start polling for stats
-usePoll(fetchStats, POLLING.DASHBOARD_METRICS, false)
+// Setup polling
+const { stop: stopPolling } = usePoll(async () => {
+  if (!loading.value) {
+    await containersStore.fetchContainers(true)
+    await fetchStats()
+  }
+}, POLLING.CONTAINERS, false)
 
 onMounted(() => {
   loadData()
 })
 
 onUnmounted(() => {
+  stopPolling()
   if (containerLoadingInterval) {
     clearInterval(containerLoadingInterval)
     containerLoadingInterval = null
+  }
+  if (logsDialog.value.followInterval) {
+    clearInterval(logsDialog.value.followInterval)
   }
 })
 </script>
@@ -573,18 +548,11 @@ onUnmounted(() => {
     <!-- Page Header -->
     <div class="flex items-center justify-between flex-wrap gap-4">
       <div>
-        <h1
-          :class="[
-            'text-2xl font-bold',
-            'text-primary'
-          ]"
-        >
-          Containers
-        </h1>
+        <h1 class="text-2xl font-bold text-primary">Containers</h1>
         <p class="text-secondary mt-1">Manage Docker containers</p>
       </div>
       <div class="flex items-center gap-3">
-        <!-- Container Type Filter Buttons (shown if non-genmaster containers exist OR if not on 'all' filter) -->
+        <!-- Container Type Filter Buttons -->
         <template v-if="(hasNonProjectContainers || containerTypeFilter !== 'all') && !loading">
           <button
             @click="containerTypeFilter = 'genmaster'"
@@ -607,7 +575,7 @@ onUnmounted(() => {
                 : 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/30'
             ]"
           >
-            <ServerIcon class="h-4 w-4" />
+            <ServerStackIcon class="h-4 w-4" />
             External
           </button>
           <button
@@ -627,14 +595,20 @@ onUnmounted(() => {
         <button
           @click="loadData"
           class="btn-secondary flex items-center gap-2"
+          :disabled="loading"
         >
-          <ArrowPathIcon class="h-4 w-4" />
+          <ArrowPathIcon class="h-4 w-4" :class="{ 'animate-spin': loading }" />
           Refresh
         </button>
       </div>
     </div>
 
-    <ContainerStackLoader v-if="loading" :text="containerLoadingMessages[containerLoadingMessageIndex]" class="py-16 mt-8" />
+    <!-- Loading State with Funny Messages -->
+    <ContainerStackLoader
+      v-if="loading"
+      :text="containerLoadingMessages[containerLoadingMessageIndex] || 'Loading containers...'"
+      class="py-16 mt-8"
+    />
 
     <template v-else>
       <!-- Stats Grid -->
@@ -667,6 +641,7 @@ onUnmounted(() => {
           </div>
         </Card>
 
+        <!-- Stopped Card - Clickable -->
         <Card :padding="false">
           <button
             @click="openStoppedContainersDialog"
@@ -714,17 +689,17 @@ onUnmounted(() => {
           <option value="stopped">Stopped Only</option>
         </select>
         <p class="text-sm text-muted">
-          Showing {{ filteredContainers.length }} of {{ containerStore.containers.length }} containers
+          Showing {{ filteredContainers.length }} of {{ containersStore.containers.length }} containers
           <span v-if="containerTypeFilter !== 'all'" class="font-medium">
             ({{ containerTypeFilter === 'genmaster' ? 'GenMaster only' : 'External only' }})
           </span>
         </p>
       </div>
 
-      <!-- Container Cards Grid -->
+      <!-- Empty State -->
       <EmptyState
         v-if="filteredContainers.length === 0"
-        :icon="ServerIcon"
+        :icon="ServerStackIcon"
         title="No containers found"
         description="No containers match your current filter."
       />
@@ -744,217 +719,206 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <!-- Container Cards Grid -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-        <Card
-          v-for="container in filteredContainers"
-          :key="container.id"
-
-          :padding="false"
-        >
-          <!-- Collapsed Header Row (always visible, clickable to expand) -->
-          <div
-            @click="toggleContainer(container.id)"
-            class="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+          <Card
+            v-for="container in filteredContainers"
+            :key="container.id"
+            :padding="false"
           >
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <!-- Expand/Collapse Icon -->
-                <component
-                  :is="isExpanded(container.id) ? ChevronDownIcon : ChevronRightIcon"
-                  class="h-5 w-5 text-gray-400 flex-shrink-0 transition-transform"
-                />
-                <!-- Status Icon -->
-                <div
-                  :class="[
-                    'p-2 rounded-lg flex-shrink-0',
-                    `bg-${getStatusColor(container)}-100 dark:bg-${getStatusColor(container)}-500/20`
-                  ]"
-                >
+            <!-- Collapsed Header Row -->
+            <div
+              @click="toggleContainer(container.id)"
+              class="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+            >
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <!-- Expand/Collapse Icon -->
                   <component
-                    :is="getStatusIcon(container)"
-                    :class="['h-5 w-5', `text-${getStatusColor(container)}-500`]"
+                    :is="isExpanded(container.id) ? ChevronDownIcon : ChevronRightIcon"
+                    class="h-5 w-5 text-gray-400 flex-shrink-0 transition-transform"
                   />
-                </div>
-                <!-- Container Name and Image -->
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <h3 class="font-semibold text-primary truncate">{{ container.name }}</h3>
-                    <StatusBadge :status="container.status" size="sm" />
-                    <span
-                      v-if="hasNonProjectContainers"
-                      :class="[
-                        'px-1.5 py-0.5 text-xs font-medium rounded flex-shrink-0',
-                        container.is_project
-                          ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400'
-                          : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
-                      ]"
-                    >
-                      {{ container.is_project ? 'GenMaster' : 'External' }}
-                    </span>
-                  </div>
-                  <p class="text-xs text-muted mt-0.5 font-mono truncate">{{ container.image }}</p>
-                </div>
-              </div>
-              <!-- Health Badge (always visible) -->
-              <div class="flex items-center gap-2 flex-shrink-0">
-                <span
-                  v-if="container.health && container.health !== 'none'"
-                  :class="['px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1', getHealthBadgeClass(container.health)]"
-                >
-                  <HeartIcon class="h-3 w-3" />
-                  {{ container.health }}
-                </span>
-                <!-- Remove Button for stopped containers (always visible) -->
-                <button
-                  v-if="container.status !== 'running'"
-                  @click.stop="promptRemoveContainer(container)"
-                  class="px-2 py-1 rounded-lg text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30 transition-colors flex items-center gap-1"
-                  title="Remove this container"
-                >
-                  <TrashIcon class="h-3 w-3" />
-                  Remove
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Expanded Content (only shown when expanded) -->
-          <Transition name="expand">
-            <div v-if="isExpanded(container.id)">
-              <!-- Recreate Button Row (for project containers) -->
-              <div v-if="container.is_project" class="px-4 pb-3">
-                <button
-                  @click="promptRecreateContainer(container)"
-                  class="w-full btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30"
-                  title="Recreate this container"
-                >
-                  <ArrowPathRoundedSquareIcon class="h-4 w-4" />
-                  Recreate Container
-                </button>
-              </div>
-
-              <!-- Stats Grid -->
-              <div class="px-4 pb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                <!-- Uptime -->
-                <div class="text-center p-3 rounded-lg bg-surface-hover">
-                  <ClockIcon class="h-5 w-5 mx-auto text-blue-500 mb-1" />
-                  <p class="text-xs text-muted">Uptime</p>
-                  <p class="font-semibold text-primary text-sm">{{ container.uptime || '-' }}</p>
-                </div>
-
-                <!-- CPU -->
-                <div class="text-center p-3 rounded-lg bg-surface-hover">
-                  <CpuChipIcon class="h-5 w-5 mx-auto text-purple-500 mb-1" />
-                  <p class="text-xs text-muted">CPU</p>
-                  <p :class="['font-semibold text-sm', getCpuColor(container.cpu_percent)]">
-                    {{ container.status === 'running' ? container.cpu_percent.toFixed(1) + '%' : '-' }}
-                  </p>
-                </div>
-
-                <!-- Memory -->
-                <div class="text-center p-3 rounded-lg bg-surface-hover">
-                  <ServerIcon class="h-5 w-5 mx-auto text-amber-500 mb-1" />
-                  <p class="text-xs text-muted">Memory</p>
-                  <p :class="['font-semibold text-sm', getMemoryColor(container.memory_mb)]">
-                    {{ container.status === 'running' ? container.memory_mb + ' MB' : '-' }}
-                  </p>
-                </div>
-
-                <!-- Network -->
-                <div class="text-center p-3 rounded-lg bg-surface-hover">
-                  <SignalIcon class="h-5 w-5 mx-auto text-cyan-500 mb-1" />
-                  <p class="text-xs text-muted">Network</p>
-                  <p class="font-semibold text-primary text-xs">
-                    <span v-if="container.status === 'running'" class="flex items-center justify-center gap-1">
-                      <ArrowDownTrayIcon class="h-3 w-3 text-emerald-500" />
-                      {{ formatBytes(container.network_rx) }}
-                    </span>
-                    <span v-else>-</span>
-                  </p>
-                </div>
-              </div>
-
-              <!-- Memory Bar (only for running containers) -->
-              <div v-if="container.status === 'running' && container.memory_limit > 0" class="px-4 pb-3">
-                <div class="flex items-center justify-between text-xs text-muted mb-1">
-                  <span>Memory Usage</span>
-                  <span>{{ container.memory_percent.toFixed(1) }}%</span>
-                </div>
-                <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <!-- Status Icon -->
                   <div
                     :class="[
-                      'h-full rounded-full transition-all duration-500',
-                      container.memory_percent > 80 ? 'bg-red-500' :
-                      container.memory_percent > 60 ? 'bg-amber-500' : 'bg-emerald-500'
+                      'p-2 rounded-lg flex-shrink-0',
+                      `bg-${getStatusColor(container)}-100 dark:bg-${getStatusColor(container)}-500/20`
                     ]"
-                    :style="{ width: `${Math.min(container.memory_percent, 100)}%` }"
-                  ></div>
+                  >
+                    <component
+                      :is="getStatusIcon(container)"
+                      :class="['h-5 w-5', `text-${getStatusColor(container)}-500`]"
+                    />
+                  </div>
+                  <!-- Container Name and Image -->
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <h3 class="font-semibold text-primary truncate">{{ container.name }}</h3>
+                      <StatusBadge :status="container.status" size="sm" />
+                      <span
+                        v-if="hasNonProjectContainers"
+                        :class="[
+                          'px-1.5 py-0.5 text-xs font-medium rounded flex-shrink-0',
+                          container.is_project
+                            ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400'
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
+                        ]"
+                      >
+                        {{ container.is_project ? 'GenMaster' : 'External' }}
+                      </span>
+                    </div>
+                    <p class="text-xs text-muted mt-0.5 font-mono truncate">{{ container.image }}</p>
+                  </div>
                 </div>
-              </div>
-
-              <!-- Actions Footer -->
-              <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                <div class="flex items-center justify-center gap-3 flex-wrap">
-                  <!-- Start Button (when stopped) -->
+                <!-- Health Badge & Remove Button -->
+                <div class="flex items-center gap-2 flex-shrink-0">
+                  <span
+                    v-if="container.health && container.health !== 'none'"
+                    :class="['px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1', getHealthBadgeClass(container.health)]"
+                  >
+                    <HeartIcon class="h-3 w-3" />
+                    {{ container.health }}
+                  </span>
+                  <!-- Remove Button for stopped containers -->
                   <button
                     v-if="container.status !== 'running'"
-                    @click="performAction(container, 'start')"
-                    class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30"
-                    title="Start Container"
+                    @click.stop="promptRemoveContainer(container)"
+                    class="px-2 py-1 rounded-lg text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30 transition-colors flex items-center gap-1"
+                    title="Remove this container"
                   >
-                    <PlayIcon class="h-4 w-4" />
-                    Start
-                  </button>
-
-                  <!-- Stop Button (when running) -->
-                  <button
-                    v-if="container.status === 'running'"
-                    @click="performAction(container, 'stop')"
-                    class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 border border-red-200 dark:border-red-500/30"
-                    title="Stop Container"
-                  >
-                    <StopIcon class="h-4 w-4" />
-                    Stop
-                  </button>
-
-                  <!-- Restart Button (only for running containers) -->
-                  <button
-                    v-if="container.status === 'running'"
-                    @click="performAction(container, 'restart')"
-                    class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30"
-                    title="Restart Container"
-                  >
-                    <ArrowPathIcon class="h-4 w-4" />
-                    Restart
-                  </button>
-
-                  <!-- Logs Button -->
-                  <button
-                    @click="viewLogs(container)"
-                    class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30"
-                    title="View Logs"
-                  >
-                    <DocumentTextIcon class="h-4 w-4" />
-                    Logs
-                  </button>
-
-                  <!-- Terminal Button (only when running) -->
-                  <button
-                    v-if="container.status === 'running'"
-                    @click="openTerminal(container)"
-                    class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-500/10 border border-cyan-200 dark:border-cyan-500/30"
-                    title="Open Terminal"
-                  >
-                    <CommandLineIcon class="h-4 w-4" />
-                    Terminal
+                    <TrashIcon class="h-3 w-3" />
+                    Remove
                   </button>
                 </div>
               </div>
             </div>
-          </Transition>
-        </Card>
-      </div>
-    </template>
+
+            <!-- Expanded Content -->
+            <Transition name="expand">
+              <div v-if="isExpanded(container.id)">
+                <!-- Recreate Button Row (for project containers) -->
+                <div v-if="container.is_project" class="px-4 pb-3">
+                  <button
+                    @click="promptRecreateContainer(container)"
+                    class="w-full btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30"
+                    title="Recreate this container"
+                  >
+                    <ArrowPathRoundedSquareIcon class="h-4 w-4" />
+                    Recreate Container
+                  </button>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="px-4 pb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <!-- Uptime -->
+                  <div class="text-center p-3 rounded-lg bg-surface-hover">
+                    <ClockIcon class="h-5 w-5 mx-auto text-blue-500 mb-1" />
+                    <p class="text-xs text-muted">Uptime</p>
+                    <p class="font-semibold text-primary text-sm">{{ container.uptime || '-' }}</p>
+                  </div>
+
+                  <!-- CPU -->
+                  <div class="text-center p-3 rounded-lg bg-surface-hover">
+                    <CpuChipIcon class="h-5 w-5 mx-auto text-purple-500 mb-1" />
+                    <p class="text-xs text-muted">CPU</p>
+                    <p :class="['font-semibold text-sm', getCpuColor(container.cpu_percent)]">
+                      {{ container.status === 'running' ? container.cpu_percent.toFixed(1) + '%' : '-' }}
+                    </p>
+                  </div>
+
+                  <!-- Memory -->
+                  <div class="text-center p-3 rounded-lg bg-surface-hover">
+                    <ServerStackIcon class="h-5 w-5 mx-auto text-amber-500 mb-1" />
+                    <p class="text-xs text-muted">Memory</p>
+                    <p :class="['font-semibold text-sm', getMemoryColor(container.memory_mb)]">
+                      {{ container.status === 'running' ? container.memory_mb + ' MB' : '-' }}
+                    </p>
+                  </div>
+
+                  <!-- Network -->
+                  <div class="text-center p-3 rounded-lg bg-surface-hover">
+                    <SignalIcon class="h-5 w-5 mx-auto text-cyan-500 mb-1" />
+                    <p class="text-xs text-muted">Network</p>
+                    <p class="font-semibold text-primary text-xs">
+                      <span v-if="container.status === 'running'" class="flex items-center justify-center gap-1">
+                        <ArrowDownTrayIcon class="h-3 w-3 text-emerald-500" />
+                        {{ formatBytes(container.network_rx) }}
+                      </span>
+                      <span v-else>-</span>
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Memory Bar -->
+                <div v-if="container.status === 'running' && container.memory_limit > 0" class="px-4 pb-3">
+                  <div class="flex items-center justify-between text-xs text-muted mb-1">
+                    <span>Memory Usage</span>
+                    <span>{{ container.memory_percent.toFixed(1) }}%</span>
+                  </div>
+                  <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      :class="[
+                        'h-full rounded-full transition-all duration-500',
+                        container.memory_percent > 80 ? 'bg-red-500' :
+                        container.memory_percent > 60 ? 'bg-amber-500' : 'bg-emerald-500'
+                      ]"
+                      :style="{ width: `${Math.min(container.memory_percent, 100)}%` }"
+                    ></div>
+                  </div>
+                </div>
+
+                <!-- Actions Footer -->
+                <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                  <div class="flex items-center justify-center gap-3 flex-wrap">
+                    <!-- Start Button -->
+                    <button
+                      v-if="container.status !== 'running'"
+                      @click="performAction(container, 'start')"
+                      class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30"
+                      title="Start Container"
+                    >
+                      <PlayIcon class="h-4 w-4" />
+                      Start
+                    </button>
+
+                    <!-- Stop Button -->
+                    <button
+                      v-if="container.status === 'running'"
+                      @click="performAction(container, 'stop')"
+                      class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 border border-red-200 dark:border-red-500/30"
+                      title="Stop Container"
+                    >
+                      <StopIcon class="h-4 w-4" />
+                      Stop
+                    </button>
+
+                    <!-- Restart Button -->
+                    <button
+                      v-if="container.status === 'running'"
+                      @click="performAction(container, 'restart')"
+                      class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30"
+                      title="Restart Container"
+                    >
+                      <ArrowPathIcon class="h-4 w-4" />
+                      Restart
+                    </button>
+
+                    <!-- Logs Button -->
+                    <button
+                      @click="viewLogs(container)"
+                      class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30"
+                      title="View Logs"
+                    >
+                      <DocumentTextIcon class="h-4 w-4" />
+                      Logs
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </Card>
+        </div>
+      </template>
     </template>
 
     <!-- Action Confirmation Dialog -->
@@ -969,7 +933,7 @@ onUnmounted(() => {
       @cancel="actionDialog.open = false"
     />
 
-    <!-- Enhanced Logs Dialog -->
+    <!-- Logs Dialog -->
     <Teleport to="body">
       <Transition name="modal">
         <div
@@ -1099,12 +1063,7 @@ onUnmounted(() => {
                 Showing {{ logsDialog.lines }} lines
                 <span v-if="logsDialog.since">&bull; Since: {{ logsDialog.since }}</span>
               </p>
-              <button
-                @click="closeLogs"
-                class="btn-secondary"
-              >
-                Close
-              </button>
+              <button @click="closeLogs" class="btn-secondary">Close</button>
             </div>
           </div>
         </div>
@@ -1139,7 +1098,7 @@ onUnmounted(() => {
                 @click="stoppedContainersDialog.open = false"
                 class="p-1 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
               >
-                &times;
+                <XMarkIcon class="h-5 w-5" />
               </button>
             </div>
 
@@ -1156,7 +1115,7 @@ onUnmounted(() => {
                 >
                   <div class="flex items-center gap-3">
                     <div class="p-2 rounded-lg bg-gray-200 dark:bg-gray-600">
-                      <ServerIcon class="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                      <ServerStackIcon class="h-5 w-5 text-gray-500 dark:text-gray-400" />
                     </div>
                     <div>
                       <p class="font-medium text-gray-900 dark:text-white">{{ container.name }}</p>
@@ -1197,7 +1156,7 @@ onUnmounted(() => {
       </Transition>
     </Teleport>
 
-    <!-- Danger Zone Stop Dialog for Critical Containers -->
+    <!-- Danger Zone Stop Dialog (with skull icon) -->
     <Teleport to="body">
       <Transition name="modal">
         <div
@@ -1210,7 +1169,7 @@ onUnmounted(() => {
             <div class="px-6 py-5 bg-red-50 dark:bg-red-900/30 rounded-t-lg border-b border-red-200 dark:border-red-800">
               <div class="flex items-center justify-center mb-3">
                 <div class="p-4 rounded-full bg-red-100 dark:bg-red-900/50">
-                  <!-- Skull and Crossbones SVG -->
+                  <!-- Skull SVG -->
                   <svg class="h-12 w-12 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 2C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm-2 15v-1h4v1h-4zm5.55-5.46l-.55.39V14h-6v-2.07l-.55-.39C7.51 10.85 7 9.47 7 8c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.47-.51 2.85-1.45 3.54zM9 9c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm6 0c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm-7 9h8l-1 3h-6l-1-3z"/>
                   </svg>
@@ -1267,7 +1226,7 @@ onUnmounted(() => {
       </Transition>
     </Teleport>
 
-    <!-- Remove Container Confirmation Dialog (Skull and Crossbones) -->
+    <!-- Remove Container Confirmation Dialog (with skull icon) -->
     <Teleport to="body">
       <Transition name="modal">
         <div
@@ -1280,7 +1239,7 @@ onUnmounted(() => {
             <div class="px-6 py-5 bg-red-50 dark:bg-red-900/30 rounded-t-lg border-b border-red-200 dark:border-red-800">
               <div class="flex items-center justify-center mb-3">
                 <div class="p-4 rounded-full bg-red-100 dark:bg-red-900/50">
-                  <!-- Skull and Crossbones SVG -->
+                  <!-- Skull SVG -->
                   <svg class="h-12 w-12 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 2C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm-2 15v-1h4v1h-4zm5.55-5.46l-.55.39V14h-6v-2.07l-.55-.39C7.51 10.85 7 9.47 7 8c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.47-.51 2.85-1.45 3.54zM9 9c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm6 0c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm-7 9h8l-1 3h-6l-1-3z"/>
                   </svg>
@@ -1329,7 +1288,7 @@ onUnmounted(() => {
       </Transition>
     </Teleport>
 
-    <!-- Recreate Container Warning Dialog (Yellow with Exclamation) -->
+    <!-- Recreate Container Warning Dialog (with 3 buttons) -->
     <Teleport to="body">
       <Transition name="modal">
         <div
@@ -1342,10 +1301,7 @@ onUnmounted(() => {
             <div class="px-6 py-5 bg-amber-50 dark:bg-amber-900/30 rounded-t-lg border-b border-amber-200 dark:border-amber-800">
               <div class="flex items-center justify-center mb-3">
                 <div class="p-4 rounded-full bg-amber-100 dark:bg-amber-900/50">
-                  <!-- Warning Triangle SVG with exclamation mark -->
-                  <svg class="h-12 w-12 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
+                  <ExclamationTriangleIcon class="h-12 w-12 text-amber-600 dark:text-amber-400" />
                 </div>
               </div>
               <h3 class="text-xl font-bold text-amber-700 dark:text-amber-400 text-center">
@@ -1395,12 +1351,6 @@ onUnmounted(() => {
         </div>
       </Transition>
     </Teleport>
-
-    <!-- Terminal Modal -->
-    <ContainerTerminal
-      v-model="showTerminalModal"
-      :container="terminalContainer"
-    />
   </div>
 </template>
 
@@ -1414,7 +1364,6 @@ onUnmounted(() => {
   opacity: 0;
 }
 
-/* Expand/collapse animation */
 .expand-enter-active,
 .expand-leave-active {
   transition: all 0.2s ease;
