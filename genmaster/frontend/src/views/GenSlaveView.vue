@@ -218,19 +218,19 @@
                 <circle class="text-gray-200 dark:text-gray-700" stroke="currentColor" stroke-width="10" fill="transparent" r="40" cx="50" cy="50" />
                 <circle
                   :class="[
-                    (slaveSystemInfo.temperature_celsius || 0) >= 80 ? 'text-red-500' :
-                    (slaveSystemInfo.temperature_celsius || 0) >= 60 ? 'text-amber-500' : 'text-cyan-500'
+                    (slaveSystemInfo.temperature_fahrenheit || 0) >= 176 ? 'text-red-500' :
+                    (slaveSystemInfo.temperature_fahrenheit || 0) >= 140 ? 'text-amber-500' : 'text-cyan-500'
                   ]"
                   stroke="currentColor" stroke-width="10" stroke-linecap="round" fill="transparent" r="40" cx="50" cy="50"
-                  :stroke-dasharray="`${Math.min((slaveSystemInfo.temperature_celsius || 0), 100) * 2.51} 251`" transform="rotate(-90 50 50)"
+                  :stroke-dasharray="`${Math.min((slaveSystemInfo.temperature_fahrenheit || 0) / 2.12, 100) * 2.51} 251`" transform="rotate(-90 50 50)"
                 />
               </svg>
               <div class="absolute inset-0 flex items-center justify-center">
-                <span class="text-xl font-bold text-primary">{{ Math.round(slaveSystemInfo.temperature_celsius || 0) }}°</span>
+                <span class="text-xl font-bold text-primary">{{ Math.round(slaveSystemInfo.temperature_fahrenheit || 0) }}°F</span>
               </div>
             </div>
             <p class="text-sm text-secondary mt-2">Temp</p>
-            <p class="text-xs text-muted">{{ (slaveSystemInfo.temperature_celsius || 0) >= 60 ? 'Warm' : 'Normal' }}</p>
+            <p class="text-xs text-muted">{{ (slaveSystemInfo.temperature_fahrenheit || 0) >= 140 ? 'Warm' : 'Normal' }}</p>
           </div>
         </Card>
       </div>
