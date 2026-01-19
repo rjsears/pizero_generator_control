@@ -81,7 +81,7 @@ class StateMachine:
         Initialize state machine from database.
 
         On boot, we reset certain states for safety:
-        - automation_armed = False (require operator to re-arm)
+        - slave_relay_armed = False (require operator to re-arm)
         - slave_connection_status = "unknown" (will be updated by heartbeat)
         - If generator_running was True, mark it as needing reconciliation
         """
@@ -93,7 +93,7 @@ class StateMachine:
             logger.info(
                 f"Pre-boot state - "
                 f"generator_running: {state.generator_running}, "
-                f"automation_armed: {state.automation_armed}, "
+                f"relay_armed: {state.slave_relay_armed}, "
                 f"slave_status: {state.slave_connection_status}"
             )
 
@@ -101,13 +101,11 @@ class StateMachine:
             was_running = state.generator_running
 
             # SAFETY: Always disarm on boot - require operator to re-arm
-            if state.automation_armed:
+            if state.slave_relay_armed:
                 logger.warning(
-                    "Automation was armed before reboot - disarming for safety"
+                    "Relay was armed before reboot - disarming for safety"
                 )
-                state.automation_armed = False
-                state.automation_armed_at = None
-                state.automation_armed_by = None
+                state.slave_relay_armed = False
 
             # Reset slave connection status - will be updated by heartbeat
             state.slave_connection_status = "unknown"
@@ -144,7 +142,7 @@ class StateMachine:
             logger.info(
                 f"State machine initialized - "
                 f"generator_running: {state.generator_running}, "
-                f"automation_armed: {state.automation_armed}, "
+                f"relay_armed: {state.slave_relay_armed}, "
                 f"override: {state.override_enabled}"
             )
 
@@ -153,7 +151,7 @@ class StateMachine:
                 "SYSTEM_BOOT_RESET",
                 {
                     "was_running": was_running,
-                    "automation_disarmed": True,
+                    "relay_disarmed": True,
                     "reason": "Safety reset on boot",
                 },
                 severity="WARNING" if was_running else "INFO",
@@ -519,7 +517,7 @@ class StateMachine:
 
     async def arm_automation(self, source: str = "api") -> dict:
         """
-        Arm the automation system, enabling all automated actions.
+        Arm the relay, enabling generator control.
 
         Args:
             source: What initiated the arm request ('api', 'ui', 'startup')
@@ -533,36 +531,32 @@ class StateMachine:
             state = await self._get_state(db)
 
             # Check if already armed
-            if state.automation_armed:
+            if state.slave_relay_armed:
                 return {
                     "success": True,
                     "armed": True,
-                    "message": "Automation already armed",
-                    "armed_at": state.automation_armed_at,
+                    "message": "Relay already armed",
                     "warnings": [],
                 }
 
             # Check GenSlave connection status
             if state.slave_connection_status == "disconnected":
                 warnings.append(
-                    "GenSlave is disconnected - automation may not function correctly"
+                    "GenSlave is disconnected - relay control may not function correctly"
                 )
             elif state.slave_connection_status == "unknown":
                 warnings.append(
                     "GenSlave connection status unknown - recommend verifying connection first"
                 )
 
-            # Arm the system
-            now = int(time.time())
-            state.automation_armed = True
-            state.automation_armed_at = now
-            state.automation_armed_by = source
+            # Arm the relay
+            state.slave_relay_armed = True
             await db.commit()
 
-            logger.info(f"Automation armed by {source}")
+            logger.info(f"Relay armed by {source}")
 
             await self.log_event(
-                "AUTOMATION_ARMED",
+                "RELAY_ARMED",
                 {
                     "source": source,
                     "slave_status": state.slave_connection_status,
@@ -570,21 +564,20 @@ class StateMachine:
                 },
             )
             await self._send_webhook(
-                "automation.armed",
-                {"source": source, "armed_at": now},
+                "relay.armed",
+                {"source": source},
             )
 
             return {
                 "success": True,
                 "armed": True,
-                "message": "Automation armed successfully",
-                "armed_at": now,
+                "message": "Relay armed successfully",
                 "warnings": warnings,
             }
 
     async def disarm_automation(self, source: str = "api") -> dict:
         """
-        Disarm the automation system, blocking all automated actions.
+        Disarm the relay, blocking generator control.
 
         If the generator is running, it will NOT be stopped automatically.
         The operator should manually stop it if needed.
@@ -601,12 +594,11 @@ class StateMachine:
             state = await self._get_state(db)
 
             # Check if already disarmed
-            if not state.automation_armed:
+            if not state.slave_relay_armed:
                 return {
                     "success": True,
                     "armed": False,
-                    "message": "Automation already disarmed",
-                    "armed_at": None,
+                    "message": "Relay already disarmed",
                     "warnings": [],
                 }
 
@@ -617,52 +609,45 @@ class StateMachine:
                     "Use manual stop if needed."
                 )
 
-            # Disarm the system
-            state.automation_armed = False
-            previous_armed_at = state.automation_armed_at
-            state.automation_armed_at = None
-            state.automation_armed_by = None
+            # Disarm the relay
+            state.slave_relay_armed = False
             await db.commit()
 
-            logger.info(f"Automation disarmed by {source}")
+            logger.info(f"Relay disarmed by {source}")
 
             await self.log_event(
-                "AUTOMATION_DISARMED",
+                "RELAY_DISARMED",
                 {
                     "source": source,
                     "generator_was_running": state.generator_running,
-                    "was_armed_since": previous_armed_at,
                 },
             )
             await self._send_webhook(
-                "automation.disarmed",
+                "relay.disarmed",
                 {"source": source, "generator_running": state.generator_running},
             )
 
             return {
                 "success": True,
                 "armed": False,
-                "message": "Automation disarmed",
-                "armed_at": None,
+                "message": "Relay disarmed",
                 "warnings": warnings,
             }
 
     async def get_arm_status(self) -> dict:
-        """Get current automation arm status."""
+        """Get current relay arm status."""
         async with AsyncSessionLocal() as db:
             state = await self._get_state(db)
             return {
-                "armed": state.automation_armed,
-                "armed_at": state.automation_armed_at,
-                "armed_by": state.automation_armed_by,
+                "armed": state.slave_relay_armed or False,
                 "slave_connection": state.slave_connection_status,
             }
 
     async def is_armed(self) -> bool:
-        """Check if automation is armed."""
+        """Check if relay is armed."""
         async with AsyncSessionLocal() as db:
             state = await self._get_state(db)
-            return state.automation_armed
+            return state.slave_relay_armed or False
 
     # =========================================================================
     # Heartbeat/Communication Operations
@@ -796,7 +781,7 @@ class StateMachine:
             slave_health=await self.get_slave_health(),
             override=await self.get_override_status(),
             system_health=system_health,
-            automation_armed=await self.is_armed(),
+            relay_armed=await self.is_armed(),
             timestamp=int(time.time()),
         )
 

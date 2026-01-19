@@ -106,16 +106,14 @@ class FullSystemStatus(BaseModel):
     slave_health: SlaveHealth = Field(description="GenSlave connection health")
     override: OverrideStatus = Field(description="Manual override status")
     system_health: SystemHealth = Field(description="GenMaster system health")
-    automation_armed: bool = Field(description="Whether automation is armed and active")
+    relay_armed: bool = Field(description="Whether GenSlave relay is armed")
     timestamp: int = Field(description="Unix timestamp of this status")
 
 
 class AutomationArmStatus(BaseModel):
-    """Automation arming status."""
+    """Relay arming status."""
 
-    armed: bool = Field(description="Whether automation is armed")
-    armed_at: Optional[int] = Field(None, description="Unix timestamp when armed")
-    armed_by: Optional[str] = Field(None, description="Who/what armed the system")
+    armed: bool = Field(description="Whether relay is armed")
     slave_connection: str = Field(
         description="GenSlave connection status ('connected', 'disconnected', 'unknown')"
     )
@@ -124,8 +122,6 @@ class AutomationArmStatus(BaseModel):
         json_schema_extra = {
             "example": {
                 "armed": True,
-                "armed_at": 1705320000,
-                "armed_by": "api",
                 "slave_connection": "connected",
             }
         }
