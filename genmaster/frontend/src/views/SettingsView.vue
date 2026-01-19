@@ -92,15 +92,17 @@ const showPasswords = ref({ current: false, new: false, confirm: false })
 const changingPassword = ref(false)
 
 // Access Control state
-const ipRanges = ref([])
+const accessControl = ref({ enabled: false, ip_ranges: [], nginx_config_path: '', last_updated: null })
 const loadingIpRanges = ref(false)
 const savingIpRanges = ref(false)
-const newIpRange = ref({ ip_range: '', description: '' })
+const reloadingNginx = ref(false)
+const newIpRange = ref({ cidr: '', description: '' })
 const editingIpRange = ref(null)
 const commonNetworks = [
   { name: 'Tailscale', range: '100.64.0.0/10', description: 'Tailscale VPN network' },
   { name: 'Local (192.168.x.x)', range: '192.168.0.0/16', description: 'Local network' },
   { name: 'Local (10.x.x.x)', range: '10.0.0.0/8', description: 'Local network' },
+  { name: 'Docker (172.x.x.x)', range: '172.16.0.0/12', description: 'Docker networks' },
 ]
 
 // Environment variables state
@@ -211,10 +213,10 @@ async function changePassword() {
 async function loadIpRanges() {
   loadingIpRanges.value = true
   try {
-    const response = await settingsApi.get('ip_ranges')
-    ipRanges.value = response.data?.value || []
+    const response = await settingsApi.getAccessControl()
+    accessControl.value = response.data
   } catch {
-    ipRanges.value = []
+    accessControl.value = { enabled: false, ip_ranges: [], nginx_config_path: '', last_updated: null }
   } finally {
     loadingIpRanges.value = false
   }
@@ -222,27 +224,30 @@ async function loadIpRanges() {
 
 // Add new IP range
 async function addIpRange() {
-  if (!newIpRange.value.ip_range) {
+  if (!newIpRange.value.cidr) {
     notificationStore.error('IP range is required')
     return
   }
 
   // Basic CIDR validation
   const cidrPattern = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/
-  if (!cidrPattern.test(newIpRange.value.ip_range)) {
+  if (!cidrPattern.test(newIpRange.value.cidr)) {
     notificationStore.error('Invalid CIDR format (e.g., 192.168.1.0/24)')
     return
   }
 
   savingIpRanges.value = true
   try {
-    const updatedRanges = [...ipRanges.value, { ...newIpRange.value }]
-    await settingsApi.update('ip_ranges', { value: updatedRanges })
-    ipRanges.value = updatedRanges
-    newIpRange.value = { ip_range: '', description: '' }
+    await settingsApi.addIpRange({
+      cidr: newIpRange.value.cidr,
+      description: newIpRange.value.description || '',
+      access_level: 'internal'
+    })
+    await loadIpRanges()
+    newIpRange.value = { cidr: '', description: '' }
     notificationStore.success('IP range added')
   } catch (error) {
-    notificationStore.error('Failed to add IP range')
+    notificationStore.error(error.response?.data?.detail || 'Failed to add IP range')
   } finally {
     savingIpRanges.value = false
   }
@@ -251,50 +256,69 @@ async function addIpRange() {
 // Add common network
 async function addCommonNetwork(network) {
   // Check if already exists
-  if (ipRanges.value.some(r => r.ip_range === network.range)) {
+  if (accessControl.value.ip_ranges.some(r => r.cidr === network.range)) {
     notificationStore.warning('This network is already added')
     return
   }
 
   savingIpRanges.value = true
   try {
-    const updatedRanges = [...ipRanges.value, { ip_range: network.range, description: network.description }]
-    await settingsApi.update('ip_ranges', { value: updatedRanges })
-    ipRanges.value = updatedRanges
+    await settingsApi.addIpRange({
+      cidr: network.range,
+      description: network.description,
+      access_level: 'internal'
+    })
+    await loadIpRanges()
     notificationStore.success(`${network.name} network added`)
-  } catch {
-    notificationStore.error('Failed to add network')
+  } catch (error) {
+    notificationStore.error(error.response?.data?.detail || 'Failed to add network')
   } finally {
     savingIpRanges.value = false
   }
 }
 
 // Remove IP range
-async function removeIpRange(index) {
+async function removeIpRange(cidr) {
   savingIpRanges.value = true
   try {
-    const updatedRanges = ipRanges.value.filter((_, i) => i !== index)
-    await settingsApi.update('ip_ranges', { value: updatedRanges })
-    ipRanges.value = updatedRanges
+    await settingsApi.deleteIpRange(cidr)
+    await loadIpRanges()
     notificationStore.success('IP range removed')
-  } catch {
-    notificationStore.error('Failed to remove IP range')
+  } catch (error) {
+    notificationStore.error(error.response?.data?.detail || 'Failed to remove IP range')
   } finally {
     savingIpRanges.value = false
   }
 }
 
 // Update IP range description
-async function updateIpRangeDescription(index) {
+async function updateIpRangeDescription(range) {
   savingIpRanges.value = true
   try {
-    await settingsApi.update('ip_ranges', { value: ipRanges.value })
+    await settingsApi.updateIpRange(range.cidr, range.description)
     editingIpRange.value = null
     notificationStore.success('Description updated')
-  } catch {
-    notificationStore.error('Failed to update description')
+  } catch (error) {
+    notificationStore.error(error.response?.data?.detail || 'Failed to update description')
   } finally {
     savingIpRanges.value = false
+  }
+}
+
+// Reload nginx configuration
+async function reloadNginx() {
+  reloadingNginx.value = true
+  try {
+    const response = await settingsApi.reloadNginx()
+    if (response.data.success) {
+      notificationStore.success('Nginx reloaded successfully')
+    } else {
+      notificationStore.error(response.data.message || 'Failed to reload nginx')
+    }
+  } catch (error) {
+    notificationStore.error(error.response?.data?.detail || 'Failed to reload nginx')
+  } finally {
+    reloadingNginx.value = false
   }
 }
 
@@ -360,7 +384,7 @@ onMounted(() => {
 
 // Watch for tab changes to load data
 watch(activeTab, (tab) => {
-  if (tab === 'access' && ipRanges.value.length === 0) {
+  if (tab === 'access' && accessControl.value.ip_ranges.length === 0) {
     loadIpRanges()
   } else if (tab === 'environment' && envVars.value.length === 0) {
     loadEnvVars()
@@ -684,18 +708,28 @@ watch(activeTab, (tab) => {
           <div class="absolute inset-0 bg-black/10"></div>
           <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
           <div class="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
-          <div class="relative flex items-center gap-4">
-            <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
-              <GlobeAltIcon class="h-8 w-8" />
+          <div class="relative flex items-center justify-between">
+            <div class="flex items-center gap-4">
+              <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+                <GlobeAltIcon class="h-8 w-8" />
+              </div>
+              <div>
+                <h2 class="text-2xl font-bold">Access Control</h2>
+                <p class="text-white/80">Manage IP ranges for nginx geo block access</p>
+              </div>
             </div>
-            <div>
-              <h2 class="text-2xl font-bold">Access Control</h2>
-              <p class="text-white/80">Manage IP ranges and network access</p>
-            </div>
+            <button
+              @click="reloadNginx"
+              :disabled="reloadingNginx"
+              class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+            >
+              <ArrowPathIcon :class="['h-5 w-5', reloadingNginx ? 'animate-spin' : '']" />
+              Reload Nginx
+            </button>
           </div>
         </div>
 
-        <Card title="Allowed IP Ranges" subtitle="Configure which networks can access the system">
+        <Card title="Allowed IP Ranges" subtitle="Configure which networks have internal access (bypasses external restrictions)">
           <LoadingSpinner v-if="loadingIpRanges" size="sm" text="Loading IP ranges..." />
           <template v-else>
             <!-- Quick Add Common Networks -->
@@ -706,15 +740,15 @@ watch(activeTab, (tab) => {
                   v-for="network in commonNetworks"
                   :key="network.range"
                   @click="addCommonNetwork(network)"
-                  :disabled="savingIpRanges || ipRanges.some(r => r.ip_range === network.range)"
+                  :disabled="savingIpRanges || accessControl.ip_ranges.some(r => r.cidr === network.range)"
                   :class="[
                     'px-3 py-1.5 text-sm rounded-lg border transition-colors',
-                    ipRanges.some(r => r.ip_range === network.range)
+                    accessControl.ip_ranges.some(r => r.cidr === network.range)
                       ? 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 cursor-not-allowed'
                       : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
                   ]"
                 >
-                  <CheckIcon v-if="ipRanges.some(r => r.ip_range === network.range)" class="h-4 w-4 inline mr-1" />
+                  <CheckIcon v-if="accessControl.ip_ranges.some(r => r.cidr === network.range)" class="h-4 w-4 inline mr-1" />
                   <PlusIcon v-else class="h-4 w-4 inline mr-1" />
                   {{ network.name }}
                 </button>
@@ -724,25 +758,31 @@ watch(activeTab, (tab) => {
             <!-- Current IP Ranges -->
             <div class="space-y-3 mb-6">
               <div
-                v-for="(range, index) in ipRanges"
-                :key="index"
+                v-for="range in accessControl.ip_ranges"
+                :key="range.cidr"
                 class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700"
               >
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
                     <code class="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm font-mono text-primary">
-                      {{ range.ip_range }}
+                      {{ range.cidr }}
                     </code>
+                    <span v-if="range.protected" class="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                      Protected
+                    </span>
+                    <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                      {{ range.access_level }}
+                    </span>
                   </div>
-                  <div v-if="editingIpRange === index" class="mt-2 flex items-center gap-2">
+                  <div v-if="editingIpRange === range.cidr" class="mt-2 flex items-center gap-2">
                     <input
-                      v-model="ipRanges[index].description"
+                      v-model="range.description"
                       type="text"
                       class="input text-sm flex-1"
                       placeholder="Description"
-                      @keyup.enter="updateIpRangeDescription(index)"
+                      @keyup.enter="updateIpRangeDescription(range)"
                     />
-                    <button @click="updateIpRangeDescription(index)" class="btn-primary btn-sm">
+                    <button @click="updateIpRangeDescription(range)" class="btn-primary btn-sm">
                       <CheckIcon class="h-4 w-4" />
                     </button>
                     <button @click="editingIpRange = null" class="btn-secondary btn-sm">
@@ -751,24 +791,28 @@ watch(activeTab, (tab) => {
                   </div>
                   <p v-else class="text-sm text-muted mt-1">
                     {{ range.description || 'No description' }}
-                    <button @click="editingIpRange = index" class="ml-2 text-blue-500 hover:underline">
+                    <button @click="editingIpRange = range.cidr" class="ml-2 text-blue-500 hover:underline">
                       <PencilIcon class="h-3 w-3 inline" /> Edit
                     </button>
                   </p>
                 </div>
                 <button
-                  @click="removeIpRange(index)"
+                  v-if="!range.protected"
+                  @click="removeIpRange(range.cidr)"
                   :disabled="savingIpRanges"
                   class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                 >
                   <TrashIcon class="h-5 w-5" />
                 </button>
+                <div v-else class="p-2 text-gray-400" title="Protected ranges cannot be deleted">
+                  <LockClosedIcon class="h-5 w-5" />
+                </div>
               </div>
 
-              <div v-if="ipRanges.length === 0" class="text-center py-8 text-muted">
+              <div v-if="accessControl.ip_ranges.length === 0" class="text-center py-8 text-muted">
                 <GlobeAltIcon class="h-12 w-12 mx-auto mb-3 opacity-50" />
                 <p>No IP ranges configured</p>
-                <p class="text-sm">Add networks to allow access</p>
+                <p class="text-sm">Add networks to allow internal access</p>
               </div>
             </div>
 
@@ -777,7 +821,7 @@ watch(activeTab, (tab) => {
               <h4 class="text-sm font-medium text-secondary mb-3">Add Custom IP Range</h4>
               <div class="flex gap-3">
                 <input
-                  v-model="newIpRange.ip_range"
+                  v-model="newIpRange.cidr"
                   type="text"
                   class="input flex-1"
                   placeholder="e.g., 192.168.1.0/24"
@@ -788,10 +832,27 @@ watch(activeTab, (tab) => {
                   class="input flex-1"
                   placeholder="Description (optional)"
                 />
-                <button @click="addIpRange" :disabled="savingIpRanges || !newIpRange.ip_range" class="btn-primary">
+                <button @click="addIpRange" :disabled="savingIpRanges || !newIpRange.cidr" class="btn-primary">
                   <PlusIcon class="h-4 w-4 mr-2" />
                   Add
                 </button>
+              </div>
+            </div>
+
+            <!-- Info Box -->
+            <div class="mt-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+              <div class="flex gap-3">
+                <svg class="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <h5 class="font-medium text-blue-800 dark:text-blue-300">About Access Control</h5>
+                  <p class="mt-1 text-sm text-blue-700 dark:text-blue-400">
+                    IP ranges configured here are classified as "internal" in nginx's geo block. Internal networks have full access to services like Portainer.
+                    External networks (not listed here) can access the main application but not internal-only services.
+                    Click "Reload Nginx" after making changes to apply them immediately.
+                  </p>
+                </div>
               </div>
             </div>
           </template>
