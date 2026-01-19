@@ -41,6 +41,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     make \
+    iproute2 \
+    wireless-tools \
+    iw \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

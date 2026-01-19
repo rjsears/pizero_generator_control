@@ -218,6 +218,8 @@ async def get_system_info() -> SystemInfo:
     # Network info
     network_interfaces = _get_network_interfaces()
     primary_ip = _get_primary_ip(network_interfaces)
+    default_gateway = _get_default_gateway()
+    dns_servers = _get_dns_servers()
 
     return SystemInfo(
         hostname=platform.node(),
@@ -235,6 +237,8 @@ async def get_system_info() -> SystemInfo:
         temperature_fahrenheit=temperature_f,
         uptime_seconds=_get_uptime(),
         ip_address=primary_ip,
+        default_gateway=default_gateway,
+        dns_servers=dns_servers,
         network_interfaces=network_interfaces,
         status=status,
         warnings=warnings,
@@ -367,84 +371,94 @@ def _get_network_interfaces() -> list[NetworkInfo]:
 
 
 def _get_wifi_info(interface: str) -> Optional[dict]:
-    """Get WiFi information for an interface using iwconfig/iw."""
-    try:
-        # Try iw first (more modern)
-        import subprocess
+    """Get WiFi information for an interface."""
+    import subprocess
 
+    info = {}
+
+    # Try iwgetid for SSID (simpler and more reliable)
+    try:
         result = subprocess.run(
-            ["iw", "dev", interface, "link"],
+            ["iwgetid", interface, "-r"],
             capture_output=True,
             text=True,
             timeout=5,
         )
+        if result.returncode == 0 and result.stdout.strip():
+            info["ssid"] = result.stdout.strip()
+    except Exception:
+        pass
 
-        if result.returncode == 0:
-            output = result.stdout
-            info = {}
+    # Try /proc/net/wireless for signal strength
+    try:
+        with open("/proc/net/wireless", "r") as f:
+            for line in f.readlines()[2:]:  # Skip headers
+                parts = line.split()
+                if len(parts) >= 4:
+                    iface = parts[0].rstrip(":")
+                    if iface == interface:
+                        # Signal level is in column 3 (can be dBm or relative)
+                        signal_str = parts[3].rstrip(".")
+                        signal_val = int(float(signal_str))
+                        # If value is negative, it's dBm; if positive, convert
+                        if signal_val > 0:
+                            signal_dbm = signal_val - 256 if signal_val > 63 else signal_val - 100
+                        else:
+                            signal_dbm = signal_val
+                        info["signal_dbm"] = signal_dbm
+                        info["signal_percent"] = max(0, min(100, int((signal_dbm + 90) * 100 / 60)))
+                        break
+    except Exception:
+        pass
 
-            # Parse SSID
-            for line in output.split("\n"):
-                if "SSID:" in line:
-                    info["ssid"] = line.split("SSID:")[1].strip()
-                elif "signal:" in line:
-                    # Format: "signal: -45 dBm"
-                    signal_str = line.split("signal:")[1].strip().split()[0]
-                    signal_dbm = int(signal_str)
+    # Fallback: try iw command
+    if "ssid" not in info or "signal_dbm" not in info:
+        try:
+            result = subprocess.run(
+                ["iw", "dev", interface, "link"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.split("\n"):
+                    if "SSID:" in line and "ssid" not in info:
+                        info["ssid"] = line.split("SSID:")[1].strip()
+                    elif "signal:" in line and "signal_dbm" not in info:
+                        signal_str = line.split("signal:")[1].strip().split()[0]
+                        signal_dbm = int(signal_str)
+                        info["signal_dbm"] = signal_dbm
+                        info["signal_percent"] = max(0, min(100, int((signal_dbm + 90) * 100 / 60)))
+        except Exception:
+            pass
+
+    # Final fallback: iwconfig
+    if "ssid" not in info or "signal_dbm" not in info:
+        try:
+            result = subprocess.run(
+                ["iwconfig", interface],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                output = result.stdout
+                if 'ESSID:"' in output and "ssid" not in info:
+                    essid_start = output.index('ESSID:"') + 7
+                    essid_end = output.index('"', essid_start)
+                    info["ssid"] = output[essid_start:essid_end]
+                if "Signal level=" in output and "signal_dbm" not in info:
+                    signal_part = output.split("Signal level=")[1].split()[0]
+                    if "dBm" in signal_part:
+                        signal_dbm = int(signal_part.replace("dBm", ""))
+                    else:
+                        signal_dbm = int(signal_part.split("/")[0]) - 100
                     info["signal_dbm"] = signal_dbm
-                    # Convert dBm to percentage (rough approximation)
-                    # -30 dBm = 100%, -90 dBm = 0%
-                    info["signal_percent"] = max(
-                        0, min(100, int((signal_dbm + 90) * 100 / 60))
-                    )
+                    info["signal_percent"] = max(0, min(100, int((signal_dbm + 90) * 100 / 60)))
+        except Exception:
+            pass
 
-            if info:
-                return info
-
-    except Exception:
-        pass
-
-    # Fallback to iwconfig
-    try:
-        import subprocess
-
-        result = subprocess.run(
-            ["iwconfig", interface],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-
-        if result.returncode == 0:
-            output = result.stdout
-            info = {}
-
-            # Parse ESSID
-            if 'ESSID:"' in output:
-                essid_start = output.index('ESSID:"') + 7
-                essid_end = output.index('"', essid_start)
-                info["ssid"] = output[essid_start:essid_end]
-
-            # Parse signal level
-            if "Signal level=" in output:
-                signal_part = output.split("Signal level=")[1].split()[0]
-                if "dBm" in signal_part:
-                    signal_dbm = int(signal_part.replace("dBm", ""))
-                else:
-                    # Some drivers report as ratio (e.g., 70/100)
-                    signal_dbm = int(signal_part.split("/")[0]) - 100
-                info["signal_dbm"] = signal_dbm
-                info["signal_percent"] = max(
-                    0, min(100, int((signal_dbm + 90) * 100 / 60))
-                )
-
-            if info:
-                return info
-
-    except Exception:
-        pass
-
-    return None
+    return info if info else None
 
 
 def _get_primary_ip(interfaces: list[NetworkInfo]) -> Optional[str]:
