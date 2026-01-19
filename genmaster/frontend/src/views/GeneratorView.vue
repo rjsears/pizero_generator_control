@@ -932,10 +932,20 @@ async function fetchRelayState() {
   relayStateLoading.value = true
   try {
     const response = await genslaveApi.getRelayState()
-    relayArmed.value = response.data?.armed || false
+    // Only update if we got a valid response with an explicit armed value
+    if (response.data && typeof response.data.armed === 'boolean') {
+      relayArmed.value = response.data.armed
+    } else {
+      console.warn('Relay state response missing armed field:', response.data)
+      // Keep previous value if response is malformed
+    }
   } catch (err) {
     console.error('Failed to fetch relay state:', err)
-    relayArmed.value = false
+    // Don't reset to false on error - keep previous value
+    // Only set to false on first load if we have no previous value
+    if (relayArmed.value === null) {
+      relayArmed.value = false
+    }
   } finally {
     relayStateLoading.value = false
   }
