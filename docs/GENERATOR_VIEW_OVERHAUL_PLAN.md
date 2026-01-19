@@ -61,7 +61,7 @@ Based on the n8n_nginx repository (`refactor/frontend-optimization-v2` branch), 
 
 ### New Layout (Compact, Collapsible)
 ```
-[Control Row: GenSlave | Relay | Emergency Stop]  <- 3 boxes (Generator toggle REMOVED)
+[Control Row: GenSlave | Generator Run Relay | Emergency Stop]  <- 3 boxes (Generator toggle REMOVED)
 [Generator Status Card]  [Victron Status Card]
 [Fuel Usage Tracking]    [Manual Override]      <- Same row, compact
 [Run Time Limits - Collapsible]                 <- Collapsed by default
@@ -164,6 +164,7 @@ Based on the n8n_nginx repository (`refactor/frontend-optimization-v2` branch), 
 ### Phase 1: Setup & Infrastructure
 - [ ] Create feature branch `gencontrol_tab_overhaul`
 - [ ] Remove Generator toggle from top control row (redundant with Start/Stop buttons)
+- [ ] Rename "Relay" to "Generator Run Relay" in top control row for clarity
 - [ ] Update control row grid from 4 columns to 3 columns
 - [ ] Add CSS transition classes for `section-expand` animation
 - [ ] Add collapsible state refs (`runtimeLimitsExpanded`, `generatorInfoExpanded`, `exerciseScheduleExpanded`)
@@ -271,10 +272,10 @@ Based on the n8n_nginx repository (`refactor/frontend-optimization-v2` branch), 
 │ Generator Control                                                           │
 │ Monitor and control the generator                                           │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐                      │
-│ │   GenSlave    │ │     Relay     │ │   Emergency   │   <- Control Row     │
-│ │    Online     │ │     Armed     │ │     Stop      │      (3 boxes)       │
-│ └───────────────┘ └───────────────┘ └───────────────┘                      │
+│ ┌───────────────┐ ┌─────────────────────┐ ┌───────────────┐                │
+│ │   GenSlave    │ │ Generator Run Relay │ │   Emergency   │  <- Control    │
+│ │    Online     │ │       Armed         │ │     Stop      │     Row        │
+│ └───────────────┘ └─────────────────────┘ └───────────────┘                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ ┌─────────────────────────────┐ ┌─────────────────────────────┐            │
 │ │ [⚡] Generator Status       │ │ [📡] Victron Command        │            │
