@@ -1659,6 +1659,10 @@ configure_genslave() {
         echo -e "  ${WHITE}2.${NC} Run GenSlave setup on your Pi Zero 2W"
         echo -e "  ${WHITE}3.${NC} Enter this API secret when prompted during GenSlave setup"
         echo ""
+        echo -e "  ${YELLOW}If GenSlave is already running and you changed the API key:${NC}"
+        echo -e "  ${WHITE}1.${NC} Update API_SECRET in GenSlave's .env file"
+        echo -e "  ${WHITE}2.${NC} Run: ${CYAN}docker-compose up -d --force-recreate genslave${NC}"
+        echo ""
         echo -ne "  ${WHITE}Press Enter when GenSlave is configured and running to test the connection...${NC}"
         read -r
         echo ""
