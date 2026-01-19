@@ -2394,6 +2394,16 @@ SLAVE_API_SECRET=${GENSLAVE_API_SECRET}
 GENSLAVE_IP=${GENSLAVE_IP}
 GENSLAVE_HOSTNAME=${GENSLAVE_HOSTNAME:-genslave}
 
+# Generator Information (optional - can be configured via web UI)
+# Set these values to pre-populate generator info on first startup
+GEN_INFO_MANUFACTURER=${GEN_INFO_MANUFACTURER:-}
+GEN_INFO_MODEL_NUMBER=${GEN_INFO_MODEL_NUMBER:-}
+GEN_INFO_SERIAL_NUMBER=${GEN_INFO_SERIAL_NUMBER:-}
+GEN_INFO_FUEL_TYPE=${GEN_INFO_FUEL_TYPE:-}
+GEN_INFO_LOAD_EXPECTED=${GEN_INFO_LOAD_EXPECTED:-}
+GEN_INFO_FUEL_CONSUMPTION_50=${GEN_INFO_FUEL_CONSUMPTION_50:-}
+GEN_INFO_FUEL_CONSUMPTION_100=${GEN_INFO_FUEL_CONSUMPTION_100:-}
+
 # Webhook Configuration
 WEBHOOK_BASE_URL=${WEBHOOK_URL}
 WEBHOOK_SECRET=${WEBHOOK_SECRET}
@@ -2835,17 +2845,45 @@ EOF
     if [ "$INSTALL_PORTAINER" = true ]; then
         cat >> "${SCRIPT_DIR}/nginx/nginx.conf" << 'EOF'
 
+        # Portainer - Container Management UI
         location /portainer/ {
             if ($access_level = "external") {
                 return 403;
             }
-            proxy_pass http://genmaster_portainer:9000/;
+
+            # Rewrite /portainer/ to / for Portainer
+            rewrite ^/portainer/(.*) /$1 break;
+
+            proxy_pass http://genmaster_portainer:9000;
             proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_set_header Connection "";
+
+            # WebSocket timeouts
+            proxy_read_timeout 86400;
+            proxy_send_timeout 86400;
+            proxy_buffering off;
+        }
+
+        # Portainer WebSocket endpoint
+        location /portainer/api/websocket/ {
+            if ($access_level = "external") {
+                return 403;
+            }
+
+            rewrite ^/portainer/(.*) /$1 break;
+
+            proxy_pass http://genmaster_portainer:9000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 86400;
+            proxy_buffering off;
         }
 EOF
     fi
