@@ -2718,7 +2718,7 @@ EOF
     image: portainer/portainer-ce:latest
     container_name: genmaster_portainer
     restart: unless-stopped
-    command: --base-url /portainer --csrf-origins "https://${DOMAIN}"
+    command: --base-url /portainer
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
