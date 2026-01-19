@@ -591,7 +591,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useNotificationStore } from '@/stores/notifications'
-import api, { genslaveApi, configApi } from '@/services/api'
+import api, { genslaveApi, configApi, systemApi } from '@/services/api'
 import Card from '@/components/common/Card.vue'
 import HeartbeatLoader from '@/components/common/HeartbeatLoader.vue'
 import {
@@ -766,16 +766,24 @@ async function testSlaveConnection() {
   }
 }
 
-// Toggle relay ARM/DISARM
+// Toggle relay ARM/DISARM - syncs both GenSlave relay and GenMaster automation
 async function toggleRelayArm() {
   armingRelay.value = true
   try {
     if (relayArmed.value) {
-      await genslaveApi.disarm()
+      // Disarm both GenSlave relay and GenMaster automation
+      await Promise.all([
+        genslaveApi.disarm(),
+        systemApi.disarm(),
+      ])
       relayArmed.value = false
       notificationStore.success('Relay disarmed')
     } else {
-      await genslaveApi.arm()
+      // Arm both GenSlave relay and GenMaster automation
+      await Promise.all([
+        genslaveApi.arm(),
+        systemApi.arm(),
+      ])
       relayArmed.value = true
       notificationStore.success('Relay armed - generator can now be started')
     }

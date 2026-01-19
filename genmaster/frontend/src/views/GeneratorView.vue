@@ -293,7 +293,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useGeneratorStore } from '@/stores/generator'
 import { useNotificationStore } from '@/stores/notifications'
 import configService from '@/services/config'
-import { genslaveApi, configApi } from '@/services/api'
+import { genslaveApi, configApi, systemApi } from '@/services/api'
 import Card from '@/components/common/Card.vue'
 import Button from '@/components/common/Button.vue'
 import Input from '@/components/common/Input.vue'
@@ -317,15 +317,23 @@ const savingRunTimeConfig = ref(false)
 const relayArmed = ref(false)
 const armingRelay = ref(false)
 
-// Toggle relay arm/disarm
+// Toggle relay arm/disarm - syncs both GenSlave relay and GenMaster automation
 async function toggleRelayArm() {
   armingRelay.value = true
   try {
     if (relayArmed.value) {
-      await genslaveApi.disarm()
+      // Disarm both GenSlave relay and GenMaster automation
+      await Promise.all([
+        genslaveApi.disarm(),
+        systemApi.disarm(),
+      ])
       relayArmed.value = false
     } else {
-      await genslaveApi.arm()
+      // Arm both GenSlave relay and GenMaster automation
+      await Promise.all([
+        genslaveApi.arm(),
+        systemApi.arm(),
+      ])
       relayArmed.value = true
     }
   } catch (err) {
