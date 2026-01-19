@@ -1659,6 +1659,10 @@ configure_genslave() {
         echo -e "  ${WHITE}2.${NC} Run GenSlave setup on your Pi Zero 2W"
         echo -e "  ${WHITE}3.${NC} Enter this API secret when prompted during GenSlave setup"
         echo ""
+        echo -e "  ${YELLOW}If GenSlave is already running and you changed the API key:${NC}"
+        echo -e "  ${WHITE}1.${NC} Update API_SECRET in GenSlave's .env file"
+        echo -e "  ${WHITE}2.${NC} Run: ${CYAN}docker-compose up -d --force-recreate genslave${NC}"
+        echo ""
         echo -ne "  ${WHITE}Press Enter when GenSlave is configured and running to test the connection...${NC}"
         read -r
         echo ""
@@ -1742,19 +1746,16 @@ validate_genslave() {
         fi
     fi
 
-    # Test API health endpoint
+    # Test API health endpoint with API key
     print_info "Testing GenSlave API health..."
     local health_url="${GENSLAVE_API_URL}/api/health"
-    local health_response=$(curl -s --connect-timeout 10 --max-time 15 "$health_url" 2>/dev/null)
+    local health_response=$(curl -s --connect-timeout 10 --max-time 15 \
+        -H "X-API-Key: ${GENSLAVE_API_SECRET}" \
+        "$health_url" 2>/dev/null)
 
     if [ -n "$health_response" ]; then
-        if echo "$health_response" | grep -qi "healthy\|ok\|status"; then
-            print_success "GenSlave API is responding"
-            echo -e "    ${GRAY}Response: ${health_response:0:100}${NC}"
-        else
-            print_warning "GenSlave API responded but status unclear"
-            echo -e "    ${GRAY}Response: ${health_response:0:100}${NC}"
-        fi
+        print_success "GenSlave API is responding"
+        echo -e "    ${GRAY}Response: ${health_response:0:100}${NC}"
     else
         print_warning "GenSlave API is not responding at $health_url"
         validation_passed=false
