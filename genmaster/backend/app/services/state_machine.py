@@ -180,8 +180,9 @@ class StateMachine:
             async with AsyncSessionLocal() as db:
                 state = await self._get_state(db)
 
-                # Update our record of slave's relay state
+                # Update our record of slave's relay state and armed state
                 state.slave_relay_state = result["relay_state"]
+                state.slave_relay_armed = result["slave_armed"]
 
                 # If slave's relay is ON but we think generator is stopped,
                 # we have a mismatch - log it but don't auto-start
@@ -262,6 +263,8 @@ class StateMachine:
 
             # Validate state transition
             if not state.can_start_generator():
+                if not state.slave_relay_armed:
+                    raise ValueError("Cannot start - GenSlave relay is not armed")
                 if state.generator_running:
                     raise ValueError("Generator is already running")
                 if state.override_enabled and state.override_type == "force_stop":
@@ -395,6 +398,14 @@ class StateMachine:
                 logger.info(
                     f"Victron signal changed to {signal_active}, "
                     f"but override ({state.override_type}) is active - ignoring"
+                )
+                return
+
+            # Check if relay is armed
+            if not state.slave_relay_armed:
+                logger.info(
+                    f"Victron signal changed to {signal_active}, "
+                    f"but GenSlave relay is not armed - ignoring"
                 )
                 return
 
@@ -647,9 +658,12 @@ class StateMachine:
                 previous_missed = state.missed_heartbeat_count
                 state.missed_heartbeat_count = 0
 
-                # Update slave relay state if provided
-                if slave_status and "relay_state" in slave_status:
-                    state.slave_relay_state = slave_status["relay_state"]
+                # Update slave relay state and armed state if provided
+                if slave_status:
+                    if "relay_state" in slave_status:
+                        state.slave_relay_state = slave_status["relay_state"]
+                    if "armed" in slave_status:
+                        state.slave_relay_armed = slave_status["armed"]
 
                 # Check if connection was restored
                 if state.slave_connection_status == "disconnected":

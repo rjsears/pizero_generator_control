@@ -78,6 +78,7 @@ class SystemState(Base):
     missed_heartbeat_count: Mapped[int] = mapped_column(default=0)
     slave_connection_status: Mapped[str] = mapped_column(default="unknown")
     slave_relay_state: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    slave_relay_armed: Mapped[Optional[bool]] = mapped_column(nullable=True)
 
     # Metadata
     updated_at: Mapped[datetime] = mapped_column(
@@ -107,6 +108,8 @@ class SystemState(Base):
 
     def can_start_generator(self) -> bool:
         """Check if generator can be started."""
+        if not self.slave_relay_armed:
+            return False
         if self.generator_running:
             return False
         if self.override_enabled and self.override_type == "force_stop":
