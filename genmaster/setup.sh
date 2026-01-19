@@ -1746,20 +1746,35 @@ validate_genslave() {
         fi
     fi
 
-    # Test API health endpoint with API key
+    # Test API health endpoint with API key (with retries)
     print_info "Testing GenSlave API health..."
     local health_url="${GENSLAVE_API_URL}/api/health"
-    local health_response=$(curl -s --connect-timeout 10 --max-time 15 \
-        -H "X-API-Key: ${GENSLAVE_API_SECRET}" \
-        "$health_url" 2>/dev/null)
+    local health_response=""
+    local max_attempts=3
+    local retry_delay=10
+    local attempt=1
 
-    if [ -n "$health_response" ]; then
-        print_success "GenSlave API is responding"
-        echo -e "    ${GRAY}Response: ${health_response:0:100}${NC}"
-    else
-        print_warning "GenSlave API is not responding at $health_url"
-        validation_passed=false
-    fi
+    while [ $attempt -le $max_attempts ]; do
+        health_response=$(curl -s --connect-timeout 10 --max-time 15 \
+            -H "X-API-Key: ${GENSLAVE_API_SECRET}" \
+            "$health_url" 2>/dev/null)
+
+        if [ -n "$health_response" ]; then
+            print_success "GenSlave API is responding"
+            echo -e "    ${GRAY}Response: ${health_response:0:100}${NC}"
+            break
+        else
+            if [ $attempt -lt $max_attempts ]; then
+                print_warning "GenSlave not responding yet (attempt $attempt/$max_attempts)"
+                echo -e "    ${GRAY}GenSlave may still be starting, retrying in ${retry_delay} seconds...${NC}"
+                sleep $retry_delay
+            else
+                print_warning "GenSlave API is not responding at $health_url"
+                validation_passed=false
+            fi
+        fi
+        ((attempt++))
+    done
 
     echo ""
 
