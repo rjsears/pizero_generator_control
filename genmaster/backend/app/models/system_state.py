@@ -119,5 +119,5 @@ class SystemState(Base):
         return True
 
     def is_armed(self) -> bool:
-        """Check if automation is armed."""
-        return self.automation_armed
+        """Check if relay is armed."""
+        return self.slave_relay_armed or False
