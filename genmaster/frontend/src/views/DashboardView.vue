@@ -339,7 +339,7 @@
                     class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300"
                   >
                     <ClockIcon class="w-3.5 h-3.5" />
-                    {{ formatMinutes(generatorStore.runTimeMinutes) }}
+                    {{ formatMinutes(localRunTimeMinutes) }}
                   </div>
                 </div>
               </div>
@@ -349,12 +349,12 @@
             <div v-if="generatorStore.isRunning" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <div class="flex items-center justify-between text-sm mb-2">
                 <span class="text-secondary">Runtime</span>
-                <span class="font-medium text-primary">{{ formatMinutes(generatorStore.runTimeMinutes) }}</span>
+                <span class="font-medium text-primary">{{ formatMinutes(localRunTimeMinutes) }}</span>
               </div>
               <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div
                   class="h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full transition-all animate-pulse"
-                  :style="{ width: `${Math.min((generatorStore.runTimeMinutes / 120) * 100, 100)}%` }"
+                  :style="{ width: `${Math.min((localRunTimeMinutes / 120) * 100, 100)}%` }"
                 />
               </div>
             </div>
@@ -392,7 +392,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGeneratorStore } from '@/stores/generator'
 import { useSystemStore } from '@/stores/system'
@@ -424,6 +424,7 @@ const metricsStore = useMetricsStore()
 const loading = ref(true)
 const metricsAvailable = ref(false)
 let refreshInterval = null
+let runtimeInterval = null
 
 // Relay arm/disarm state (GenSlave)
 const relayArmed = ref(false)
@@ -434,6 +435,40 @@ const generatorToggleLoading = ref(false)
 
 // Emergency stop state
 const emergencyStopLoading = ref(false)
+
+// Real-time runtime tracking
+const localRunTimeSeconds = ref(0)
+const localRunTimeMinutes = computed(() => Math.floor(localRunTimeSeconds.value / 60))
+
+// Update local runtime from generator state
+function syncRuntimeFromStore() {
+  if (generatorStore.state?.start_time && generatorStore.isRunning) {
+    // Calculate current runtime based on start_time
+    const now = Math.floor(Date.now() / 1000)
+    localRunTimeSeconds.value = now - generatorStore.state.start_time
+  } else if (generatorStore.state?.runtime_seconds) {
+    localRunTimeSeconds.value = generatorStore.state.runtime_seconds
+  } else {
+    localRunTimeSeconds.value = 0
+  }
+}
+
+// Start/stop runtime timer based on generator state
+function updateRuntimeTimer() {
+  // Clear existing timer
+  if (runtimeInterval) {
+    clearInterval(runtimeInterval)
+    runtimeInterval = null
+  }
+
+  // Start timer if generator is running
+  if (generatorStore.isRunning) {
+    syncRuntimeFromStore()
+    runtimeInterval = setInterval(() => {
+      localRunTimeSeconds.value++
+    }, 1000)
+  }
+}
 
 // Handle emergency stop
 async function handleEmergencyStop() {
@@ -494,6 +529,20 @@ async function fetchRelayState() {
   }
 }
 
+// Watch for generator running state changes to start/stop runtime timer
+watch(() => generatorStore.isRunning, (isRunning) => {
+  if (isRunning) {
+    syncRuntimeFromStore()
+    updateRuntimeTimer()
+  } else {
+    if (runtimeInterval) {
+      clearInterval(runtimeInterval)
+      runtimeInterval = null
+    }
+    localRunTimeSeconds.value = 0
+  }
+})
+
 // Fetch data on mount and set up polling
 onMounted(async () => {
   try {
@@ -506,6 +555,9 @@ onMounted(async () => {
       generatorStore.fetchState(),
     ])
     metricsAvailable.value = true
+
+    // Initialize runtime timer if generator is already running
+    updateRuntimeTimer()
   } catch (err) {
     console.error('Failed to load dashboard data:', err)
   } finally {
@@ -526,6 +578,9 @@ onMounted(async () => {
 onUnmounted(() => {
   if (refreshInterval) {
     clearInterval(refreshInterval)
+  }
+  if (runtimeInterval) {
+    clearInterval(runtimeInterval)
   }
 })
 
