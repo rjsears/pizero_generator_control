@@ -280,8 +280,6 @@ class StateMachine:
 
             # Validate state transition
             if not state.can_start_generator():
-                if not state.slave_relay_armed:
-                    raise ValueError("Cannot start - GenSlave relay is not armed")
                 if state.generator_running:
                     raise ValueError("Generator is already running")
                 if state.override_enabled and state.override_type == "force_stop":
@@ -291,10 +289,15 @@ class StateMachine:
                 raise ValueError("Generator cannot be started in current state")
 
             # Turn on the relay via GenSlave
+            # GenSlave will reject if relay is not armed
             slave_client = await self._get_slave_client()
             relay_response = await slave_client.relay_on()
             if not relay_response.success:
-                raise ValueError(f"Failed to turn on relay: {relay_response.error}")
+                error_msg = relay_response.error or "Unknown error"
+                # Provide helpful message if GenSlave rejected due to not being armed
+                if "not armed" in error_msg.lower():
+                    raise ValueError("Cannot start - GenSlave relay is not armed. Arm the relay first.")
+                raise ValueError(f"Failed to turn on relay: {error_msg}")
 
             logger.info("GenSlave relay turned ON")
 
@@ -512,127 +515,8 @@ class StateMachine:
             return previous_type
 
     # =========================================================================
-    # Automation Arming Operations
+    # Arm Status (cached from heartbeat - GenSlave is source of truth)
     # =========================================================================
-
-    async def arm_automation(self, source: str = "api") -> dict:
-        """
-        Arm the relay, enabling generator control.
-
-        Args:
-            source: What initiated the arm request ('api', 'ui', 'startup')
-
-        Returns:
-            Dict with armed status, warnings, and any messages
-        """
-        warnings = []
-
-        async with AsyncSessionLocal() as db:
-            state = await self._get_state(db)
-
-            # Check if already armed
-            if state.slave_relay_armed:
-                return {
-                    "success": True,
-                    "armed": True,
-                    "message": "Relay already armed",
-                    "warnings": [],
-                }
-
-            # Check GenSlave connection status
-            if state.slave_connection_status == "disconnected":
-                warnings.append(
-                    "GenSlave is disconnected - relay control may not function correctly"
-                )
-            elif state.slave_connection_status == "unknown":
-                warnings.append(
-                    "GenSlave connection status unknown - recommend verifying connection first"
-                )
-
-            # Arm the relay
-            state.slave_relay_armed = True
-            await db.commit()
-
-            logger.info(f"Relay armed by {source}")
-
-            await self.log_event(
-                "RELAY_ARMED",
-                {
-                    "source": source,
-                    "slave_status": state.slave_connection_status,
-                    "warnings": warnings,
-                },
-            )
-            await self._send_webhook(
-                "relay.armed",
-                {"source": source},
-            )
-
-            return {
-                "success": True,
-                "armed": True,
-                "message": "Relay armed successfully",
-                "warnings": warnings,
-            }
-
-    async def disarm_automation(self, source: str = "api") -> dict:
-        """
-        Disarm the relay, blocking generator control.
-
-        If the generator is running, it will NOT be stopped automatically.
-        The operator should manually stop it if needed.
-
-        Args:
-            source: What initiated the disarm request
-
-        Returns:
-            Dict with armed status and any messages
-        """
-        warnings = []
-
-        async with AsyncSessionLocal() as db:
-            state = await self._get_state(db)
-
-            # Check if already disarmed
-            if not state.slave_relay_armed:
-                return {
-                    "success": True,
-                    "armed": False,
-                    "message": "Relay already disarmed",
-                    "warnings": [],
-                }
-
-            # Warn if generator is running
-            if state.generator_running:
-                warnings.append(
-                    "Generator is currently running - it will NOT be stopped automatically. "
-                    "Use manual stop if needed."
-                )
-
-            # Disarm the relay
-            state.slave_relay_armed = False
-            await db.commit()
-
-            logger.info(f"Relay disarmed by {source}")
-
-            await self.log_event(
-                "RELAY_DISARMED",
-                {
-                    "source": source,
-                    "generator_was_running": state.generator_running,
-                },
-            )
-            await self._send_webhook(
-                "relay.disarmed",
-                {"source": source, "generator_running": state.generator_running},
-            )
-
-            return {
-                "success": True,
-                "armed": False,
-                "message": "Relay disarmed",
-                "warnings": warnings,
-            }
 
     async def get_arm_status(self) -> dict:
         """Get current relay arm status."""

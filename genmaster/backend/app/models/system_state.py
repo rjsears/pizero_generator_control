@@ -107,9 +107,12 @@ class SystemState(Base):
         return self.generator_running and self.run_trigger != "idle"
 
     def can_start_generator(self) -> bool:
-        """Check if generator can be started."""
-        if not self.slave_relay_armed:
-            return False
+        """Check if generator can be started.
+
+        Note: We don't check slave_relay_armed here because GenSlave
+        is the source of truth for armed state. If not armed, GenSlave
+        will reject the relay_on() request directly.
+        """
         if self.generator_running:
             return False
         if self.override_enabled and self.override_type == "force_stop":
@@ -119,5 +122,5 @@ class SystemState(Base):
         return True
 
     def is_armed(self) -> bool:
-        """Check if relay is armed."""
+        """Check if relay is armed (cached from last heartbeat)."""
         return self.slave_relay_armed or False

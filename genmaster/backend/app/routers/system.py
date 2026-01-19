@@ -208,45 +208,8 @@ async def get_arm_status(
     return AutomationArmStatus(**status)
 
 
-@router.post("/arm", response_model=ArmResponse)
-async def arm_automation(
-    request: ArmRequest = ArmRequest(),
-    state_machine=Depends(get_state_machine),
-) -> ArmResponse:
-    """
-    Arm the automation system.
-
-    Arming enables all automated actions:
-    - Victron signal will trigger generator start/stop
-    - Scheduled runs will execute
-    - Heartbeat failures will trigger safety actions
-
-    Before arming, the system verifies GenSlave connectivity.
-    Warnings are returned if connectivity is degraded.
-    """
-    result = await state_machine.arm_automation(source=request.source)
-    return ArmResponse(**result)
-
-
-@router.post("/disarm", response_model=ArmResponse)
-async def disarm_automation(
-    request: ArmRequest = ArmRequest(),
-    state_machine=Depends(get_state_machine),
-) -> ArmResponse:
-    """
-    Disarm the automation system.
-
-    Disarming blocks all automated actions:
-    - Victron signals are logged but not acted upon
-    - Scheduled runs are skipped
-    - No automatic start/stop of generator
-
-    WARNING: If the generator is running when disarmed, it will NOT
-    be stopped automatically. Use manual stop if needed.
-    """
-    result = await state_machine.disarm_automation(source=request.source)
-    return ArmResponse(**result)
-
+# Note: /arm and /disarm endpoints removed - GenSlave is source of truth
+# for arm state. Use genslaveApi.arm/disarm directly.
 
 # =========================================================================
 # SSL Certificate Endpoints
