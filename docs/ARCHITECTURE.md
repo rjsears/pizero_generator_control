@@ -790,7 +790,7 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  │  generator_running          BOOLEAN DEFAULT false                             │  │
 │  │  generator_start_time       INTEGER (unix timestamp)                          │  │
 │  │  current_run_id             INTEGER → generator_runs.id                       │  │
-│  │  run_trigger                VARCHAR(20) 'idle'|'victron'|'manual'|'scheduled' │  │
+│  │  run_trigger                VARCHAR(20) 'idle'|'victron'|'manual'|'scheduled'|'exercise' │
 │  │  victron_signal_state       BOOLEAN DEFAULT false                             │  │
 │  │  victron_last_change        INTEGER (unix timestamp)                          │  │
 │  │  override_enabled           BOOLEAN DEFAULT false                             │  │
@@ -825,9 +825,13 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  │  start_time                 INTEGER NOT NULL (unix timestamp)                 │  │
 │  │  end_time                   INTEGER (unix timestamp)                          │  │
 │  │  duration_seconds           INTEGER (calculated)                              │  │
-│  │  trigger_type               VARCHAR(20) 'victron'|'manual'|'scheduled'        │  │
+│  │  trigger_type               VARCHAR(20) 'victron'|'manual'|'scheduled'|'exercise' │
 │  │  stop_reason                VARCHAR(50)                                       │  │
 │  │  scheduled_run_id           INTEGER → scheduled_runs.id                       │  │
+│  │  fuel_type_at_run           VARCHAR(20) (snapshot of fuel type)               │  │
+│  │  load_at_run                INTEGER (snapshot of load setting: 50 or 100)     │  │
+│  │  fuel_consumption_rate      FLOAT (gal/hr rate used for this run)             │  │
+│  │  estimated_fuel_used        FLOAT (calculated: runtime × rate)                │  │
 │  │  notes                      TEXT                                              │  │
 │  └───────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                     │
@@ -863,6 +867,35 @@ PostgreSQL 16 with asyncpg driver for async operations.
 │  │  is_admin                   BOOLEAN DEFAULT false                             │  │
 │  │  created_at                 INTEGER (unix timestamp)                          │  │
 │  │  last_login                 INTEGER (unix timestamp)                          │  │
+│  └───────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                     │
+│  ┌───────────────────────────────────────────────────────────────────────────────┐  │
+│  │                              generator_info                                  │  │
+│  │                          (Singleton - 1 row)                                  │  │
+│  ├───────────────────────────────────────────────────────────────────────────────┤  │
+│  │  id                         SERIAL PRIMARY KEY (constrained to 1)            │  │
+│  │  manufacturer               VARCHAR(100)                                      │  │
+│  │  model_number               VARCHAR(100)                                      │  │
+│  │  serial_number              VARCHAR(100)                                      │  │
+│  │  fuel_type                  VARCHAR(20) 'lpg'|'natural_gas'|'diesel'         │  │
+│  │  load_expected              INTEGER (50 or 100)                               │  │
+│  │  fuel_consumption_50        FLOAT (gal/hr at 50% load)                        │  │
+│  │  fuel_consumption_100       FLOAT (gal/hr at 100% load)                       │  │
+│  │  updated_at                 TIMESTAMP                                         │  │
+│  └───────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                     │
+│  ┌───────────────────────────────────────────────────────────────────────────────┐  │
+│  │                              exercise_schedule                               │  │
+│  │                          (Singleton - 1 row)                                  │  │
+│  ├───────────────────────────────────────────────────────────────────────────────┤  │
+│  │  id                         SERIAL PRIMARY KEY (constrained to 1)            │  │
+│  │  enabled                    BOOLEAN DEFAULT false                             │  │
+│  │  frequency_days             INTEGER (e.g., 7 for weekly)                      │  │
+│  │  start_time                 VARCHAR(5) (e.g., "10:00")                        │  │
+│  │  duration_minutes           INTEGER                                           │  │
+│  │  last_exercise_date         DATE                                              │  │
+│  │  next_exercise_date         DATE (computed)                                   │  │
+│  │  updated_at                 TIMESTAMP                                         │  │
 │  └───────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘

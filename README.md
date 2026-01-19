@@ -110,10 +110,28 @@ The RPi Generator Control system automates generator management for off-grid sol
 | **Mobile Responsive** | Works on any device |
 | **Container Management** | Portainer integration for Docker control |
 
+### Generator Information & Fuel Tracking
+| Feature | Description |
+|---------|-------------|
+| **Generator Profile** | Store manufacturer, model number, and serial number |
+| **Fuel Configuration** | Configure fuel type (LPG, Natural Gas, Diesel) and expected load |
+| **Consumption Rates** | Set fuel consumption rates at 50% and 100% load |
+| **Per-Run Tracking** | Automatically track fuel usage for each generator run |
+| **Fuel History** | View estimated fuel consumed in run history |
+
+### Exercise Scheduling
+| Feature | Description |
+|---------|-------------|
+| **Automated Exercise** | Schedule regular generator runs for maintenance |
+| **Configurable Frequency** | Set exercise interval (weekly, bi-weekly, monthly, or custom) |
+| **Time Selection** | Choose start time for exercise runs |
+| **Duration Control** | Set how long each exercise run should last |
+| **Run Now** | Manually trigger an exercise run on demand |
+
 ### Operational Excellence
 | Feature | Description |
 |---------|-------------|
-| **Run History** | Complete log of all generator runs with duration and trigger |
+| **Run History** | Complete log of all generator runs with duration, trigger, and fuel usage |
 | **Statistics** | Daily, monthly, and all-time runtime tracking |
 | **System Health** | CPU, memory, disk, and temperature monitoring |
 | **Backup/Restore** | Database backup with one-click restore |
@@ -242,9 +260,10 @@ The setup wizard will:
 7. **Configure GenSlave** - IP address, API secret (prominently displayed for copying)
 8. **Connection validation** - Retries 3 times with 10-second delays if GenSlave is starting
 9. **Configure timezone** - Default America/Phoenix with host sync option
-10. **Optional services** - Tailscale VPN, Cloudflare Tunnel, Portainer
-11. **Generate configs** - .env, docker-compose.yml, nginx.conf
-12. **Deploy stack** - Start all containers
+10. **Configure generator info** - Optional manufacturer, model, fuel type, consumption rates
+11. **Optional services** - Tailscale VPN, Cloudflare Tunnel, Portainer
+12. **Generate configs** - .env, docker-compose.yml, nginx.conf
+13. **Deploy stack** - Start all containers
 
 ### Setup Command Line Options
 
@@ -267,6 +286,33 @@ The setup wizard will:
 # Show version
 ./setup.sh --version
 ```
+
+### Pre-configuring Generator Information
+
+To pre-populate generator information during setup, create a `gen_info.json` file:
+
+```bash
+# Copy the template
+cp genmaster/setup/gen_info.json.template genmaster/setup/gen_info.json
+
+# Edit with your generator details
+nano genmaster/setup/gen_info.json
+```
+
+Template contents:
+```json
+{
+  "manufacturer": "Generac",
+  "model_number": "7043",
+  "serial_number": "ABC123456",
+  "fuel_type": "lpg",
+  "load_expected": 50,
+  "fuel_consumption_50": 1.6,
+  "fuel_consumption_100": 2.8
+}
+```
+
+The setup wizard will detect this file and offer to use these values. Fuel type options: `lpg`, `natural_gas`, `diesel`. Load options: `50` or `100`.
 
 ### Verify Installation
 
@@ -351,6 +397,15 @@ HEARTBEAT_FAILURE_THRESHOLD=3
 WEBHOOK_BASE_URL=https://n8n.example.com/webhook/xxx
 WEBHOOK_SECRET=<webhook-secret>
 
+# Generator Information (Optional - can be configured via UI)
+GEN_INFO_MANUFACTURER=Generac
+GEN_INFO_MODEL_NUMBER=7043
+GEN_INFO_SERIAL_NUMBER=ABC123456
+GEN_INFO_FUEL_TYPE=lpg           # lpg, natural_gas, or diesel
+GEN_INFO_LOAD_EXPECTED=50        # 50 or 100
+GEN_INFO_FUEL_CONSUMPTION_50=1.6 # gal/hr at 50% load
+GEN_INFO_FUEL_CONSUMPTION_100=2.8 # gal/hr at 100% load
+
 # Cloudflare Tunnel
 CLOUDFLARE_TUNNEL_TOKEN=<tunnel-token>
 
@@ -397,7 +452,17 @@ The dashboard provides at-a-glance status of:
 - **Start Generator** - Manual start (requires GenSlave online)
 - **Stop Generator** - Manual stop
 - **View Schedule** - Manage scheduled runs
-- **View History** - Browse run history
+- **View History** - Browse run history with fuel consumption data
+
+### Generator Tab
+
+- **Generator Information** - View and edit manufacturer, model, serial number
+- **Fuel Configuration** - Set fuel type, expected load, and consumption rates
+- **Exercise Schedule** - Configure automated maintenance runs
+  - Enable/disable exercise scheduling
+  - Set frequency (weekly, bi-weekly, monthly, or custom days)
+  - Configure start time and duration
+  - Run exercise immediately with "Run Now" button
 
 ### Settings
 
@@ -443,6 +508,63 @@ Content-Type: application/json
 
 # Delete schedule
 DELETE /api/schedule/{id}
+```
+
+### Generator Information
+
+```bash
+# Get generator info
+GET /api/generator-info
+
+# Response
+{
+  "manufacturer": "Generac",
+  "model_number": "7043",
+  "serial_number": "ABC123456",
+  "fuel_type": "lpg",
+  "load_expected": 50,
+  "fuel_consumption_50": 1.6,
+  "fuel_consumption_100": 2.8
+}
+
+# Update generator info (partial update)
+PATCH /api/generator-info
+Content-Type: application/json
+{
+  "manufacturer": "Generac",
+  "fuel_type": "lpg",
+  "load_expected": 50
+}
+```
+
+### Exercise Schedule
+
+```bash
+# Get exercise schedule
+GET /api/exercise
+
+# Response
+{
+  "enabled": true,
+  "frequency_days": 7,
+  "start_time": "10:00",
+  "duration_minutes": 15,
+  "last_exercise_date": "2026-01-12",
+  "next_exercise_date": "2026-01-19"
+}
+
+# Update exercise schedule
+PATCH /api/exercise
+Content-Type: application/json
+{
+  "enabled": true,
+  "frequency_days": 14,
+  "start_time": "09:00",
+  "duration_minutes": 30
+}
+
+# Run exercise now (manual trigger)
+POST /api/exercise/run-now
 ```
 
 ### System
