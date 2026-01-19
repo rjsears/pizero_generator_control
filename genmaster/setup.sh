@@ -1569,9 +1569,23 @@ generate_secret_key() {
 configure_genslave() {
     print_section "GenSlave Configuration"
 
+    # In PRECONFIG_MODE, show existing config and API secret, then return
     if [ "$PRECONFIG_MODE" = "true" ]; then
         if [ "$GENSLAVE_ENABLED" = "true" ]; then
             print_info "GenSlave: $GENSLAVE_API_URL"
+            # Always show the API secret so user can copy it
+            if [ -n "$GENSLAVE_API_SECRET" ]; then
+                echo ""
+                echo -e "  ${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
+                echo -e "  ${GREEN}║${NC}  ${WHITE}IMPORTANT: Copy this API secret for GenSlave setup!${NC}           ${GREEN}║${NC}"
+                echo -e "  ${GREEN}╠════════════════════════════════════════════════════════════════╣${NC}"
+                echo -e "  ${GREEN}║${NC}                                                                ${GREEN}║${NC}"
+                echo -e "  ${GREEN}║${NC}  ${CYAN}SLAVE_API_SECRET=${GENSLAVE_API_SECRET}${NC}  ${GREEN}║${NC}"
+                echo -e "  ${GREEN}║${NC}                                                                ${GREEN}║${NC}"
+                echo -e "  ${GREEN}║${NC}  ${GRAY}You will need this when running GenSlave setup.${NC}              ${GREEN}║${NC}"
+                echo -e "  ${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
+                echo ""
+            fi
         else
             print_info "GenSlave: Disabled"
         fi
@@ -1586,105 +1600,72 @@ configure_genslave() {
     if confirm_prompt "Enable GenSlave communication?" "y"; then
         GENSLAVE_ENABLED=true
 
-        # Get GenSlave hostname and IP for /etc/hosts entry
+        # Get GenSlave IP address
         echo ""
-        echo -e "  ${WHITE}GenSlave Host Configuration${NC}"
-        echo -e "  ${GRAY}Adding a hosts entry ensures reliable hostname resolution.${NC}"
+        echo -e "  ${WHITE}GenSlave Network Configuration${NC}"
+        echo -e "  ${GRAY}Enter the IP address of your GenSlave Pi Zero 2W.${NC}"
         echo ""
 
-        local input_hostname=""
         local input_ip=""
 
-        echo -ne "${WHITE}  GenSlave hostname (e.g., genslave)${NC}: "
-        read input_hostname
-        input_hostname="${input_hostname:-genslave}"
-
-        echo -ne "${WHITE}  GenSlave IP address (e.g., 192.168.1.100 or Tailscale IP)${NC}: "
+        echo -ne "${WHITE}  GenSlave IP address (e.g., 192.168.1.100)${NC}: "
         read input_ip
 
-        if [ -n "$input_ip" ] && [ -n "$input_hostname" ]; then
+        if [ -n "$input_ip" ]; then
             # Save to global variables for .env and docker-compose
             GENSLAVE_IP="$input_ip"
-            GENSLAVE_HOSTNAME="$input_hostname"
+            GENSLAVE_HOSTNAME="genslave"
 
-            # Check if entry already exists in host /etc/hosts
-            if grep -q "^[^#]*${input_hostname}$\|^[^#]*${input_hostname} \|^[^#]* ${input_hostname}$" /etc/hosts 2>/dev/null; then
-                print_warning "Host entry for '${input_hostname}' already exists in /etc/hosts"
-                if confirm_prompt "Update the existing entry?" "y"; then
-                    # Remove old entry and add new one
-                    run_privileged sed -i "/[[:space:]]${input_hostname}$/d; /[[:space:]]${input_hostname}[[:space:]]/d" /etc/hosts
-                    echo "${input_ip}    ${input_hostname}" | run_privileged tee -a /etc/hosts > /dev/null
-                    print_success "Updated /etc/hosts: ${input_ip} -> ${input_hostname}"
-                fi
-            else
-                echo "${input_ip}    ${input_hostname}" | run_privileged tee -a /etc/hosts > /dev/null
-                print_success "Added to /etc/hosts: ${input_ip} -> ${input_hostname}"
-            fi
-
-            # Set default URL based on hostname
-            GENSLAVE_API_URL="http://${input_hostname}:8001"
-            print_info "Default GenSlave URL set to: ${GENSLAVE_API_URL}"
-            print_info "GenSlave IP saved: ${GENSLAVE_IP} (will be added to container /etc/hosts)"
+            # Set default URL based on IP
+            GENSLAVE_API_URL="http://${input_ip}:8001"
+            print_info "GenSlave API URL set to: ${GENSLAVE_API_URL}"
         else
-            print_warning "Skipping /etc/hosts entry (hostname or IP not provided)"
+            print_warning "No IP provided - you'll need to set SLAVE_API_URL manually in .env"
         fi
 
         echo ""
 
-        # Get GenSlave URL (with default from above if set)
-        while true; do
-            if [ -n "$GENSLAVE_API_URL" ]; then
-                echo -ne "${WHITE}  GenSlave API URL [${GENSLAVE_API_URL}]${NC}: "
+        # Allow URL override if needed
+        if [ -n "$GENSLAVE_API_URL" ]; then
+            if confirm_prompt "Use ${GENSLAVE_API_URL} as the API URL?" "y"; then
+                : # Keep the URL as-is
             else
-                echo -ne "${WHITE}  GenSlave API URL (e.g., http://genslave.local:8001)${NC}: "
-            fi
-            read input_url
-            GENSLAVE_API_URL="${input_url:-$GENSLAVE_API_URL}"
-
-            if [ -n "$GENSLAVE_API_URL" ]; then
-                # Validate URL format
-                if [[ ! "$GENSLAVE_API_URL" =~ ^https?:// ]]; then
-                    print_warning "URL should start with http:// or https://"
-                    if ! confirm_prompt "Continue with this URL anyway?"; then
-                        continue
-                    fi
+                echo -ne "${WHITE}  Enter custom GenSlave API URL${NC}: "
+                read custom_url
+                if [ -n "$custom_url" ]; then
+                    GENSLAVE_API_URL="$custom_url"
                 fi
-                break
             fi
-            print_error "URL is required"
-        done
+        fi
 
-        # Generate API secret
+        # Generate API secret if not already set
         if [ -z "$GENSLAVE_API_SECRET" ]; then
             GENSLAVE_API_SECRET=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 32)
             AUTOGEN_SLAVE_SECRET=true
         fi
 
-        # Ask if GenSlave is already configured and running
-        echo ""
-        echo -e "  ${YELLOW}NOTE:${NC} GenSlave must be installed and running on the Pi Zero 2W"
-        echo -e "  ${YELLOW}      with the same API secret for communication to work.${NC}"
-        echo ""
-
         # Show the API secret prominently - user needs this for GenSlave setup
         echo ""
         echo -e "  ${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "  ${GREEN}║${NC}  ${WHITE}IMPORTANT: Save this API secret for GenSlave setup!${NC}           ${GREEN}║${NC}"
+        echo -e "  ${GREEN}║${NC}  ${WHITE}IMPORTANT: Copy this API secret for GenSlave setup!${NC}           ${GREEN}║${NC}"
         echo -e "  ${GREEN}╠════════════════════════════════════════════════════════════════╣${NC}"
         echo -e "  ${GREEN}║${NC}                                                                ${GREEN}║${NC}"
         echo -e "  ${GREEN}║${NC}  ${CYAN}SLAVE_API_SECRET=${GENSLAVE_API_SECRET}${NC}  ${GREEN}║${NC}"
         echo -e "  ${GREEN}║${NC}                                                                ${GREEN}║${NC}"
-        echo -e "  ${GREEN}║${NC}  ${GRAY}You will need this when running GenSlave setup.${NC}              ${GREEN}║${NC}"
         echo -e "  ${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
+        echo -e "  ${YELLOW}If GenSlave is not yet configured:${NC}"
+        echo -e "  ${WHITE}1.${NC} Copy the API secret above"
+        echo -e "  ${WHITE}2.${NC} Run GenSlave setup on your Pi Zero 2W"
+        echo -e "  ${WHITE}3.${NC} Enter this API secret when prompted during GenSlave setup"
+        echo ""
+        echo -ne "  ${WHITE}Press Enter when GenSlave is configured and running to test the connection...${NC}"
+        read -r
+        echo ""
 
-        if confirm_prompt "Is GenSlave already installed and running?" "n"; then
-            validate_genslave
-        else
-            echo ""
-            print_info "GenSlave URL saved. You can validate the connection later with:"
-            echo -e "    ${CYAN}./setup.sh --genslave${NC}"
-        fi
+        # Test the connection
+        print_info "Testing connection to GenSlave..."
+        validate_genslave
 
         print_success "GenSlave configured"
     else
@@ -3034,7 +3015,17 @@ show_deployment_summary() {
     if [ "$GENSLAVE_ENABLED" = true ] && [ -n "$GENSLAVE_API_URL" ]; then
         echo -e "  ${WHITE}${BOLD}GenSlave Configuration:${NC}"
         echo -e "    API URL:             ${CYAN}${GENSLAVE_API_URL}${NC}"
-        [ "$AUTOGEN_SLAVE_SECRET" = true ] && echo -e "    API Secret:          ${CYAN}${GENSLAVE_API_SECRET}${NC}"
+        if [ -n "$GENSLAVE_API_SECRET" ]; then
+            echo ""
+            echo -e "  ${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
+            echo -e "  ${GREEN}║${NC}  ${WHITE}IMPORTANT: Copy this API secret for GenSlave setup!${NC}           ${GREEN}║${NC}"
+            echo -e "  ${GREEN}╠════════════════════════════════════════════════════════════════╣${NC}"
+            echo -e "  ${GREEN}║${NC}                                                                ${GREEN}║${NC}"
+            echo -e "  ${GREEN}║${NC}  ${CYAN}SLAVE_API_SECRET=${GENSLAVE_API_SECRET}${NC}  ${GREEN}║${NC}"
+            echo -e "  ${GREEN}║${NC}                                                                ${GREEN}║${NC}"
+            echo -e "  ${GREEN}║${NC}  ${GRAY}You will need this when running GenSlave setup.${NC}              ${GREEN}║${NC}"
+            echo -e "  ${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
+        fi
         echo ""
     fi
 
