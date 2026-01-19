@@ -347,19 +347,41 @@
               :key="iface.interface"
               class="p-3 rounded-lg bg-surface-hover"
             >
-              <div class="flex items-center justify-between mb-2">
+              <!-- Interface Header -->
+              <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center gap-2">
-                  <WifiIcon v-if="iface.is_wifi" class="h-4 w-4 text-blue-500" />
-                  <GlobeAltIcon v-else class="h-4 w-4 text-emerald-500" />
-                  <span class="font-medium text-primary">{{ iface.interface }}</span>
+                  <WifiIcon v-if="iface.is_wifi" class="h-5 w-5 text-blue-500" />
+                  <GlobeAltIcon v-else class="h-5 w-5 text-emerald-500" />
+                  <span class="font-bold text-primary">{{ iface.interface }}</span>
+                  <span v-if="iface.is_wifi && iface.wifi_ssid" class="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400">
+                    {{ iface.wifi_ssid }}
+                  </span>
                 </div>
-                <span v-if="iface.ip_address" class="font-mono text-sm text-secondary">{{ iface.ip_address }}</span>
               </div>
+
+              <!-- IP and Netmask -->
+              <div class="grid grid-cols-2 gap-2 text-sm mb-2">
+                <div>
+                  <span class="text-muted">IP Address</span>
+                  <p class="font-mono font-medium text-primary">{{ iface.ip_address || 'N/A' }}</p>
+                </div>
+                <div>
+                  <span class="text-muted">Netmask</span>
+                  <p class="font-mono font-medium text-primary">{{ iface.netmask || 'N/A' }}</p>
+                </div>
+              </div>
+
+              <!-- MAC Address -->
+              <div v-if="iface.mac_address" class="text-sm mb-2">
+                <span class="text-muted">MAC Address</span>
+                <p class="font-mono font-medium text-primary">{{ iface.mac_address }}</p>
+              </div>
+
               <!-- WiFi Signal if available -->
-              <div v-if="iface.is_wifi && iface.wifi_ssid" class="mt-2">
-                <div class="flex justify-between items-center text-sm mb-1">
+              <div v-if="iface.is_wifi && iface.wifi_ssid" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between text-sm mb-2">
                   <span class="text-muted">WiFi Signal</span>
-                  <span class="font-medium text-primary">{{ iface.wifi_ssid }}</span>
+                  <span class="font-medium text-primary">{{ iface.wifi_signal_dbm }} dBm ({{ iface.wifi_signal_percent || 0 }}%)</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -372,10 +394,27 @@
                       :style="{ width: `${iface.wifi_signal_percent || 0}%` }"
                     ></div>
                   </div>
-                  <span class="text-xs text-muted w-12 text-right">{{ iface.wifi_signal_percent || 0 }}%</span>
+                  <span :class="[
+                    'text-xs font-medium w-16 text-right',
+                    (iface.wifi_signal_percent || 0) >= 75 ? 'text-emerald-500' :
+                    (iface.wifi_signal_percent || 0) >= 50 ? 'text-amber-500' : 'text-red-500'
+                  ]">
+                    {{ (iface.wifi_signal_percent || 0) >= 75 ? 'Excellent' : (iface.wifi_signal_percent || 0) >= 50 ? 'Good' : 'Weak' }}
+                  </span>
                 </div>
-                <div v-if="iface.wifi_signal_dbm" class="text-xs text-muted mt-1">
-                  {{ iface.wifi_signal_dbm }} dBm
+              </div>
+            </div>
+
+            <!-- Gateway and DNS -->
+            <div v-if="slaveSystemInfo.default_gateway || slaveSystemInfo.dns_servers?.length" class="p-3 rounded-lg bg-surface-hover">
+              <div class="grid grid-cols-2 gap-4 text-sm">
+                <div v-if="slaveSystemInfo.default_gateway">
+                  <span class="text-muted">Default Gateway</span>
+                  <p class="font-mono font-medium text-primary">{{ slaveSystemInfo.default_gateway }}</p>
+                </div>
+                <div v-if="slaveSystemInfo.dns_servers?.length">
+                  <span class="text-muted">DNS Servers</span>
+                  <p class="font-mono font-medium text-primary">{{ slaveSystemInfo.dns_servers.join(', ') }}</p>
                 </div>
               </div>
             </div>
