@@ -47,7 +47,7 @@
         </div>
       </Card>
 
-      <!-- Automation Armed Status (GenMaster) -->
+      <!-- Relay Armed Status (GenSlave) -->
       <Card :padding="false">
         <div class="p-4">
           <div class="flex items-center justify-between">
@@ -55,43 +55,43 @@
               <div
                 :class="[
                   'p-2 rounded-lg',
-                  automationArmed ? 'bg-amber-100 dark:bg-amber-500/20' : 'bg-gray-100 dark:bg-gray-500/20'
+                  relayArmed ? 'bg-amber-100 dark:bg-amber-500/20' : 'bg-gray-100 dark:bg-gray-500/20'
                 ]"
               >
                 <ShieldExclamationIcon
                   :class="[
                     'h-5 w-5',
-                    automationArmed ? 'text-amber-500' : 'text-gray-500'
+                    relayArmed ? 'text-amber-500' : 'text-gray-500'
                   ]"
                 />
               </div>
               <div>
-                <p class="text-sm text-secondary">Automation</p>
+                <p class="text-sm text-secondary">Relay</p>
                 <p
                   :class="[
                     'text-xl font-bold',
-                    automationArmed ? 'text-amber-500' : 'text-gray-500'
+                    relayArmed ? 'text-amber-500' : 'text-gray-500'
                   ]"
                 >
-                  {{ automationArmed ? 'Armed' : 'Disarmed' }}
+                  {{ relayArmed ? 'Armed' : 'Disarmed' }}
                 </p>
               </div>
             </div>
             <button
-              @click="toggleAutomationArm"
-              :disabled="armingAutomation"
+              @click="toggleRelayArm"
+              :disabled="togglingRelay || !slaveOnline"
               :class="[
                 'relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-                automationArmed
+                relayArmed
                   ? 'bg-amber-500 focus:ring-amber-500'
                   : 'bg-gray-400 focus:ring-gray-500',
-                armingAutomation ? 'opacity-50 cursor-not-allowed' : ''
+                (togglingRelay || !slaveOnline) ? 'opacity-50 cursor-not-allowed' : ''
               ]"
             >
               <span
                 :class="[
                   'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform',
-                  automationArmed ? 'translate-x-7' : 'translate-x-1'
+                  relayArmed ? 'translate-x-7' : 'translate-x-1'
                 ]"
               />
             </button>
@@ -131,15 +131,15 @@
             </div>
             <button
               @click="toggleGenerator"
-              :disabled="generatorToggleLoading || !automationArmed"
+              :disabled="generatorToggleLoading || !relayArmed"
               :class="[
                 'relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
                 generatorStore.isRunning
                   ? 'bg-green-500 focus:ring-green-500'
                   : 'bg-gray-400 focus:ring-gray-500',
-                (generatorToggleLoading || !automationArmed) ? 'opacity-50 cursor-not-allowed' : ''
+                (generatorToggleLoading || !relayArmed) ? 'opacity-50 cursor-not-allowed' : ''
               ]"
-              :title="!automationArmed ? 'Automation must be armed to control generator' : ''"
+              :title="!relayArmed ? 'Relay must be armed to control generator' : ''"
             >
               <span
                 :class="[
@@ -425,9 +425,9 @@ const loading = ref(true)
 const metricsAvailable = ref(false)
 let refreshInterval = null
 
-// Automation arm/disarm state (GenMaster)
-const automationArmed = ref(false)
-const armingAutomation = ref(false)
+// Relay arm/disarm state (GenSlave)
+const relayArmed = ref(false)
+const togglingRelay = ref(false)
 
 // Generator toggle state
 const generatorToggleLoading = ref(false)
@@ -447,21 +447,29 @@ async function handleEmergencyStop() {
   }
 }
 
-// Toggle automation arm/disarm (GenMaster)
-async function toggleAutomationArm() {
-  armingAutomation.value = true
+// Toggle relay arm/disarm (GenSlave) - also syncs GenMaster automation
+async function toggleRelayArm() {
+  togglingRelay.value = true
   try {
-    if (automationArmed.value) {
-      await systemApi.disarm()
-      automationArmed.value = false
+    if (relayArmed.value) {
+      // Disarm both GenSlave relay and GenMaster automation
+      await Promise.all([
+        genslaveApi.disarm(),
+        systemApi.disarm(),
+      ])
+      relayArmed.value = false
     } else {
-      await systemApi.arm()
-      automationArmed.value = true
+      // Arm both GenSlave relay and GenMaster automation
+      await Promise.all([
+        genslaveApi.arm(),
+        systemApi.arm(),
+      ])
+      relayArmed.value = true
     }
   } catch (err) {
-    console.error('Failed to toggle automation arm state:', err)
+    console.error('Failed to toggle relay arm state:', err)
   } finally {
-    armingAutomation.value = false
+    togglingRelay.value = false
   }
 }
 
@@ -483,14 +491,14 @@ async function toggleGenerator() {
   }
 }
 
-// Fetch automation status
-async function fetchAutomationStatus() {
+// Fetch relay state from GenSlave
+async function fetchRelayState() {
   try {
-    const response = await systemApi.getArmStatus()
-    automationArmed.value = response.data?.armed || false
+    const response = await genslaveApi.getRelayState()
+    relayArmed.value = response.data?.armed || false
   } catch (err) {
-    console.error('Failed to fetch automation status:', err)
-    automationArmed.value = false
+    console.error('Failed to fetch relay state:', err)
+    relayArmed.value = false
   }
 }
 
@@ -502,7 +510,7 @@ onMounted(async () => {
       systemStore.fetchSlaveHealth(),
       systemStore.fetchVictronStatus(),
       metricsStore.fetchDashboardMetrics(),
-      fetchAutomationStatus(),
+      fetchRelayState(),
       generatorStore.fetchState(),
     ])
     metricsAvailable.value = true
