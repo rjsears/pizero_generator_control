@@ -1826,6 +1826,128 @@ configure_webhooks() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# GENERATOR INFORMATION CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Global variables for generator info
+GEN_INFO_MANUFACTURER=""
+GEN_INFO_MODEL_NUMBER=""
+GEN_INFO_SERIAL_NUMBER=""
+GEN_INFO_FUEL_TYPE=""
+GEN_INFO_LOAD_EXPECTED=""
+GEN_INFO_FUEL_CONSUMPTION_50=""
+GEN_INFO_FUEL_CONSUMPTION_100=""
+
+configure_generator_info() {
+    print_section "Generator Information"
+
+    local gen_info_file="${SCRIPT_DIR}/setup/gen_info.json"
+
+    # Check if pre-configured file exists
+    if [ -f "$gen_info_file" ]; then
+        print_info "Found generator info configuration file"
+
+        # Parse JSON file using grep/sed (portable, no jq required)
+        GEN_INFO_MANUFACTURER=$(grep -o '"manufacturer"[[:space:]]*:[[:space:]]*"[^"]*"' "$gen_info_file" | sed 's/.*: *"\([^"]*\)"/\1/')
+        GEN_INFO_MODEL_NUMBER=$(grep -o '"model_number"[[:space:]]*:[[:space:]]*"[^"]*"' "$gen_info_file" | sed 's/.*: *"\([^"]*\)"/\1/')
+        GEN_INFO_SERIAL_NUMBER=$(grep -o '"serial_number"[[:space:]]*:[[:space:]]*"[^"]*"' "$gen_info_file" | sed 's/.*: *"\([^"]*\)"/\1/')
+        GEN_INFO_FUEL_TYPE=$(grep -o '"fuel_type"[[:space:]]*:[[:space:]]*"[^"]*"' "$gen_info_file" | sed 's/.*: *"\([^"]*\)"/\1/')
+        GEN_INFO_LOAD_EXPECTED=$(grep -o '"load_expected"[[:space:]]*:[[:space:]]*[0-9]*' "$gen_info_file" | sed 's/.*: *//')
+        GEN_INFO_FUEL_CONSUMPTION_50=$(grep -o '"fuel_consumption_50"[[:space:]]*:[[:space:]]*[0-9.]*' "$gen_info_file" | sed 's/.*: *//')
+        GEN_INFO_FUEL_CONSUMPTION_100=$(grep -o '"fuel_consumption_100"[[:space:]]*:[[:space:]]*[0-9.]*' "$gen_info_file" | sed 's/.*: *//')
+
+        echo ""
+        echo -e "  ${WHITE}Generator Information from config file:${NC}"
+        echo -e "    Manufacturer:        ${CYAN}${GEN_INFO_MANUFACTURER:-Not set}${NC}"
+        echo -e "    Model Number:        ${CYAN}${GEN_INFO_MODEL_NUMBER:-Not set}${NC}"
+        echo -e "    Serial Number:       ${CYAN}${GEN_INFO_SERIAL_NUMBER:-Not set}${NC}"
+        echo -e "    Fuel Type:           ${CYAN}${GEN_INFO_FUEL_TYPE:-Not set}${NC}"
+        echo -e "    Expected Load:       ${CYAN}${GEN_INFO_LOAD_EXPECTED:-Not set}%${NC}"
+        echo -e "    Consumption @ 50%:   ${CYAN}${GEN_INFO_FUEL_CONSUMPTION_50:-Not set} gal/hr${NC}"
+        echo -e "    Consumption @ 100%:  ${CYAN}${GEN_INFO_FUEL_CONSUMPTION_100:-Not set} gal/hr${NC}"
+        echo ""
+
+        if [ "$PRECONFIG_MODE" = "true" ]; then
+            print_info "Using pre-configured generator information"
+            return
+        fi
+
+        if confirm_prompt "Use this generator information?" "y"; then
+            print_success "Generator information configured"
+            return
+        fi
+    fi
+
+    if [ "$PRECONFIG_MODE" = "true" ]; then
+        print_info "Generator info: Not pre-configured (can be set in UI)"
+        return
+    fi
+
+    echo ""
+    echo -e "  ${GRAY}Enter your generator details for fuel tracking and identification.${NC}"
+    echo -e "  ${GRAY}All fields are optional - you can configure them later in the UI.${NC}"
+    echo ""
+
+    if confirm_prompt "Configure generator information now?" "n"; then
+        echo ""
+        echo -ne "${WHITE}  Manufacturer (e.g., Generac)${NC}: "
+        read GEN_INFO_MANUFACTURER
+
+        echo -ne "${WHITE}  Model Number (e.g., 7043)${NC}: "
+        read GEN_INFO_MODEL_NUMBER
+
+        echo -ne "${WHITE}  Serial Number${NC}: "
+        read GEN_INFO_SERIAL_NUMBER
+
+        echo ""
+        echo -e "  ${WHITE}Fuel Type:${NC}"
+        echo -e "    ${CYAN}1)${NC} LPG (Propane)"
+        echo -e "    ${CYAN}2)${NC} Natural Gas"
+        echo -e "    ${CYAN}3)${NC} Diesel"
+        echo ""
+
+        local fuel_choice=""
+        echo -ne "${WHITE}  Enter fuel type [1-3]${NC}: "
+        read fuel_choice
+        case "$fuel_choice" in
+            1) GEN_INFO_FUEL_TYPE="lpg" ;;
+            2) GEN_INFO_FUEL_TYPE="natural_gas" ;;
+            3) GEN_INFO_FUEL_TYPE="diesel" ;;
+            *) GEN_INFO_FUEL_TYPE="" ;;
+        esac
+
+        echo ""
+        echo -e "  ${WHITE}Expected Load:${NC}"
+        echo -e "    ${CYAN}1)${NC} 50%"
+        echo -e "    ${CYAN}2)${NC} 100%"
+        echo ""
+
+        local load_choice=""
+        echo -ne "${WHITE}  Enter expected load [1-2]${NC}: "
+        read load_choice
+        case "$load_choice" in
+            1) GEN_INFO_LOAD_EXPECTED="50" ;;
+            2) GEN_INFO_LOAD_EXPECTED="100" ;;
+            *) GEN_INFO_LOAD_EXPECTED="" ;;
+        esac
+
+        echo ""
+        echo -e "  ${GRAY}Enter fuel consumption rates from your generator specifications.${NC}"
+        echo ""
+
+        echo -ne "${WHITE}  Fuel consumption at 50% load (gal/hr)${NC}: "
+        read GEN_INFO_FUEL_CONSUMPTION_50
+
+        echo -ne "${WHITE}  Fuel consumption at 100% load (gal/hr)${NC}: "
+        read GEN_INFO_FUEL_CONSUMPTION_100
+
+        print_success "Generator information configured"
+    else
+        print_info "Generator info skipped (can be configured in UI)"
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # DNS PROVIDER CONFIGURATION (for Let's Encrypt SSL)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -3506,7 +3628,8 @@ main() {
         [ "$CURRENT_STEP" -lt 7 ] && { generate_secret_key; save_state "Secret Key" 7; }
         [ "$CURRENT_STEP" -lt 8 ] && { configure_genslave; save_state "GenSlave" 8; }
         [ "$CURRENT_STEP" -lt 9 ] && { configure_webhooks; save_state "Webhooks" 9; }
-        [ "$CURRENT_STEP" -lt 10 ] && { configure_optional_services; save_state "Services" 10; }
+        [ "$CURRENT_STEP" -lt 10 ] && { configure_generator_info; save_state "Generator Info" 10; }
+        [ "$CURRENT_STEP" -lt 11 ] && { configure_optional_services; save_state "Services" 11; }
 
         if ! show_configuration_summary; then
             print_error "Cancelled"
