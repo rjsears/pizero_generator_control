@@ -107,39 +107,8 @@ class FailsafeStatus(BaseModel):
 # =========================================================================
 
 
-@router.get("/api/health", response_model=HealthCheck)
-async def health_check() -> HealthCheck:
-    """
-    Basic health check endpoint.
-
-    Used by GenMaster and load balancers to verify GenSlave is responding.
-    """
-    status = "healthy"
-    warnings = []
-
-    # Check failsafe state
-    failsafe_status = failsafe_monitor.get_status()
-    if failsafe_status["failsafe_triggered"]:
-        status = "degraded"
-        warnings.append("Failsafe triggered")
-
-    # Check HAT availability
-    if relay_service.is_mock_mode:
-        if settings.MOCK_HAT_MODE:
-            pass  # Expected in mock mode
-        else:
-            status = "degraded"
-            warnings.append("Automation Hat not detected")
-
-    return HealthCheck(
-        status=status,
-        version=settings.APP_VERSION,
-        uptime_seconds=_get_uptime(),
-        relay_state=relay_service.get_state(),
-        failsafe_active=failsafe_status["failsafe_triggered"],
-        armed=relay_service.is_armed,
-        mock_mode=relay_service.is_mock_mode,
-    )
+# Note: /api/health is defined in main.py as a public endpoint (no auth required)
+# This allows GenMaster setup and load balancers to check connectivity without API key
 
 
 @router.post("/api/heartbeat", response_model=HeartbeatResponse)
