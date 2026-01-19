@@ -88,6 +88,11 @@ class FailsafeMonitor:
             self._failsafe_triggered = False
             self._failsafe_triggered_at = None
 
+            # Check if relay needs to be re-armed and send notification
+            if self._relay_service and not self._relay_service.is_armed:
+                logger.info("Relay is disarmed after failsafe recovery - sending reminder notification")
+                asyncio.create_task(notification_service.send_heartbeat_restored_alert())
+
         # Process command if present and armed
         command = data.get("command", "none")
         if command != "none" and self._relay_service:

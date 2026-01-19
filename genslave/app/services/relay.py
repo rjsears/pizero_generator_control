@@ -107,12 +107,12 @@ class RelayService:
         self._armed = True
         self._armed_at = int(time.time())
         self._armed_by = source
-        logger.info(f"Automation armed by {source}")
+        logger.info(f"Relay armed by {source}")
 
         return {
             "success": True,
             "armed": True,
-            "message": "Automation armed",
+            "message": "Relay armed",
             "armed_at": self._armed_at,
         }
 
@@ -135,12 +135,12 @@ class RelayService:
         self._armed_by = None
         relay_state = self.get_state()
 
-        logger.info(f"Automation disarmed by {source}, relay_state={relay_state}")
+        logger.info(f"Relay disarmed by {source}, relay_state={relay_state}")
 
         return {
             "success": True,
             "armed": False,
-            "message": "Automation disarmed",
+            "message": "Relay disarmed",
             "relay_state": relay_state,
             "warning": "Relay state unchanged - use explicit off command if needed" if relay_state else None,
         }
@@ -164,7 +164,7 @@ class RelayService:
             True if successful, False otherwise
         """
         if not force and not self._armed:
-            logger.warning("Relay ON requested but automation not armed - ignoring")
+            logger.warning("Relay ON requested but relay not armed - ignoring")
             return False
 
         try:

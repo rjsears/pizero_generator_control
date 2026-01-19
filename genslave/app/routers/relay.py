@@ -94,12 +94,12 @@ async def relay_on(command: RelayCommand = RelayCommand()) -> RelayResponse:
     """
     Turn relay ON (start generator).
 
-    Requires automation to be armed unless force=true.
+    Requires relay to be armed unless force=true.
     """
     if not relay_service.is_armed and not command.force:
         raise HTTPException(
             status_code=403,
-            detail="Automation not armed - cannot turn relay ON",
+            detail="Relay not armed - cannot turn relay ON",
         )
 
     success = relay_service.relay_on(force=command.force)
