@@ -356,7 +356,7 @@ async def delete_container(
 @router.post("/{name}/recreate")
 async def recreate_container(
     name: str,
-    pull_image: bool = Query(True, description="Pull latest image before recreating"),
+    pull: bool = Query(False, description="Pull latest image before recreating"),
 ) -> dict:
     """
     Recreate a container with the same configuration.
@@ -384,7 +384,7 @@ async def recreate_container(
         restart_policy = config.get("HostConfig", {}).get("RestartPolicy", {})
 
         # Pull latest image if requested
-        if pull_image:
+        if pull:
             logger.info(f"Pulling latest image for {image}")
             try:
                 client.images.pull(image)
