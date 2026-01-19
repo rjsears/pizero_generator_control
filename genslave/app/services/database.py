@@ -69,27 +69,26 @@ class DatabaseService:
             """)
             conn.commit()
 
-            # Check if API secret exists in DB
-            cursor.execute(
-                "SELECT value FROM settings WHERE key = ?",
-                ("api_secret",)
-            )
-            row = cursor.fetchone()
-
-            if row:
-                # Load from DB into cache
-                self._cache["api_secret"] = row["value"]
-                logger.info("API secret loaded from database")
-            elif settings.API_SECRET:
-                # Seed from environment variable
+            # API secret: Environment variable ALWAYS takes precedence
+            # On every restart, if env var is set, update the database with it
+            if settings.API_SECRET:
                 self._set_setting_sync(conn, "api_secret", settings.API_SECRET)
-                logger.info("API secret seeded from environment variable")
+                logger.info("API secret set from environment variable")
             else:
-                # No API secret configured - this is a problem
-                logger.warning(
-                    "No API secret configured! GenSlave API is unprotected. "
-                    "Set GENSLAVE_API_SECRET in .env file."
+                # No env var - check if database has a value (legacy support)
+                cursor.execute(
+                    "SELECT value FROM settings WHERE key = ?",
+                    ("api_secret",)
                 )
+                row = cursor.fetchone()
+                if row:
+                    self._cache["api_secret"] = row["value"]
+                    logger.info("API secret loaded from database (no env var set)")
+                else:
+                    logger.warning(
+                        "No API secret configured! GenSlave API is unprotected. "
+                        "Set GENSLAVE_API_SECRET in .env file."
+                    )
 
             # Check if Apprise URLs exist in DB
             cursor.execute(
