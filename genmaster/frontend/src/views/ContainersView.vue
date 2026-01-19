@@ -3,7 +3,7 @@
   /genmaster/frontend/src/views/ContainersView.vue
 
   Part of the "RPi Generator Control" suite
-  Version 1.0.0 - January 18th, 2026
+  Version 1.0.0 - January 17th, 2026
 
   Richard J. Sears
   richardjsears@protonmail.com
@@ -11,7 +11,7 @@
   -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
 <script setup>
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useContainersStore } from '@/stores/containers'
 import { useNotificationStore } from '@/stores/notifications'
 import { usePoll } from '@/composables/usePoll'
@@ -23,6 +23,8 @@ import ContainerStackLoader from '@/components/common/ContainerStackLoader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import Modal from '@/components/common/Modal.vue'
+import ContainerTerminal from '@/components/containers/ContainerTerminal.vue'
 import {
   ServerStackIcon,
   PlayIcon,
@@ -30,24 +32,16 @@ import {
   ArrowPathIcon,
   DocumentTextIcon,
   CommandLineIcon,
-  CpuChipIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  ExclamationTriangleIcon,
-  SignalIcon,
-  ArrowDownTrayIcon,
-  ArrowUpTrayIcon,
-  Square3Stack3DIcon,
-  HeartIcon,
-  TrashIcon,
-  ArrowPathRoundedSquareIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   ChevronDoubleDownIcon,
   ChevronDoubleUpIcon,
-  MagnifyingGlassIcon,
-  XMarkIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  ExclamationTriangleIcon,
+  ArrowPathRoundedSquareIcon,
+  FunnelIcon,
+  ShieldExclamationIcon,
 } from '@heroicons/vue/24/outline'
 
 const containersStore = useContainersStore()
@@ -55,58 +49,46 @@ const notificationStore = useNotificationStore()
 
 const loading = ref(true)
 const containerStats = ref({})
-const actionDialog = ref({ open: false, container: null, action: '', loading: false })
-const logsDialog = ref({
+const expandedContainers = ref({})
+const showLogsModal = ref(false)
+const showTerminalModal = ref(false)
+const selectedContainer = ref(null)
+const containerLogs = ref('')
+const logsLoading = ref(false)
+
+// Status filter
+const statusFilter = ref('all') // 'all', 'running', 'stopped', 'unhealthy'
+
+// Recreate dialog state
+const recreateDialog = ref({
   open: false,
   container: null,
-  logs: '',
+  pullImage: true,
   loading: false,
-  lines: 200,
-  follow: false,
-  since: '',
-  search: '',
-  filteredLogs: '',
-  followInterval: null,
 })
-const expandedContainers = ref({})
 
-// Funny loading messages
-const allContainerMessages = [
-  'Waking up the containers...',
-  'Asking Docker who\'s home...',
-  'Counting all the little boxes...',
-  'Unpacking the shipping containers...',
-  'Checking if anyone escaped...',
-  'Herding the container cats...',
-  'Making sure no one\'s sleeping on the job...',
-  'Peeking inside each container...',
-  'Taking attendance...',
-  'Shaking the containers to see what rattles...',
-  'Knocking on container doors...',
-  'Interrogating the Docker daemon...',
-  'Playing hide and seek with containers...',
-  'Convincing containers to share their secrets...',
-  'Measuring how much RAM each container stole...',
-  'Checking who ate all the CPU...',
-  'Translating from container-speak...',
-  'Sorting containers by how well they behave...',
-  'Asking nicely for container stats...',
-  'Bribing containers with more memory...',
-  'Checking if nginx is still angry...',
-  'Verifying PostgreSQL had its morning coffee...',
-  'Making sure the generator isn\'t plotting...',
-  'Inspecting the container cargo...',
-]
-const containerLoadingMessages = ref([])
-const containerLoadingMessageIndex = ref(0)
-let containerLoadingInterval = null
+// Critical container warning dialog
+const criticalWarning = ref({
+  open: false,
+  container: null,
+  action: null,
+  actionName: '',
+})
 
-function shuffleContainerMessages() {
-  const shuffled = [...allContainerMessages].sort(() => Math.random() - 0.5)
-  containerLoadingMessages.value = shuffled.slice(0, 12)
-}
+// Critical containers that require extra confirmation
+const CRITICAL_CONTAINERS = ['genmaster', 'nginx', 'postgres', 'genmaster-api', 'genmaster-nginx', 'genmaster-db']
 
-// Container expand/collapse
+// Confirm dialog state
+const confirmDialog = ref({
+  open: false,
+  title: '',
+  message: '',
+  action: null,
+  danger: false,
+  loading: false,
+})
+
+// Toggle container expand/collapse
 function toggleContainer(containerId) {
   expandedContainers.value[containerId] = !expandedContainers.value[containerId]
 }
@@ -115,72 +97,14 @@ function isExpanded(containerId) {
   return !!expandedContainers.value[containerId]
 }
 
-const allExpanded = computed(() => {
-  if (filteredContainers.value.length === 0) return false
-  return filteredContainers.value.every(c => expandedContainers.value[c.id])
-})
-
-function toggleAllContainers() {
-  const shouldExpand = !allExpanded.value
-  filteredContainers.value.forEach(container => {
-    expandedContainers.value[container.id] = shouldExpand
-  })
-}
-
-// Critical containers with danger zone warnings (GenMaster specific)
-const criticalContainers = {
-  'genmaster': {
-    title: 'This action will cause the loss of all management!',
-    description: 'If you stop this container, you will lose access to this management interface. You can start it again from the command line by running: docker compose up -d genmaster from the pizero_generator_control directory on the docker host.'
-  },
-  'genmaster_cloudflared': {
-    title: 'This action may cause the loss of connectivity to GenMaster from outside your network!',
-    description: 'If you stop this container, you will lose access to GenMaster from outside your network. It will still be accessible from within your network at its local IP address. You can start it again by running: docker compose up -d genmaster_cloudflared from the pizero_generator_control directory on the docker host.'
-  },
-  'genmaster_nginx': {
-    title: 'This action may cause the loss of connectivity to GenMaster!',
-    description: 'If you stop this container, you may lose access to your GenMaster instance. You can start it again by running: docker compose up -d genmaster_nginx from the pizero_generator_control directory on the docker host.'
-  },
-  'genmaster_db': {
-    title: 'This action may cause features that require database access to fail!',
-    description: 'If you stop this container, scheduled runs and history features will fail. You can start it again by running: docker compose up -d genmaster_db from the pizero_generator_control directory on the docker host.'
-  },
-  'genmaster_redis': {
-    title: 'This action may cause caching and session features to fail!',
-    description: 'If you stop this container, caching and real-time updates may stop working. You can start it again by running: docker compose up -d genmaster_redis from the pizero_generator_control directory on the docker host.'
-  },
-  'genmaster_tailscale': {
-    title: 'This action may cause the loss of connectivity to GenMaster host server!',
-    description: 'If you stop this container, you may lose access to your GenMaster docker host if you are using Tailscale exclusively for connectivity. GenMaster will still be accessible via CloudFlare or from within your network. You can start it again by running: docker compose up -d genmaster_tailscale from the pizero_generator_control directory on the docker host.'
-  },
-}
-
-const dangerStopDialog = ref({ open: false, container: null, loading: false })
-
+// Check if container is critical
 function isCriticalContainer(containerName) {
-  return containerName in criticalContainers
+  return CRITICAL_CONTAINERS.some(critical =>
+    containerName.toLowerCase().includes(critical.toLowerCase())
+  )
 }
 
-function getCriticalWarning(containerName) {
-  return criticalContainers[containerName] || { title: '', description: '' }
-}
-
-// Stopped containers and removal dialogs
-const stoppedContainersDialog = ref({ open: false })
-const removeConfirmDialog = ref({ open: false, container: null, loading: false })
-const recreateDialog = ref({ open: false, container: null, loading: false })
-
-// Filters
-const filterStatus = ref('all')
-const containerTypeFilter = ref('all')
-
-// Check if container is a GenMaster project container
-function isProjectContainer(container) {
-  const projectPrefixes = ['genmaster', 'portainer']
-  return projectPrefixes.some(prefix => container.name.toLowerCase().startsWith(prefix))
-}
-
-// Merge containers with stats
+// Merge containers with their stats
 const containersWithStats = computed(() => {
   return containersStore.containers.map(container => {
     const stats = containerStats.value[container.name] || {}
@@ -193,33 +117,43 @@ const containersWithStats = computed(() => {
       memory_mb: stats.memory_usage ? Math.round(stats.memory_usage / (1024 * 1024)) : 0,
       network_rx: stats.network_rx || 0,
       network_tx: stats.network_tx || 0,
-      is_project: isProjectContainer(container),
+      isCritical: isCriticalContainer(container.name),
     }
   })
 })
 
-const hasNonProjectContainers = computed(() => {
-  return containersWithStats.value.some(c => !c.is_project)
-})
-
+// Filtered containers based on status
 const filteredContainers = computed(() => {
-  let filtered = containersWithStats.value
-
-  if (containerTypeFilter.value === 'genmaster') {
-    filtered = filtered.filter(c => c.is_project)
-  } else if (containerTypeFilter.value === 'external') {
-    filtered = filtered.filter(c => !c.is_project)
+  if (statusFilter.value === 'all') {
+    return containersWithStats.value
   }
-
-  if (filterStatus.value === 'running') {
-    filtered = filtered.filter(c => c.status === 'running')
-  } else if (filterStatus.value === 'stopped') {
-    filtered = filtered.filter(c => c.status !== 'running')
+  if (statusFilter.value === 'running') {
+    return containersWithStats.value.filter(c => c.status === 'running')
   }
-
-  return filtered
+  if (statusFilter.value === 'stopped') {
+    return containersWithStats.value.filter(c => c.status !== 'running')
+  }
+  if (statusFilter.value === 'unhealthy') {
+    return containersWithStats.value.filter(c => c.health === 'unhealthy')
+  }
+  return containersWithStats.value
 })
 
+// Check if all filtered containers are expanded
+const allExpanded = computed(() => {
+  if (filteredContainers.value.length === 0) return false
+  return filteredContainers.value.every(c => expandedContainers.value[c.id])
+})
+
+// Toggle all containers expand/collapse
+function toggleAllContainers() {
+  const shouldExpand = !allExpanded.value
+  filteredContainers.value.forEach(container => {
+    expandedContainers.value[container.id] = shouldExpand
+  })
+}
+
+// Stats summary
 const stats = computed(() => {
   const all = containersWithStats.value
   return {
@@ -230,78 +164,6 @@ const stats = computed(() => {
   }
 })
 
-const stoppedContainers = computed(() => {
-  return containersWithStats.value.filter(c => c.status !== 'running')
-})
-
-function openStoppedContainersDialog() {
-  if (stats.value.stopped > 0) {
-    stoppedContainersDialog.value.open = true
-  }
-}
-
-function promptRemoveContainer(container) {
-  removeConfirmDialog.value = { open: true, container, loading: false }
-}
-
-function promptRecreateContainer(container) {
-  recreateDialog.value = { open: true, container, loading: false }
-}
-
-async function confirmRecreate() {
-  const container = recreateDialog.value.container
-  if (!container) return
-
-  recreateDialog.value.loading = true
-  try {
-    await containersStore.recreateContainer(container.name, false)
-    notificationStore.success(`Container ${container.name} recreated successfully`)
-    recreateDialog.value.open = false
-    await loadData()
-  } catch (error) {
-    notificationStore.error(error.response?.data?.detail || `Failed to recreate ${container.name}`)
-  } finally {
-    recreateDialog.value.loading = false
-  }
-}
-
-async function confirmRecreateWithPull() {
-  const container = recreateDialog.value.container
-  if (!container) return
-
-  recreateDialog.value.loading = true
-  try {
-    await containersStore.recreateContainer(container.name, true)
-    notificationStore.success(`Container ${container.name} pulled and recreated successfully`)
-    recreateDialog.value.open = false
-    await loadData()
-  } catch (error) {
-    notificationStore.error(error.response?.data?.detail || `Failed to recreate ${container.name}`)
-  } finally {
-    recreateDialog.value.loading = false
-  }
-}
-
-async function confirmRemoveContainer() {
-  const container = removeConfirmDialog.value.container
-  if (!container) return
-
-  removeConfirmDialog.value.loading = true
-  try {
-    await containersStore.removeContainer(container.name)
-    notificationStore.success(`Container ${container.name} removed successfully`)
-    removeConfirmDialog.value.open = false
-    if (stoppedContainers.value.length <= 1) {
-      stoppedContainersDialog.value.open = false
-    }
-    await loadData()
-  } catch (error) {
-    notificationStore.error(error.response?.data?.detail || `Failed to remove ${container.name}`)
-  } finally {
-    removeConfirmDialog.value.loading = false
-  }
-}
-
 function getStatusIcon(container) {
   if (container.health === 'unhealthy') return ExclamationTriangleIcon
   if (container.status === 'running') return CheckCircleIcon
@@ -309,11 +171,10 @@ function getStatusIcon(container) {
   return ServerStackIcon
 }
 
-function getStatusColor(container) {
-  if (container.health === 'unhealthy') return 'red'
-  if (container.status === 'running') return 'emerald'
-  if (container.status === 'exited' || container.status === 'stopped') return 'gray'
-  return 'blue'
+function getStatusIconColor(container) {
+  if (container.health === 'unhealthy') return 'text-red-500'
+  if (container.status === 'running') return 'text-emerald-500'
+  return 'text-gray-400'
 }
 
 function getMemoryColor(memoryMb) {
@@ -328,157 +189,135 @@ function getCpuColor(cpuPercent) {
   return 'text-emerald-500'
 }
 
-function getHealthBadgeClass(health) {
-  switch (health) {
-    case 'healthy':
-      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
-    case 'unhealthy':
-      return 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
-    case 'starting':
-      return 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
-    default:
-      return 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400'
+// Check for critical container and show warning if needed
+function checkCriticalAndExecute(container, action, actionName) {
+  if (container.isCritical) {
+    criticalWarning.value = {
+      open: true,
+      container,
+      action,
+      actionName,
+    }
+  } else {
+    action()
   }
 }
 
-async function performAction(container, action) {
-  if (action === 'stop' && isCriticalContainer(container.name)) {
-    dangerStopDialog.value = { open: true, container, loading: false }
-    return
+function confirmCriticalAction() {
+  if (criticalWarning.value.action) {
+    criticalWarning.value.action()
   }
-  actionDialog.value = { open: true, container, action, loading: false }
+  criticalWarning.value.open = false
 }
 
-async function confirmDangerStop() {
-  const container = dangerStopDialog.value.container
-  if (!container) return
-
-  dangerStopDialog.value.loading = true
-  try {
-    await containersStore.stopContainer(container.name)
-    notificationStore.success(`Container ${container.name} stopped`)
-    dangerStopDialog.value.open = false
-    await loadData()
-  } catch (error) {
-    notificationStore.error(`Failed to stop container: ${error.response?.data?.detail || error.message}`)
-  } finally {
-    dangerStopDialog.value.loading = false
+// Actions with confirmation
+function promptStart(container) {
+  confirmDialog.value = {
+    open: true,
+    title: 'Start Container',
+    message: `Are you sure you want to start ${container.name}?`,
+    action: () => startContainer(container.name),
+    danger: false,
+    loading: false,
   }
+}
+
+function promptStop(container) {
+  const action = () => {
+    confirmDialog.value = {
+      open: true,
+      title: 'Stop Container',
+      message: `Are you sure you want to stop ${container.name}?`,
+      action: () => stopContainer(container.name),
+      danger: true,
+      loading: false,
+    }
+  }
+  checkCriticalAndExecute(container, action, 'stop')
+}
+
+function promptRestart(container) {
+  const action = () => {
+    confirmDialog.value = {
+      open: true,
+      title: 'Restart Container',
+      message: `Are you sure you want to restart ${container.name}?`,
+      action: () => restartContainer(container.name),
+      danger: false,
+      loading: false,
+    }
+  }
+  checkCriticalAndExecute(container, action, 'restart')
+}
+
+function promptRecreate(container) {
+  const action = () => {
+    recreateDialog.value = {
+      open: true,
+      container,
+      pullImage: true,
+      loading: false,
+    }
+  }
+  checkCriticalAndExecute(container, action, 'recreate')
 }
 
 async function confirmAction() {
-  const { container, action } = actionDialog.value
-  if (!container || !action) return
-
-  actionDialog.value.loading = true
+  if (!confirmDialog.value.action) return
+  confirmDialog.value.loading = true
   try {
-    switch (action) {
-      case 'start':
-        await containersStore.startContainer(container.name)
-        notificationStore.success(`Container ${container.name} started`)
-        break
-      case 'stop':
-        await containersStore.stopContainer(container.name)
-        notificationStore.success(`Container ${container.name} stopped`)
-        break
-      case 'restart':
-        await containersStore.restartContainer(container.name)
-        notificationStore.success(`Container ${container.name} restarted`)
-        break
-    }
-    actionDialog.value.open = false
-    await loadData()
-  } catch (error) {
-    notificationStore.error(`Failed to ${action} container`)
+    await confirmDialog.value.action()
+    confirmDialog.value.open = false
   } finally {
-    actionDialog.value.loading = false
+    confirmDialog.value.loading = false
   }
+}
+
+async function executeRecreate() {
+  if (!recreateDialog.value.container) return
+  recreateDialog.value.loading = true
+  try {
+    await containersStore.recreateContainer(
+      recreateDialog.value.container.name,
+      recreateDialog.value.pullImage
+    )
+    recreateDialog.value.open = false
+  } finally {
+    recreateDialog.value.loading = false
+  }
+}
+
+async function startContainer(name) {
+  await containersStore.startContainer(name)
+}
+
+async function stopContainer(name) {
+  await containersStore.stopContainer(name)
+}
+
+async function restartContainer(name) {
+  await containersStore.restartContainer(name)
 }
 
 async function viewLogs(container) {
-  if (logsDialog.value.followInterval) {
-    clearInterval(logsDialog.value.followInterval)
-    logsDialog.value.followInterval = null
-  }
+  selectedContainer.value = container
+  containerLogs.value = ''
+  showLogsModal.value = true
+  logsLoading.value = true
 
-  logsDialog.value = {
-    open: true,
-    container,
-    logs: '',
-    loading: true,
-    lines: 200,
-    follow: false,
-    since: '',
-    search: '',
-    filteredLogs: '',
-    followInterval: null,
-  }
-  await fetchLogs()
-}
-
-async function fetchLogs() {
-  logsDialog.value.loading = true
   try {
-    const logs = await containersStore.getContainerLogs(
-      logsDialog.value.container.name,
-      logsDialog.value.lines,
-      logsDialog.value.since || undefined
-    )
-    logsDialog.value.logs = logs || 'No logs available'
-    applyLogFilter()
-  } catch (error) {
-    logsDialog.value.logs = 'Failed to fetch logs'
-    notificationStore.error('Failed to fetch logs')
+    const logs = await containersStore.getContainerLogs(container.name, 200)
+    containerLogs.value = logs || 'No logs available'
+  } catch {
+    containerLogs.value = 'Failed to fetch logs'
   } finally {
-    logsDialog.value.loading = false
+    logsLoading.value = false
   }
 }
 
-function applyLogFilter() {
-  if (!logsDialog.value.search) {
-    logsDialog.value.filteredLogs = logsDialog.value.logs
-    return
-  }
-  const searchTerm = logsDialog.value.search.toLowerCase()
-  const lines = logsDialog.value.logs.split('\n')
-  const filtered = lines.filter(line => line.toLowerCase().includes(searchTerm))
-  logsDialog.value.filteredLogs = filtered.join('\n')
-}
-
-function toggleLogFollow() {
-  logsDialog.value.follow = !logsDialog.value.follow
-
-  if (logsDialog.value.follow) {
-    logsDialog.value.followInterval = setInterval(async () => {
-      if (logsDialog.value.open && logsDialog.value.container) {
-        try {
-          const logs = await containersStore.getContainerLogs(
-            logsDialog.value.container.name,
-            logsDialog.value.lines,
-            logsDialog.value.since || undefined
-          )
-          logsDialog.value.logs = logs || 'No logs available'
-          applyLogFilter()
-        } catch (error) {
-          console.error('Failed to refresh logs:', error)
-        }
-      }
-    }, 2000)
-  } else {
-    if (logsDialog.value.followInterval) {
-      clearInterval(logsDialog.value.followInterval)
-      logsDialog.value.followInterval = null
-    }
-  }
-}
-
-function closeLogs() {
-  if (logsDialog.value.followInterval) {
-    clearInterval(logsDialog.value.followInterval)
-    logsDialog.value.followInterval = null
-  }
-  logsDialog.value.open = false
-  logsDialog.value.follow = false
+function openTerminal(container) {
+  selectedContainer.value = container
+  showTerminalModal.value = true
 }
 
 async function fetchStats() {
@@ -496,25 +335,10 @@ async function fetchStats() {
 
 async function loadData() {
   loading.value = true
-  containerLoadingMessageIndex.value = 0
-  shuffleContainerMessages()
-
-  containerLoadingInterval = setInterval(() => {
-    containerLoadingMessageIndex.value = (containerLoadingMessageIndex.value + 1) % containerLoadingMessages.value.length
-  }, 2000)
-
   try {
-    await Promise.all([
-      containersStore.fetchContainers(true),
-      fetchStats(),
-    ])
-  } catch (error) {
-    notificationStore.error('Failed to load containers')
+    await containersStore.fetchContainers(true) // Include all containers
+    await fetchStats()
   } finally {
-    if (containerLoadingInterval) {
-      clearInterval(containerLoadingInterval)
-      containerLoadingInterval = null
-    }
     loading.value = false
   }
 }
@@ -527,843 +351,398 @@ const { stop: stopPolling } = usePoll(async () => {
   }
 }, POLLING.CONTAINERS, false)
 
-onMounted(() => {
-  loadData()
+onMounted(async () => {
+  await loadData()
 })
 
 onUnmounted(() => {
   stopPolling()
-  if (containerLoadingInterval) {
-    clearInterval(containerLoadingInterval)
-    containerLoadingInterval = null
-  }
-  if (logsDialog.value.followInterval) {
-    clearInterval(logsDialog.value.followInterval)
-  }
 })
 </script>
 
 <template>
   <div class="space-y-6">
     <!-- Page Header -->
-    <div class="flex items-center justify-between flex-wrap gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h1 class="text-2xl font-bold text-primary">Containers</h1>
         <p class="text-secondary mt-1">Manage Docker containers</p>
       </div>
       <div class="flex items-center gap-3">
-        <!-- Container Type Filter Buttons -->
-        <template v-if="(hasNonProjectContainers || containerTypeFilter !== 'all') && !loading">
-          <button
-            @click="containerTypeFilter = 'genmaster'"
-            :class="[
-              'px-3 py-1.5 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 text-sm',
-              containerTypeFilter === 'genmaster'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25'
-                : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/30'
-            ]"
-          >
-            <Square3Stack3DIcon class="h-4 w-4" />
-            GenMaster
-          </button>
-          <button
-            @click="containerTypeFilter = 'external'"
-            :class="[
-              'px-3 py-1.5 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 text-sm',
-              containerTypeFilter === 'external'
-                ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/25'
-                : 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/30'
-            ]"
-          >
-            <ServerStackIcon class="h-4 w-4" />
-            External
-          </button>
-          <button
-            @click="containerTypeFilter = 'all'"
-            :class="[
-              'px-3 py-1.5 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 text-sm',
-              containerTypeFilter === 'all'
-                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
-                : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30'
-            ]"
-          >
-            <CheckCircleIcon class="h-4 w-4" />
-            All
-          </button>
-          <div class="w-px h-6 bg-gray-300 dark:bg-gray-600"></div>
-        </template>
         <button
-          @click="loadData"
-          class="btn-secondary flex items-center gap-2"
-          :disabled="loading"
+          @click="toggleAllContainers"
+          class="btn-secondary btn-sm flex items-center gap-1"
+          :title="allExpanded ? 'Collapse All' : 'Expand All'"
         >
+          <ChevronDoubleDownIcon v-if="!allExpanded" class="h-4 w-4" />
+          <ChevronDoubleUpIcon v-else class="h-4 w-4" />
+          {{ allExpanded ? 'Collapse' : 'Expand' }}
+        </button>
+        <button @click="loadData" class="btn-secondary btn-sm flex items-center gap-1" :disabled="loading">
           <ArrowPathIcon class="h-4 w-4" :class="{ 'animate-spin': loading }" />
           Refresh
         </button>
       </div>
     </div>
 
-    <!-- Loading State with Funny Messages -->
-    <ContainerStackLoader
-      v-if="loading"
-      :text="containerLoadingMessages[containerLoadingMessageIndex] || 'Loading containers...'"
-      class="py-16 mt-8"
+    <!-- Stats Cards (clickable for filtering) -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <Card
+        class="cursor-pointer transition-all hover:ring-2 hover:ring-blue-500"
+        :class="{ 'ring-2 ring-blue-500': statusFilter === 'all' }"
+        @click="statusFilter = 'all'"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-secondary">Total</p>
+            <p class="text-2xl font-bold text-primary">{{ stats.total }}</p>
+          </div>
+          <ServerStackIcon class="h-8 w-8 text-blue-500" />
+        </div>
+      </Card>
+      <Card
+        class="cursor-pointer transition-all hover:ring-2 hover:ring-emerald-500"
+        :class="{ 'ring-2 ring-emerald-500': statusFilter === 'running' }"
+        @click="statusFilter = 'running'"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-secondary">Running</p>
+            <p class="text-2xl font-bold text-emerald-500">{{ stats.running }}</p>
+          </div>
+          <CheckCircleIcon class="h-8 w-8 text-emerald-500" />
+        </div>
+      </Card>
+      <Card
+        class="cursor-pointer transition-all hover:ring-2 hover:ring-gray-500"
+        :class="{ 'ring-2 ring-gray-500': statusFilter === 'stopped' }"
+        @click="statusFilter = 'stopped'"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-secondary">Stopped</p>
+            <p class="text-2xl font-bold text-gray-500">{{ stats.stopped }}</p>
+          </div>
+          <XCircleIcon class="h-8 w-8 text-gray-400" />
+        </div>
+      </Card>
+      <Card
+        class="cursor-pointer transition-all hover:ring-2 hover:ring-red-500"
+        :class="{ 'ring-2 ring-red-500': statusFilter === 'unhealthy' }"
+        @click="statusFilter = 'unhealthy'"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-secondary">Unhealthy</p>
+            <p class="text-2xl font-bold" :class="stats.unhealthy > 0 ? 'text-red-500' : 'text-gray-500'">
+              {{ stats.unhealthy }}
+            </p>
+          </div>
+          <ExclamationTriangleIcon class="h-8 w-8" :class="stats.unhealthy > 0 ? 'text-red-500' : 'text-gray-400'" />
+        </div>
+      </Card>
+    </div>
+
+    <!-- Filter indicator -->
+    <div v-if="statusFilter !== 'all'" class="flex items-center gap-2 text-sm text-secondary">
+      <FunnelIcon class="h-4 w-4" />
+      <span>
+        Showing {{ filteredContainers.length }} {{ statusFilter }} container{{ filteredContainers.length !== 1 ? 's' : '' }}
+      </span>
+      <button @click="statusFilter = 'all'" class="text-blue-500 hover:underline">
+        Clear filter
+      </button>
+    </div>
+
+    <!-- Loading State -->
+    <div v-if="loading" class="flex justify-center py-12">
+      <ContainerStackLoader text="Loading containers..." />
+    </div>
+
+    <!-- Error State -->
+    <Card v-else-if="containersStore.error" class="border-red-500">
+      <div class="text-center py-8">
+        <ExclamationTriangleIcon class="h-12 w-12 text-red-500 mx-auto mb-4" />
+        <h3 class="text-lg font-medium text-primary">{{ containersStore.error }}</h3>
+        <p class="text-secondary mt-1">Make sure Docker is running and accessible.</p>
+        <button @click="loadData" class="btn-primary mt-4">Try Again</button>
+      </div>
+    </Card>
+
+    <!-- Empty State -->
+    <EmptyState
+      v-else-if="filteredContainers.length === 0"
+      :icon="ServerStackIcon"
+      :title="statusFilter === 'all' ? 'No containers found' : `No ${statusFilter} containers`"
+      :description="statusFilter === 'all' ? 'No Docker containers were found on this system.' : `No containers with status '${statusFilter}' were found.`"
+    >
+      <template v-if="statusFilter !== 'all'" #action>
+        <button @click="statusFilter = 'all'" class="btn-secondary">Show All Containers</button>
+      </template>
+    </EmptyState>
+
+    <!-- Container List -->
+    <div v-else class="space-y-3">
+      <Card
+        v-for="container in filteredContainers"
+        :key="container.id"
+        :padding="false"
+        class="overflow-hidden"
+        :class="{ 'border-l-4 border-l-amber-500': container.isCritical }"
+      >
+        <!-- Container Header (always visible) -->
+        <div
+          class="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-surface-hover transition-colors"
+          @click="toggleContainer(container.id)"
+        >
+          <div class="flex items-center gap-3">
+            <ChevronRightIcon
+              class="h-5 w-5 text-secondary transition-transform"
+              :class="{ 'rotate-90': isExpanded(container.id) }"
+            />
+            <component
+              :is="getStatusIcon(container)"
+              class="h-6 w-6"
+              :class="getStatusIconColor(container)"
+            />
+            <div class="flex items-center gap-2">
+              <div>
+                <h3 class="font-medium text-primary flex items-center gap-2">
+                  {{ container.name }}
+                  <ShieldExclamationIcon
+                    v-if="container.isCritical"
+                    class="h-4 w-4 text-amber-500"
+                    title="Critical container"
+                  />
+                </h3>
+                <p class="text-xs text-muted">{{ container.image }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <!-- Quick stats -->
+            <div v-if="container.status === 'running'" class="hidden md:flex items-center gap-4 text-sm">
+              <span :class="getCpuColor(container.cpu_percent)">
+                CPU: {{ container.cpu_percent.toFixed(1) }}%
+              </span>
+              <span :class="getMemoryColor(container.memory_mb)">
+                RAM: {{ container.memory_mb }}MB
+              </span>
+            </div>
+            <StatusBadge :status="container.status" />
+          </div>
+        </div>
+
+        <!-- Expanded Content -->
+        <Transition name="expand">
+          <div v-if="isExpanded(container.id)" class="border-t border-gray-400 dark:border-black">
+            <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- Container Info -->
+              <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                  <span class="text-secondary">Container ID:</span>
+                  <span class="text-primary font-mono text-xs">{{ container.id?.substring(0, 12) }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-secondary">Image:</span>
+                  <span class="text-primary">{{ container.image }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-secondary">Status:</span>
+                  <span class="text-primary capitalize">{{ container.status }}</span>
+                </div>
+                <div v-if="container.health" class="flex justify-between">
+                  <span class="text-secondary">Health:</span>
+                  <StatusBadge :status="container.health" size="sm" />
+                </div>
+                <div v-if="container.isCritical" class="flex justify-between">
+                  <span class="text-secondary">Type:</span>
+                  <span class="text-amber-500 font-medium">Critical</span>
+                </div>
+              </div>
+
+              <!-- Resource Usage -->
+              <div v-if="container.status === 'running'" class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                  <span class="text-secondary">CPU Usage:</span>
+                  <span :class="getCpuColor(container.cpu_percent)">{{ container.cpu_percent.toFixed(2) }}%</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-secondary">Memory:</span>
+                  <span :class="getMemoryColor(container.memory_mb)">
+                    {{ formatBytes(container.memory_usage) }} / {{ formatBytes(container.memory_limit) }}
+                  </span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-secondary">Network RX:</span>
+                  <span class="text-primary">{{ formatBytes(container.network_rx) }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-secondary">Network TX:</span>
+                  <span class="text-primary">{{ formatBytes(container.network_tx) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-400 dark:border-black flex flex-wrap gap-2">
+              <button
+                v-if="container.status !== 'running'"
+                @click.stop="promptStart(container)"
+                class="btn-success btn-sm flex items-center gap-1"
+              >
+                <PlayIcon class="h-4 w-4" />
+                Start
+              </button>
+              <button
+                v-if="container.status === 'running'"
+                @click.stop="promptStop(container)"
+                class="btn-danger btn-sm flex items-center gap-1"
+              >
+                <StopIcon class="h-4 w-4" />
+                Stop
+              </button>
+              <button
+                @click.stop="promptRestart(container)"
+                class="btn-warning btn-sm flex items-center gap-1"
+                :disabled="container.status !== 'running'"
+              >
+                <ArrowPathIcon class="h-4 w-4" />
+                Restart
+              </button>
+              <button
+                @click.stop="promptRecreate(container)"
+                class="btn-secondary btn-sm flex items-center gap-1"
+                title="Recreate container with latest image"
+              >
+                <ArrowPathRoundedSquareIcon class="h-4 w-4" />
+                Recreate
+              </button>
+              <button
+                @click.stop="viewLogs(container)"
+                class="btn-secondary btn-sm flex items-center gap-1"
+              >
+                <DocumentTextIcon class="h-4 w-4" />
+                Logs
+              </button>
+              <button
+                v-if="container.status === 'running'"
+                @click.stop="openTerminal(container)"
+                class="btn-secondary btn-sm flex items-center gap-1"
+                title="Open terminal in container"
+              >
+                <CommandLineIcon class="h-4 w-4" />
+                Terminal
+              </button>
+            </div>
+          </div>
+        </Transition>
+      </Card>
+    </div>
+
+    <!-- Confirm Dialog -->
+    <ConfirmDialog
+      v-model:open="confirmDialog.open"
+      :title="confirmDialog.title"
+      :message="confirmDialog.message"
+      :danger="confirmDialog.danger"
+      :loading="confirmDialog.loading"
+      @confirm="confirmAction"
     />
 
-    <template v-else>
-      <!-- Stats Grid -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card :padding="false">
-          <div class="p-4">
-            <div class="flex items-center gap-3">
-              <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-500/20">
-                <Square3Stack3DIcon class="h-5 w-5 text-blue-500" />
-              </div>
-              <div>
-                <p class="text-sm text-secondary">Total</p>
-                <p class="text-xl font-bold text-primary">{{ stats.total }}</p>
-              </div>
-            </div>
+    <!-- Critical Container Warning Dialog -->
+    <Modal v-model="criticalWarning.open" title="Critical Container Warning" size="md">
+      <div class="space-y-4">
+        <div class="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+          <ShieldExclamationIcon class="h-6 w-6 text-amber-500 flex-shrink-0" />
+          <div>
+            <h4 class="font-medium text-amber-800 dark:text-amber-200">Warning: Critical Container</h4>
+            <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
+              <strong>{{ criticalWarning.container?.name }}</strong> is a critical system container.
+              Performing this action may affect system functionality.
+            </p>
           </div>
-        </Card>
-
-        <Card :padding="false">
-          <div class="p-4">
-            <div class="flex items-center gap-3">
-              <div class="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-500/20">
-                <CheckCircleIcon class="h-5 w-5 text-emerald-500" />
-              </div>
-              <div>
-                <p class="text-sm text-secondary">Running</p>
-                <p class="text-xl font-bold text-emerald-500">{{ stats.running }}</p>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <!-- Stopped Card - Clickable -->
-        <Card :padding="false">
-          <button
-            @click="openStoppedContainersDialog"
-            :disabled="stats.stopped === 0"
-            :class="[
-              'w-full p-4 text-left transition-colors rounded-lg',
-              stats.stopped > 0 ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer' : 'cursor-default'
-            ]"
-          >
-            <div class="flex items-center gap-3">
-              <div class="p-2 rounded-lg bg-gray-100 dark:bg-gray-500/20">
-                <XCircleIcon class="h-5 w-5 text-gray-500" />
-              </div>
-              <div>
-                <p class="text-sm text-secondary">Stopped</p>
-                <p class="text-xl font-bold text-gray-500">{{ stats.stopped }}</p>
-              </div>
-              <div v-if="stats.stopped > 0" class="ml-auto text-xs text-gray-400">
-                Click to manage
-              </div>
-            </div>
-          </button>
-        </Card>
-
-        <Card :padding="false">
-          <div class="p-4">
-            <div class="flex items-center gap-3">
-              <div class="p-2 rounded-lg bg-red-100 dark:bg-red-500/20">
-                <ExclamationTriangleIcon class="h-5 w-5 text-red-500" />
-              </div>
-              <div>
-                <p class="text-sm text-secondary">Unhealthy</p>
-                <p class="text-xl font-bold text-red-500">{{ stats.unhealthy }}</p>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <!-- Filters -->
-      <div class="flex items-center gap-4">
-        <select v-model="filterStatus" class="select-field">
-          <option value="all">All Statuses</option>
-          <option value="running">Running Only</option>
-          <option value="stopped">Stopped Only</option>
-        </select>
-        <p class="text-sm text-muted">
-          Showing {{ filteredContainers.length }} of {{ containersStore.containers.length }} containers
-          <span v-if="containerTypeFilter !== 'all'" class="font-medium">
-            ({{ containerTypeFilter === 'genmaster' ? 'GenMaster only' : 'External only' }})
-          </span>
+        </div>
+        <p class="text-secondary">
+          Are you sure you want to <strong>{{ criticalWarning.actionName }}</strong> this container?
+          This action could temporarily disrupt services.
         </p>
       </div>
-
-      <!-- Empty State -->
-      <EmptyState
-        v-if="filteredContainers.length === 0"
-        :icon="ServerStackIcon"
-        title="No containers found"
-        description="No containers match your current filter."
-      />
-
-      <template v-else>
-        <!-- Expand/Collapse All Button -->
-        <div class="flex justify-end">
-          <button
-            @click="toggleAllContainers"
-            class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-          >
-            <component
-              :is="allExpanded ? ChevronDoubleUpIcon : ChevronDoubleDownIcon"
-              class="h-4 w-4"
-            />
-            {{ allExpanded ? 'Collapse All' : 'Expand All' }}
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <button @click="criticalWarning.open = false" class="btn-secondary">
+            Cancel
+          </button>
+          <button @click="confirmCriticalAction" class="btn-warning">
+            Yes, Continue
           </button>
         </div>
+      </template>
+    </Modal>
 
-        <!-- Container Cards Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-          <Card
-            v-for="container in filteredContainers"
-            :key="container.id"
-            :padding="false"
-          >
-            <!-- Collapsed Header Row -->
-            <div
-              @click="toggleContainer(container.id)"
-              class="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
-            >
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <!-- Expand/Collapse Icon -->
-                  <component
-                    :is="isExpanded(container.id) ? ChevronDownIcon : ChevronRightIcon"
-                    class="h-5 w-5 text-gray-400 flex-shrink-0 transition-transform"
-                  />
-                  <!-- Status Icon -->
-                  <div
-                    :class="[
-                      'p-2 rounded-lg flex-shrink-0',
-                      `bg-${getStatusColor(container)}-100 dark:bg-${getStatusColor(container)}-500/20`
-                    ]"
-                  >
-                    <component
-                      :is="getStatusIcon(container)"
-                      :class="['h-5 w-5', `text-${getStatusColor(container)}-500`]"
-                    />
-                  </div>
-                  <!-- Container Name and Image -->
-                  <div class="min-w-0 flex-1">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <h3 class="font-semibold text-primary truncate">{{ container.name }}</h3>
-                      <StatusBadge :status="container.status" size="sm" />
-                      <span
-                        v-if="hasNonProjectContainers"
-                        :class="[
-                          'px-1.5 py-0.5 text-xs font-medium rounded flex-shrink-0',
-                          container.is_project
-                            ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400'
-                            : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
-                        ]"
-                      >
-                        {{ container.is_project ? 'GenMaster' : 'External' }}
-                      </span>
-                    </div>
-                    <p class="text-xs text-muted mt-0.5 font-mono truncate">{{ container.image }}</p>
-                  </div>
-                </div>
-                <!-- Health Badge & Remove Button -->
-                <div class="flex items-center gap-2 flex-shrink-0">
-                  <span
-                    v-if="container.health && container.health !== 'none'"
-                    :class="['px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1', getHealthBadgeClass(container.health)]"
-                  >
-                    <HeartIcon class="h-3 w-3" />
-                    {{ container.health }}
-                  </span>
-                  <!-- Remove Button for stopped containers -->
-                  <button
-                    v-if="container.status !== 'running'"
-                    @click.stop="promptRemoveContainer(container)"
-                    class="px-2 py-1 rounded-lg text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30 transition-colors flex items-center gap-1"
-                    title="Remove this container"
-                  >
-                    <TrashIcon class="h-3 w-3" />
-                    Remove
-                  </button>
-                </div>
-              </div>
+    <!-- Recreate Dialog -->
+    <Modal v-model="recreateDialog.open" title="Recreate Container" size="md">
+      <div class="space-y-4">
+        <p class="text-secondary">
+          This will stop the container, optionally pull the latest image, and recreate it with the same configuration.
+        </p>
+        <div class="p-4 bg-surface-secondary rounded-lg">
+          <div class="flex items-center justify-between">
+            <div>
+              <h4 class="font-medium text-primary">{{ recreateDialog.container?.name }}</h4>
+              <p class="text-sm text-muted">{{ recreateDialog.container?.image }}</p>
             </div>
-
-            <!-- Expanded Content -->
-            <Transition name="expand">
-              <div v-if="isExpanded(container.id)">
-                <!-- Recreate Button Row (for project containers) -->
-                <div v-if="container.is_project" class="px-4 pb-3">
-                  <button
-                    @click="promptRecreateContainer(container)"
-                    class="w-full btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30"
-                    title="Recreate this container"
-                  >
-                    <ArrowPathRoundedSquareIcon class="h-4 w-4" />
-                    Recreate Container
-                  </button>
-                </div>
-
-                <!-- Stats Grid -->
-                <div class="px-4 pb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <!-- Uptime -->
-                  <div class="text-center p-3 rounded-lg bg-surface-hover">
-                    <ClockIcon class="h-5 w-5 mx-auto text-blue-500 mb-1" />
-                    <p class="text-xs text-muted">Uptime</p>
-                    <p class="font-semibold text-primary text-sm">{{ container.uptime || '-' }}</p>
-                  </div>
-
-                  <!-- CPU -->
-                  <div class="text-center p-3 rounded-lg bg-surface-hover">
-                    <CpuChipIcon class="h-5 w-5 mx-auto text-purple-500 mb-1" />
-                    <p class="text-xs text-muted">CPU</p>
-                    <p :class="['font-semibold text-sm', getCpuColor(container.cpu_percent)]">
-                      {{ container.status === 'running' ? container.cpu_percent.toFixed(1) + '%' : '-' }}
-                    </p>
-                  </div>
-
-                  <!-- Memory -->
-                  <div class="text-center p-3 rounded-lg bg-surface-hover">
-                    <ServerStackIcon class="h-5 w-5 mx-auto text-amber-500 mb-1" />
-                    <p class="text-xs text-muted">Memory</p>
-                    <p :class="['font-semibold text-sm', getMemoryColor(container.memory_mb)]">
-                      {{ container.status === 'running' ? container.memory_mb + ' MB' : '-' }}
-                    </p>
-                  </div>
-
-                  <!-- Network -->
-                  <div class="text-center p-3 rounded-lg bg-surface-hover">
-                    <SignalIcon class="h-5 w-5 mx-auto text-cyan-500 mb-1" />
-                    <p class="text-xs text-muted">Network</p>
-                    <p class="font-semibold text-primary text-xs">
-                      <span v-if="container.status === 'running'" class="flex items-center justify-center gap-1">
-                        <ArrowDownTrayIcon class="h-3 w-3 text-emerald-500" />
-                        {{ formatBytes(container.network_rx) }}
-                      </span>
-                      <span v-else>-</span>
-                    </p>
-                  </div>
-                </div>
-
-                <!-- Memory Bar -->
-                <div v-if="container.status === 'running' && container.memory_limit > 0" class="px-4 pb-3">
-                  <div class="flex items-center justify-between text-xs text-muted mb-1">
-                    <span>Memory Usage</span>
-                    <span>{{ container.memory_percent.toFixed(1) }}%</span>
-                  </div>
-                  <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      :class="[
-                        'h-full rounded-full transition-all duration-500',
-                        container.memory_percent > 80 ? 'bg-red-500' :
-                        container.memory_percent > 60 ? 'bg-amber-500' : 'bg-emerald-500'
-                      ]"
-                      :style="{ width: `${Math.min(container.memory_percent, 100)}%` }"
-                    ></div>
-                  </div>
-                </div>
-
-                <!-- Actions Footer -->
-                <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                  <div class="flex items-center justify-center gap-3 flex-wrap">
-                    <!-- Start Button -->
-                    <button
-                      v-if="container.status !== 'running'"
-                      @click="performAction(container, 'start')"
-                      class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30"
-                      title="Start Container"
-                    >
-                      <PlayIcon class="h-4 w-4" />
-                      Start
-                    </button>
-
-                    <!-- Stop Button -->
-                    <button
-                      v-if="container.status === 'running'"
-                      @click="performAction(container, 'stop')"
-                      class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 border border-red-200 dark:border-red-500/30"
-                      title="Stop Container"
-                    >
-                      <StopIcon class="h-4 w-4" />
-                      Stop
-                    </button>
-
-                    <!-- Restart Button -->
-                    <button
-                      v-if="container.status === 'running'"
-                      @click="performAction(container, 'restart')"
-                      class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30"
-                      title="Restart Container"
-                    >
-                      <ArrowPathIcon class="h-4 w-4" />
-                      Restart
-                    </button>
-
-                    <!-- Logs Button -->
-                    <button
-                      @click="viewLogs(container)"
-                      class="flex-1 min-w-[100px] max-w-[140px] btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30"
-                      title="View Logs"
-                    >
-                      <DocumentTextIcon class="h-4 w-4" />
-                      Logs
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </Transition>
-          </Card>
+            <StatusBadge v-if="recreateDialog.container" :status="recreateDialog.container.status" />
+          </div>
+        </div>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            v-model="recreateDialog.pullImage"
+            class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <div>
+            <span class="text-primary">Pull latest image</span>
+            <p class="text-xs text-muted">Download the newest version of the image before recreating</p>
+          </div>
+        </label>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <button @click="recreateDialog.open = false" class="btn-secondary" :disabled="recreateDialog.loading">
+            Cancel
+          </button>
+          <button @click="executeRecreate" class="btn-primary flex items-center gap-2" :disabled="recreateDialog.loading">
+            <ArrowPathIcon v-if="recreateDialog.loading" class="h-4 w-4 animate-spin" />
+            <ArrowPathRoundedSquareIcon v-else class="h-4 w-4" />
+            {{ recreateDialog.loading ? 'Recreating...' : 'Recreate Container' }}
+          </button>
         </div>
       </template>
-    </template>
+    </Modal>
 
-    <!-- Action Confirmation Dialog -->
-    <ConfirmDialog
-      :open="actionDialog.open"
-      :title="`${actionDialog.action?.charAt(0).toUpperCase()}${actionDialog.action?.slice(1)} Container`"
-      :message="`Are you sure you want to ${actionDialog.action} ${actionDialog.container?.name}?`"
-      :confirm-text="actionDialog.action?.charAt(0).toUpperCase() + actionDialog.action?.slice(1)"
-      :danger="actionDialog.action === 'stop'"
-      :loading="actionDialog.loading"
-      @confirm="confirmAction"
-      @cancel="actionDialog.open = false"
+    <!-- Logs Modal -->
+    <Modal v-model="showLogsModal" :title="`Logs: ${selectedContainer?.name}`" size="full">
+      <div v-if="logsLoading" class="flex justify-center py-8">
+        <LoadingSpinner text="Loading logs..." />
+      </div>
+      <div v-else class="bg-gray-900 rounded-lg p-4 h-96 overflow-auto">
+        <pre class="text-green-400 text-sm font-mono whitespace-pre-wrap">{{ containerLogs }}</pre>
+      </div>
+      <template #footer>
+        <button @click="showLogsModal = false" class="btn-secondary">Close</button>
+      </template>
+    </Modal>
+
+    <!-- Terminal Modal -->
+    <ContainerTerminal
+      v-model="showTerminalModal"
+      :container="selectedContainer"
     />
-
-    <!-- Logs Dialog -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="logsDialog.open"
-          class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-        >
-          <div class="absolute inset-0 bg-black/50" @click="closeLogs" />
-          <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] flex flex-col border border-gray-400 dark:border-gray-700">
-            <!-- Header -->
-            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800">
-              <div class="flex items-center gap-3">
-                <DocumentTextIcon class="h-5 w-5 text-purple-500" />
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                  Logs: {{ logsDialog.container?.name }}
-                </h3>
-                <span
-                  v-if="logsDialog.follow"
-                  class="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-full animate-pulse"
-                >
-                  Live
-                </span>
-              </div>
-              <button
-                @click="closeLogs"
-                class="p-1 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <XMarkIcon class="h-5 w-5" />
-              </button>
-            </div>
-
-            <!-- Controls Bar -->
-            <div class="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-4">
-              <!-- Lines dropdown -->
-              <div class="flex items-center gap-2">
-                <label class="text-sm font-medium text-gray-600 dark:text-gray-400">Lines:</label>
-                <select
-                  v-model.number="logsDialog.lines"
-                  @change="fetchLogs"
-                  class="select-field py-1.5 text-sm w-24"
-                >
-                  <option :value="50">50</option>
-                  <option :value="100">100</option>
-                  <option :value="200">200</option>
-                  <option :value="500">500</option>
-                  <option :value="1000">1000</option>
-                  <option :value="5000">All</option>
-                </select>
-              </div>
-
-              <!-- Since input -->
-              <div class="flex items-center gap-2">
-                <label class="text-sm font-medium text-gray-600 dark:text-gray-400">Since:</label>
-                <input
-                  v-model="logsDialog.since"
-                  type="text"
-                  placeholder="e.g. 1h, 30m, 2024-01-01"
-                  @keyup.enter="fetchLogs"
-                  @blur="fetchLogs"
-                  class="input-field py-1.5 text-sm w-40"
-                />
-              </div>
-
-              <!-- Follow toggle -->
-              <button
-                @click="toggleLogFollow"
-                :class="[
-                  'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                  logsDialog.follow
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                ]"
-              >
-                <ArrowPathIcon :class="['h-4 w-4', logsDialog.follow && 'animate-spin']" />
-                {{ logsDialog.follow ? 'Following' : 'Follow' }}
-              </button>
-
-              <!-- Refresh button -->
-              <button
-                @click="fetchLogs"
-                :disabled="logsDialog.loading"
-                class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30 transition-colors"
-              >
-                <ArrowPathIcon :class="['h-4 w-4', logsDialog.loading && 'animate-spin']" />
-                Refresh
-              </button>
-
-              <!-- Search -->
-              <div class="flex-1 min-w-[200px] relative">
-                <MagnifyingGlassIcon class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  v-model="logsDialog.search"
-                  @input="applyLogFilter"
-                  type="text"
-                  placeholder="Search logs..."
-                  class="input-field py-1.5 text-sm pl-9 w-full"
-                />
-                <button
-                  v-if="logsDialog.search"
-                  @click="logsDialog.search = ''; applyLogFilter()"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-gray-400 hover:text-gray-600"
-                >
-                  <XMarkIcon class="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            <!-- Logs Content -->
-            <div class="flex-1 overflow-auto p-4 bg-white dark:bg-gray-800">
-              <LoadingSpinner v-if="logsDialog.loading" text="Loading logs..." />
-              <div v-else class="relative">
-                <!-- Match count when searching -->
-                <div
-                  v-if="logsDialog.search"
-                  class="absolute top-2 right-2 px-2 py-1 bg-gray-800 dark:bg-gray-700 text-xs text-gray-300 rounded"
-                >
-                  {{ logsDialog.filteredLogs.split('\n').filter(l => l).length }} matches
-                </div>
-                <pre
-                  class="text-xs font-mono text-gray-200 whitespace-pre-wrap bg-gray-900 dark:bg-black p-4 rounded-lg overflow-auto min-h-[300px] max-h-[60vh]"
-                >{{ logsDialog.filteredLogs || logsDialog.logs || 'No logs available' }}</pre>
-              </div>
-            </div>
-
-            <!-- Footer -->
-            <div class="px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between">
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                Showing {{ logsDialog.lines }} lines
-                <span v-if="logsDialog.since">&bull; Since: {{ logsDialog.since }}</span>
-              </p>
-              <button @click="closeLogs" class="btn-secondary">Close</button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- Stopped Containers Dialog -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="stoppedContainersDialog.open"
-          class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-        >
-          <div class="absolute inset-0 bg-black/50" @click="stoppedContainersDialog.open = false" />
-          <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col border border-gray-400 dark:border-gray-700">
-            <!-- Header -->
-            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-t-lg">
-              <div class="flex items-center gap-3">
-                <div class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700">
-                  <XCircleIcon class="h-5 w-5 text-gray-500" />
-                </div>
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                    Stopped Containers
-                  </h3>
-                  <p class="text-sm text-gray-500 dark:text-gray-400">
-                    {{ stoppedContainers.length }} container{{ stoppedContainers.length !== 1 ? 's' : '' }} stopped
-                  </p>
-                </div>
-              </div>
-              <button
-                @click="stoppedContainersDialog.open = false"
-                class="p-1 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <XMarkIcon class="h-5 w-5" />
-              </button>
-            </div>
-
-            <!-- Content -->
-            <div class="flex-1 overflow-auto p-4 bg-white dark:bg-gray-800">
-              <div v-if="stoppedContainers.length === 0" class="text-center py-8 text-gray-500">
-                No stopped containers
-              </div>
-              <div v-else class="space-y-3">
-                <div
-                  v-for="container in stoppedContainers"
-                  :key="container.id"
-                  class="flex items-center justify-between p-4 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
-                >
-                  <div class="flex items-center gap-3">
-                    <div class="p-2 rounded-lg bg-gray-200 dark:bg-gray-600">
-                      <ServerStackIcon class="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                    </div>
-                    <div>
-                      <p class="font-medium text-gray-900 dark:text-white">{{ container.name }}</p>
-                      <p class="text-xs text-gray-500 dark:text-gray-400 font-mono">{{ container.image }}</p>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <button
-                      @click="performAction(container, 'start')"
-                      class="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
-                      title="Start container"
-                    >
-                      <PlayIcon class="h-5 w-5" />
-                    </button>
-                    <button
-                      @click="promptRemoveContainer(container)"
-                      class="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                      title="Remove container"
-                    >
-                      <TrashIcon class="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Footer -->
-            <div class="px-6 py-4 border-t border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-b-lg">
-              <button
-                @click="stoppedContainersDialog.open = false"
-                class="w-full btn-secondary"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- Danger Zone Stop Dialog (with skull icon) -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="dangerStopDialog.open"
-          class="fixed inset-0 z-[110] flex items-center justify-center p-4"
-        >
-          <div class="absolute inset-0 bg-black/60" @click="dangerStopDialog.open = false" />
-          <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-md w-full border-2 border-red-500 dark:border-red-600">
-            <!-- Header with skull -->
-            <div class="px-6 py-5 bg-red-50 dark:bg-red-900/30 rounded-t-lg border-b border-red-200 dark:border-red-800">
-              <div class="flex items-center justify-center mb-3">
-                <div class="p-4 rounded-full bg-red-100 dark:bg-red-900/50">
-                  <!-- Skull SVG -->
-                  <svg class="h-12 w-12 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm-2 15v-1h4v1h-4zm5.55-5.46l-.55.39V14h-6v-2.07l-.55-.39C7.51 10.85 7 9.47 7 8c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.47-.51 2.85-1.45 3.54zM9 9c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm6 0c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm-7 9h8l-1 3h-6l-1-3z"/>
-                  </svg>
-                </div>
-              </div>
-              <h3 class="text-xl font-bold text-red-700 dark:text-red-400 text-center">
-                Danger Zone
-              </h3>
-              <p class="text-sm text-red-600 dark:text-red-500 text-center mt-1">
-                Critical Container Warning
-              </p>
-            </div>
-
-            <!-- Content -->
-            <div class="px-6 py-5 bg-white dark:bg-gray-800">
-              <p class="text-gray-700 dark:text-gray-300 text-center">
-                You are about to shutdown
-                <span class="font-bold text-gray-900 dark:text-white">{{ dangerStopDialog.container?.name }}</span>
-              </p>
-              <div class="mt-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                <p class="text-red-700 dark:text-red-400 text-center font-bold mb-2">
-                  {{ getCriticalWarning(dangerStopDialog.container?.name).title }}
-                </p>
-                <p class="text-red-600 dark:text-red-300 text-center text-sm">
-                  {{ getCriticalWarning(dangerStopDialog.container?.name).description }}
-                </p>
-              </div>
-              <p class="text-sm text-gray-500 dark:text-gray-400 text-center mt-4 font-medium">
-                Continue with Shutdown?
-              </p>
-            </div>
-
-            <!-- Actions -->
-            <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-lg flex gap-3">
-              <button
-                @click="dangerStopDialog.open = false"
-                :disabled="dangerStopDialog.loading"
-                class="flex-1 btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                @click="confirmDangerStop"
-                :disabled="dangerStopDialog.loading"
-                class="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                <LoadingSpinner v-if="dangerStopDialog.loading" size="sm" />
-                <StopIcon v-else class="h-4 w-4" />
-                {{ dangerStopDialog.loading ? 'Shutting down...' : 'SHUTDOWN' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- Remove Container Confirmation Dialog (with skull icon) -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="removeConfirmDialog.open"
-          class="fixed inset-0 z-[110] flex items-center justify-center p-4"
-        >
-          <div class="absolute inset-0 bg-black/60" @click="removeConfirmDialog.open = false" />
-          <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-md w-full border-2 border-red-500 dark:border-red-600">
-            <!-- Header with skull -->
-            <div class="px-6 py-5 bg-red-50 dark:bg-red-900/30 rounded-t-lg border-b border-red-200 dark:border-red-800">
-              <div class="flex items-center justify-center mb-3">
-                <div class="p-4 rounded-full bg-red-100 dark:bg-red-900/50">
-                  <!-- Skull SVG -->
-                  <svg class="h-12 w-12 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm-2 15v-1h4v1h-4zm5.55-5.46l-.55.39V14h-6v-2.07l-.55-.39C7.51 10.85 7 9.47 7 8c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.47-.51 2.85-1.45 3.54zM9 9c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm6 0c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm-7 9h8l-1 3h-6l-1-3z"/>
-                  </svg>
-                </div>
-              </div>
-              <h3 class="text-xl font-bold text-red-700 dark:text-red-400 text-center">
-                Danger Zone
-              </h3>
-              <p class="text-sm text-red-600 dark:text-red-500 text-center mt-1">
-                This action cannot be undone!
-              </p>
-            </div>
-
-            <!-- Content -->
-            <div class="px-6 py-5 bg-white dark:bg-gray-800">
-              <p class="text-gray-700 dark:text-gray-300 text-center">
-                Are you sure you want to permanently remove the container
-                <span class="font-bold text-gray-900 dark:text-white">{{ removeConfirmDialog.container?.name }}</span>?
-              </p>
-              <p class="text-sm text-gray-500 dark:text-gray-400 text-center mt-2">
-                All container data will be lost forever.
-              </p>
-            </div>
-
-            <!-- Actions -->
-            <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-lg flex gap-3">
-              <button
-                @click="removeConfirmDialog.open = false"
-                :disabled="removeConfirmDialog.loading"
-                class="flex-1 btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                @click="confirmRemoveContainer"
-                :disabled="removeConfirmDialog.loading"
-                class="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                <LoadingSpinner v-if="removeConfirmDialog.loading" size="sm" />
-                <TrashIcon v-else class="h-4 w-4" />
-                {{ removeConfirmDialog.loading ? 'Removing...' : 'Remove Forever' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- Recreate Container Warning Dialog (with 3 buttons) -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="recreateDialog.open"
-          class="fixed inset-0 z-[110] flex items-center justify-center p-4"
-        >
-          <div class="absolute inset-0 bg-black/60" @click="recreateDialog.open = false" />
-          <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-md w-full border-2 border-amber-500 dark:border-amber-600">
-            <!-- Header with warning triangle -->
-            <div class="px-6 py-5 bg-amber-50 dark:bg-amber-900/30 rounded-t-lg border-b border-amber-200 dark:border-amber-800">
-              <div class="flex items-center justify-center mb-3">
-                <div class="p-4 rounded-full bg-amber-100 dark:bg-amber-900/50">
-                  <ExclamationTriangleIcon class="h-12 w-12 text-amber-600 dark:text-amber-400" />
-                </div>
-              </div>
-              <h3 class="text-xl font-bold text-amber-700 dark:text-amber-400 text-center">
-                Are You Sure?
-              </h3>
-            </div>
-
-            <!-- Content -->
-            <div class="px-6 py-5 bg-white dark:bg-gray-800">
-              <p class="text-gray-700 dark:text-gray-300 text-center">
-                You're about to recreate this container and any non-persisted data will be lost.
-              </p>
-              <p class="text-gray-700 dark:text-gray-300 text-center mt-3">
-                The <span class="font-bold text-gray-900 dark:text-white">{{ recreateDialog.container?.name }}</span> will be removed and another one created using the same configuration.
-              </p>
-            </div>
-
-            <!-- Actions - 3 buttons -->
-            <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-lg flex flex-col sm:flex-row gap-3">
-              <button
-                @click="recreateDialog.open = false"
-                :disabled="recreateDialog.loading"
-                class="flex-1 btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                @click="confirmRecreate"
-                :disabled="recreateDialog.loading"
-                class="flex-1 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                <LoadingSpinner v-if="recreateDialog.loading" size="sm" />
-                <ArrowPathRoundedSquareIcon v-else class="h-4 w-4" />
-                {{ recreateDialog.loading ? 'Working...' : 'Recreate' }}
-              </button>
-              <button
-                @click="confirmRecreateWithPull"
-                :disabled="recreateDialog.loading"
-                class="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                <LoadingSpinner v-if="recreateDialog.loading" size="sm" />
-                <ArrowDownTrayIcon v-else class="h-4 w-4" />
-                {{ recreateDialog.loading ? 'Working...' : 'Pull & Recreate' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
   </div>
 </template>
 
 <style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
 .expand-enter-active,
 .expand-leave-active {
   transition: all 0.2s ease;
