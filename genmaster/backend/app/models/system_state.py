@@ -107,8 +107,6 @@ class SystemState(Base):
 
     def can_start_generator(self) -> bool:
         """Check if generator can be started."""
-        if not self.automation_armed:
-            return False
         if self.generator_running:
             return False
         if self.override_enabled and self.override_type == "force_stop":

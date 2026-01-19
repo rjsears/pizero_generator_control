@@ -262,8 +262,6 @@ class StateMachine:
 
             # Validate state transition
             if not state.can_start_generator():
-                if not state.automation_armed:
-                    raise ValueError("Cannot start - automation is not armed")
                 if state.generator_running:
                     raise ValueError("Generator is already running")
                 if state.override_enabled and state.override_type == "force_stop":
@@ -391,14 +389,6 @@ class StateMachine:
             state.victron_signal_state = signal_active
             state.victron_last_change = int(time.time())
             await db.commit()
-
-            # Check if automation is armed
-            if not state.automation_armed:
-                logger.info(
-                    f"Victron signal changed to {signal_active}, "
-                    f"but automation is not armed - ignoring"
-                )
-                return
 
             # Check if override blocks action
             if state.override_enabled:
