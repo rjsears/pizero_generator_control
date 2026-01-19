@@ -170,18 +170,6 @@ class SchedulerService:
         """
         logger.info(f"Executing scheduled run {schedule_id}")
 
-        # Check if automation is armed
-        if not await self.state_machine.is_armed():
-            logger.warning(
-                f"Scheduled run {schedule_id} skipped - automation is not armed"
-            )
-            await self.state_machine.log_event(
-                "SCHEDULED_RUN_SKIPPED",
-                {"schedule_id": schedule_id, "reason": "automation_not_armed"},
-                severity="WARNING",
-            )
-            return
-
         async with AsyncSessionLocal() as db:
             result = await db.execute(
                 select(ScheduledRun).where(ScheduledRun.id == schedule_id)
