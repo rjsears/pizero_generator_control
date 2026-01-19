@@ -49,7 +49,7 @@ Based on the n8n_nginx repository (`refactor/frontend-optimization-v2` branch), 
 
 ### Current Layout (Vertical Stack)
 ```
-[Control Row: GenSlave | Relay | Generator | Emergency Stop]
+[Control Row: GenSlave | Relay | Generator | Emergency Stop]  <- 4 boxes
 [Generator Status Card]  [Victron Status Card]
 [Fuel Usage Tracking Card - Full Width]
 [Manual Override Card - Full Width]
@@ -61,7 +61,7 @@ Based on the n8n_nginx repository (`refactor/frontend-optimization-v2` branch), 
 
 ### New Layout (Compact, Collapsible)
 ```
-[Control Row: GenSlave | Relay | Generator | Emergency Stop]
+[Control Row: GenSlave | Relay | Emergency Stop]  <- 3 boxes (Generator toggle REMOVED)
 [Generator Status Card]  [Victron Status Card]
 [Fuel Usage Tracking]    [Manual Override]      <- Same row, compact
 [Run Time Limits - Collapsible]                 <- Collapsed by default
@@ -69,6 +69,8 @@ Based on the n8n_nginx repository (`refactor/frontend-optimization-v2` branch), 
 [Generator Information - Collapsible]           <- Collapsed by default
 [Exercise Schedule - Collapsible]               <- Collapsed by default
 ```
+
+> **Note**: The Generator toggle slider is removed from the top control row because the Generator Status card below already has Start/Stop buttons. Having both is redundant.
 
 ---
 
@@ -161,6 +163,8 @@ Based on the n8n_nginx repository (`refactor/frontend-optimization-v2` branch), 
 
 ### Phase 1: Setup & Infrastructure
 - [ ] Create feature branch `gencontrol_tab_overhaul`
+- [ ] Remove Generator toggle from top control row (redundant with Start/Stop buttons)
+- [ ] Update control row grid from 4 columns to 3 columns
 - [ ] Add CSS transition classes for `section-expand` animation
 - [ ] Add collapsible state refs (`runtimeLimitsExpanded`, `generatorInfoExpanded`, `exerciseScheduleExpanded`)
 - [ ] Add toggle functions for each collapsible section
@@ -267,10 +271,10 @@ Based on the n8n_nginx repository (`refactor/frontend-optimization-v2` branch), 
 │ Generator Control                                                           │
 │ Monitor and control the generator                                           │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐                        │
-│ │ GenSlave │ │  Relay   │ │Generator │ │Emergency │   <- Control Row       │
-│ │  Online  │ │  Armed   │ │ Running  │ │   Stop   │                        │
-│ └──────────┘ └──────────┘ └──────────┘ └──────────┘                        │
+│ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐                      │
+│ │   GenSlave    │ │     Relay     │ │   Emergency   │   <- Control Row     │
+│ │    Online     │ │     Armed     │ │     Stop      │      (3 boxes)       │
+│ └───────────────┘ └───────────────┘ └───────────────┘                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ ┌─────────────────────────────┐ ┌─────────────────────────────┐            │
 │ │ [⚡] Generator Status       │ │ [📡] Victron Command        │            │
