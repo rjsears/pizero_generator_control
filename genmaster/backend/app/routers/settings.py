@@ -11,7 +11,9 @@
 
 """Key-value settings API endpoints."""
 
+import logging
 from typing import Any, Dict, List
+from urllib.parse import unquote
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -19,7 +21,28 @@ from pydantic import BaseModel
 from app.dependencies import AdminUser, DbSession
 from app.models import Settings
 from app.schemas import WebhookConfig
+from app.schemas.access_control import (
+    AccessControlResponse,
+    AccessControlUpdateRequest,
+    AddIPRangeRequest,
+    IPRange,
+    IPRangeActionResponse,
+    NginxReloadResponse,
+    UpdateIPRangeRequest,
+)
+from app.services.access_control import (
+    NGINX_CONFIG_PATH,
+    generate_nginx_geo_block,
+    get_config_last_modified,
+    get_default_ip_ranges,
+    is_protected_range,
+    parse_nginx_geo_block,
+    reload_nginx,
+    update_nginx_config_geo_block,
+)
 from app.services.webhook import WebhookService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -199,3 +222,286 @@ async def test_webhook() -> dict:
             "message": "Test webhook failed",
             "error": result.error,
         }
+
+
+# Access Control endpoints
+
+
+def _read_nginx_config() -> str:
+    """Read nginx config file content."""
+    from pathlib import Path
+
+    path = Path(NGINX_CONFIG_PATH)
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Nginx config not found at {NGINX_CONFIG_PATH}",
+        )
+    return path.read_text()
+
+
+@router.get("/access-control", response_model=AccessControlResponse)
+async def get_access_control(
+    admin: AdminUser,
+) -> AccessControlResponse:
+    """
+    Get current access control configuration.
+
+    Returns the geo block IP ranges from nginx.conf.
+    Requires admin authentication.
+    """
+    try:
+        config_content = _read_nginx_config()
+        ip_ranges = parse_nginx_geo_block(config_content)
+        last_modified = get_config_last_modified(NGINX_CONFIG_PATH)
+
+        return AccessControlResponse(
+            enabled=len(ip_ranges) > 0,
+            ip_ranges=ip_ranges,
+            nginx_config_path=NGINX_CONFIG_PATH,
+            last_updated=last_modified,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get access control config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/access-control", response_model=AccessControlResponse)
+async def update_access_control(
+    data: AccessControlUpdateRequest,
+    admin: AdminUser,
+) -> AccessControlResponse:
+    """
+    Replace all IP ranges at once.
+
+    This will update the nginx.conf geo block with the provided IP ranges.
+    Requires admin authentication.
+    """
+    try:
+        # Ensure localhost is always included and protected
+        has_localhost = any(r.cidr == "127.0.0.1/32" for r in data.ip_ranges)
+        if not has_localhost:
+            data.ip_ranges.insert(
+                0,
+                IPRange(
+                    cidr="127.0.0.1/32",
+                    description="Localhost (protected)",
+                    access_level="internal",
+                    protected=True,
+                ),
+            )
+
+        # Update nginx config
+        success, message = update_nginx_config_geo_block(
+            NGINX_CONFIG_PATH, data.ip_ranges
+        )
+        if not success:
+            raise HTTPException(status_code=500, detail=message)
+
+        # Return updated config
+        config_content = _read_nginx_config()
+        ip_ranges = parse_nginx_geo_block(config_content)
+        last_modified = get_config_last_modified(NGINX_CONFIG_PATH)
+
+        return AccessControlResponse(
+            enabled=len(ip_ranges) > 0,
+            ip_ranges=ip_ranges,
+            nginx_config_path=NGINX_CONFIG_PATH,
+            last_updated=last_modified,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update access control: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/access-control/ip", response_model=IPRangeActionResponse)
+async def add_ip_range(
+    data: AddIPRangeRequest,
+    admin: AdminUser,
+) -> IPRangeActionResponse:
+    """
+    Add a single IP range to the access control list.
+
+    Requires admin authentication.
+    """
+    try:
+        # Read current config
+        config_content = _read_nginx_config()
+        ip_ranges = parse_nginx_geo_block(config_content)
+
+        # Check if CIDR already exists
+        if any(r.cidr == data.cidr for r in ip_ranges):
+            raise HTTPException(
+                status_code=400,
+                detail=f"IP range {data.cidr} already exists",
+            )
+
+        # Add new range
+        new_range = IPRange(
+            cidr=data.cidr,
+            description=data.description or "",
+            access_level=data.access_level,
+            protected=is_protected_range(data.cidr),
+        )
+        ip_ranges.append(new_range)
+
+        # Update nginx config
+        success, message = update_nginx_config_geo_block(NGINX_CONFIG_PATH, ip_ranges)
+        if not success:
+            raise HTTPException(status_code=500, detail=message)
+
+        return IPRangeActionResponse(
+            success=True,
+            message=f"Added IP range {data.cidr}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to add IP range: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/access-control/ip/{cidr:path}", response_model=IPRangeActionResponse)
+async def update_ip_range(
+    cidr: str,
+    data: UpdateIPRangeRequest,
+    admin: AdminUser,
+) -> IPRangeActionResponse:
+    """
+    Update an IP range's description.
+
+    The CIDR in the URL should be URL-encoded (e.g., 10.0.0.0%2F8).
+    Requires admin authentication.
+    """
+    try:
+        # Decode CIDR from URL
+        decoded_cidr = unquote(cidr)
+
+        # Read current config
+        config_content = _read_nginx_config()
+        ip_ranges = parse_nginx_geo_block(config_content)
+
+        # Find and update the range
+        found = False
+        for ip_range in ip_ranges:
+            if ip_range.cidr == decoded_cidr:
+                ip_range.description = data.description
+                found = True
+                break
+
+        if not found:
+            raise HTTPException(
+                status_code=404,
+                detail=f"IP range {decoded_cidr} not found",
+            )
+
+        # Update nginx config
+        success, message = update_nginx_config_geo_block(NGINX_CONFIG_PATH, ip_ranges)
+        if not success:
+            raise HTTPException(status_code=500, detail=message)
+
+        return IPRangeActionResponse(
+            success=True,
+            message=f"Updated IP range {decoded_cidr}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update IP range: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/access-control/ip/{cidr:path}", response_model=IPRangeActionResponse)
+async def delete_ip_range(
+    cidr: str,
+    admin: AdminUser,
+) -> IPRangeActionResponse:
+    """
+    Delete an IP range from the access control list.
+
+    Protected ranges (like 127.0.0.1/32) cannot be deleted.
+    The CIDR in the URL should be URL-encoded (e.g., 10.0.0.0%2F8).
+    Requires admin authentication.
+    """
+    try:
+        # Decode CIDR from URL
+        decoded_cidr = unquote(cidr)
+
+        # Check if protected
+        if is_protected_range(decoded_cidr):
+            raise HTTPException(
+                status_code=400,
+                detail=f"IP range {decoded_cidr} is protected and cannot be deleted",
+            )
+
+        # Read current config
+        config_content = _read_nginx_config()
+        ip_ranges = parse_nginx_geo_block(config_content)
+
+        # Find and remove the range
+        original_count = len(ip_ranges)
+        ip_ranges = [r for r in ip_ranges if r.cidr != decoded_cidr]
+
+        if len(ip_ranges) == original_count:
+            raise HTTPException(
+                status_code=404,
+                detail=f"IP range {decoded_cidr} not found",
+            )
+
+        # Update nginx config
+        success, message = update_nginx_config_geo_block(NGINX_CONFIG_PATH, ip_ranges)
+        if not success:
+            raise HTTPException(status_code=500, detail=message)
+
+        return IPRangeActionResponse(
+            success=True,
+            message=f"Deleted IP range {decoded_cidr}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete IP range: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/access-control/reload-nginx", response_model=NginxReloadResponse)
+async def reload_nginx_config(
+    admin: AdminUser,
+) -> NginxReloadResponse:
+    """
+    Reload nginx configuration.
+
+    This tests the config first, then reloads if valid.
+    Requires admin authentication.
+    """
+    try:
+        success, message, output = reload_nginx()
+        return NginxReloadResponse(
+            success=success,
+            message=message,
+            output=output,
+        )
+    except Exception as e:
+        logger.error(f"Failed to reload nginx: {e}")
+        return NginxReloadResponse(
+            success=False,
+            message=f"Failed to reload nginx: {str(e)}",
+            output=None,
+        )
+
+
+@router.get("/access-control/defaults", response_model=List[IPRange])
+async def get_default_ip_ranges_endpoint(
+    admin: AdminUser,
+) -> List[IPRange]:
+    """
+    Get the default IP ranges for quick-add functionality.
+
+    Returns common RFC1918 ranges and Tailscale range.
+    Requires admin authentication.
+    """
+    return get_default_ip_ranges()

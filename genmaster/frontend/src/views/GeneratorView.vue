@@ -69,8 +69,8 @@
       </div>
     </div>
 
-    <!-- Control Row: GenSlave | Relay | Generator | Emergency Stop -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- Control Row: GenSlave | Generator Run Relay | Emergency Stop -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <!-- GenSlave Online Status -->
       <Card :padding="false">
         <div class="p-4">
@@ -103,7 +103,7 @@
         </div>
       </Card>
 
-      <!-- Relay Armed Status (GenSlave) -->
+      <!-- Generator Run Relay Armed Status -->
       <Card :padding="false">
         <div class="p-4">
           <div class="flex items-center justify-between">
@@ -124,10 +124,10 @@
                 />
               </div>
               <div>
-                <p class="text-sm text-secondary">Relay</p>
+                <p class="text-sm text-secondary">Generator Run Relay</p>
                 <p
                   :class="[
-                    'text-xl font-bold',
+                    'text-lg font-bold',
                     relayStateLoading ? 'text-gray-400' :
                     relayArmed ? 'text-amber-500' : 'text-gray-500'
                   ]"
@@ -151,59 +151,6 @@
                 :class="[
                   'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform',
                   relayArmed ? 'translate-x-7' : 'translate-x-1'
-                ]"
-              />
-            </button>
-          </div>
-        </div>
-      </Card>
-
-      <!-- Generator Start/Stop Toggle -->
-      <Card :padding="false">
-        <div class="p-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div
-                :class="[
-                  'p-2 rounded-lg',
-                  generatorStore.isRunning ? 'bg-green-100 dark:bg-green-500/20' : 'bg-gray-100 dark:bg-gray-500/20'
-                ]"
-              >
-                <BoltIcon
-                  :class="[
-                    'h-5 w-5',
-                    generatorStore.isRunning ? 'text-green-500' : 'text-gray-500'
-                  ]"
-                />
-              </div>
-              <div>
-                <p class="text-sm text-secondary">Generator</p>
-                <p
-                  :class="[
-                    'text-xl font-bold',
-                    generatorStore.isRunning ? 'text-green-500' : 'text-gray-500'
-                  ]"
-                >
-                  {{ generatorStore.isRunning ? 'Running' : 'Stopped' }}
-                </p>
-              </div>
-            </div>
-            <button
-              @click="handleQuickToggle"
-              :disabled="generatorToggleLoading || relayStateLoading || !relayArmed"
-              :class="[
-                'relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-                generatorStore.isRunning
-                  ? 'bg-green-500 focus:ring-green-500'
-                  : 'bg-gray-400 focus:ring-gray-500',
-                (generatorToggleLoading || relayStateLoading || !relayArmed) ? 'opacity-50 cursor-not-allowed' : ''
-              ]"
-              :title="relayStateLoading ? 'Loading relay state...' : (!relayArmed ? 'Relay must be armed to control generator' : '')"
-            >
-              <span
-                :class="[
-                  'inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform',
-                  generatorStore.isRunning ? 'translate-x-7' : 'translate-x-1'
                 ]"
               />
             </button>
@@ -370,173 +317,251 @@
       </Card>
     </div>
 
-    <!-- Fuel Usage Tracking -->
-    <Card title="Fuel Usage Tracking">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm text-secondary">Total Fuel Used</p>
-          <p class="text-4xl font-bold text-orange-500 mt-1">
-            {{ totalFuelUsed.toFixed(2) }} <span class="text-lg text-secondary">gallons</span>
-          </p>
-          <p class="text-xs text-muted mt-1">Since {{ fuelResetDate }}</p>
-        </div>
-        <div class="flex flex-col items-end gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            @click="showFuelResetConfirm = true"
-          >
-            <ArrowPathIcon class="w-4 h-4 mr-1" />
-            Reset
-          </Button>
-        </div>
-      </div>
-    </Card>
-
-    <!-- Manual Override -->
-    <Card title="Manual Override">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-gray-700 dark:text-gray-300">
-            Override automatic Victron control
-          </p>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            When enabled, the generator will not automatically start based on Victron signals.
-          </p>
-        </div>
-        <Toggle
-          v-model="overrideEnabled"
-          @update:model-value="handleOverrideToggle"
-        />
-      </div>
-    </Card>
-
-    <!-- Run Time Limits -->
-    <Card title="Run Time Limits">
-      <!-- Enable/Disable Toggle -->
-      <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-        <div>
-          <p class="font-medium text-primary">Enable Runtime Limits</p>
-          <p class="text-sm text-secondary">
-            Automatically stop the generator after maximum run time
-          </p>
-        </div>
-        <Toggle
-          v-model="runTimeConfig.runtime_limits_enabled"
-        />
-      </div>
-
-      <!-- Min/Max Run Time Inputs -->
-      <div :class="['grid grid-cols-1 sm:grid-cols-2 gap-6 transition-opacity', !runTimeConfig.runtime_limits_enabled ? 'opacity-50 pointer-events-none' : '']">
-        <div>
-          <Input
-            v-model="runTimeConfig.min_run_minutes"
-            type="number"
-            label="Minimum Run Time (minutes)"
-            :min="1"
-            :max="60"
-            :disabled="!runTimeConfig.runtime_limits_enabled"
-          />
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Minimum duration for each generator run
-          </p>
-        </div>
-        <div>
-          <Input
-            v-model="runTimeConfig.max_run_minutes"
-            type="number"
-            label="Maximum Run Time (minutes)"
-            :min="1"
-            :max="1440"
-            :disabled="!runTimeConfig.runtime_limits_enabled"
-          />
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Maximum duration before automatic shutdown
-          </p>
-        </div>
-      </div>
-
-      <!-- Action when max time reached -->
-      <div :class="['mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 transition-opacity', !runTimeConfig.runtime_limits_enabled ? 'opacity-50 pointer-events-none' : '']">
-        <p class="font-medium text-primary mb-3">When Maximum Time Reached</p>
-        <div class="space-y-3">
-          <button
-            @click="runTimeConfig.max_runtime_action = 'manual_reset'"
-            :disabled="!runTimeConfig.runtime_limits_enabled"
-            :class="[
-              'w-full p-4 rounded-lg border-2 text-left transition-all',
-              runTimeConfig.max_runtime_action === 'manual_reset'
-                ? 'border-amber-500 bg-amber-50 dark:bg-amber-500/10'
-                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-            ]"
-          >
-            <div class="flex items-center gap-3">
-              <div :class="['w-5 h-5 rounded-full border-2 flex items-center justify-center', runTimeConfig.max_runtime_action === 'manual_reset' ? 'border-amber-500' : 'border-gray-400']">
-                <div v-if="runTimeConfig.max_runtime_action === 'manual_reset'" class="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
-              </div>
-              <div>
-                <p class="font-semibold text-primary">Require Manual Reset</p>
-                <p class="text-sm text-secondary">Generator stays off until you manually acknowledge</p>
-              </div>
+    <!-- Fuel Usage & Manual Override Row -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Fuel Usage Tracking -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div class="p-5">
+          <div class="flex items-center gap-4">
+            <!-- Icon -->
+            <div class="flex-shrink-0 w-12 h-12 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
+              <FireIcon class="h-6 w-6 text-orange-500" />
             </div>
-          </button>
-
-          <button
-            @click="runTimeConfig.max_runtime_action = 'cooldown'"
-            :disabled="!runTimeConfig.runtime_limits_enabled"
-            :class="[
-              'w-full p-4 rounded-lg border-2 text-left transition-all',
-              runTimeConfig.max_runtime_action === 'cooldown'
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10'
-                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-            ]"
-          >
-            <div class="flex items-center gap-3">
-              <div :class="['w-5 h-5 rounded-full border-2 flex items-center justify-center', runTimeConfig.max_runtime_action === 'cooldown' ? 'border-blue-500' : 'border-gray-400']">
-                <div v-if="runTimeConfig.max_runtime_action === 'cooldown'" class="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-              </div>
-              <div>
-                <p class="font-semibold text-primary">Cooldown Period</p>
-                <p class="text-sm text-secondary">Generator stays off for a set time, then Victron can restart it</p>
-              </div>
+            <!-- Content -->
+            <div class="flex-1 min-w-0">
+              <p class="font-semibold text-gray-900 dark:text-white">Fuel Usage</p>
+              <p class="text-sm text-gray-500 dark:text-gray-400">Track fuel consumption</p>
             </div>
-          </button>
-
-          <!-- Cooldown Duration (shown only when cooldown selected) -->
-          <div v-if="runTimeConfig.max_runtime_action === 'cooldown'" class="pl-8 mt-3 grid grid-cols-2 gap-4">
-            <div>
-              <Input
-                v-model="cooldownHours"
-                type="number"
-                label="Hours"
-                :min="0"
-                :max="23"
-                :disabled="!runTimeConfig.runtime_limits_enabled"
-              />
+            <!-- Reset Button -->
+            <Button
+              variant="secondary"
+              size="sm"
+              @click="showFuelResetConfirm = true"
+            >
+              <ArrowPathIcon class="w-4 h-4 mr-1" />
+              Reset
+            </Button>
+          </div>
+          <!-- Fuel Stats -->
+          <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+            <div class="flex items-baseline gap-2">
+              <span class="text-3xl font-bold text-orange-500">{{ totalFuelUsed.toFixed(2) }}</span>
+              <span class="text-sm text-gray-500 dark:text-gray-400">gallons</span>
             </div>
-            <div>
-              <Input
-                v-model="cooldownMinutes"
-                type="number"
-                label="Minutes"
-                :min="0"
-                :max="59"
-                :disabled="!runTimeConfig.runtime_limits_enabled"
-              />
-            </div>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Since {{ fuelResetDate }}</p>
           </div>
         </div>
       </div>
 
-      <div class="flex justify-end mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <Button
-          :loading="savingRunTimeConfig"
-          @click="saveRunTimeConfig"
-        >
-          Save Run Time Settings
-        </Button>
+      <!-- Manual Override -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div class="p-5">
+          <div class="flex items-center gap-4">
+            <!-- Icon -->
+            <div class="flex-shrink-0 w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center">
+              <HandRaisedIcon class="h-6 w-6 text-amber-500" />
+            </div>
+            <!-- Content -->
+            <div class="flex-1 min-w-0">
+              <p class="font-semibold text-gray-900 dark:text-white">Manual Override</p>
+              <p class="text-sm text-gray-500 dark:text-gray-400">Override Victron control</p>
+            </div>
+            <!-- Status Badge -->
+            <span
+              :class="[
+                'flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium',
+                overrideEnabled
+                  ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
+                  : 'bg-gray-50 text-gray-600 dark:bg-gray-500/10 dark:text-gray-400'
+              ]"
+            >
+              {{ overrideEnabled ? 'Active' : 'Disabled' }}
+            </span>
+          </div>
+          <!-- Toggle -->
+          <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              When enabled, generator won't auto-start from Victron
+            </p>
+            <Toggle
+              v-model="overrideEnabled"
+              @update:model-value="handleOverrideToggle"
+            />
+          </div>
+        </div>
       </div>
-    </Card>
+    </div>
+
+    <!-- Run Time Limits - Collapsible -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden">
+      <!-- Section Header (clickable) -->
+      <div
+        @click="runtimeLimitsExpanded = !runtimeLimitsExpanded"
+        class="flex items-center gap-4 p-5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+      >
+        <!-- Icon -->
+        <div class="flex-shrink-0 w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center">
+          <ClockIcon class="h-6 w-6 text-blue-500" />
+        </div>
+
+        <!-- Title and Description -->
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-gray-900 dark:text-white text-lg">Run Time Limits</p>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Configure automatic shutdown after maximum run time</p>
+        </div>
+
+        <!-- Status Badge -->
+        <span
+          :class="[
+            'flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium',
+            runTimeConfig.runtime_limits_enabled
+              ? 'bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400'
+              : 'bg-gray-50 text-gray-600 dark:bg-gray-500/10 dark:text-gray-400'
+          ]"
+        >
+          {{ runTimeConfig.runtime_limits_enabled ? 'Enabled' : 'Disabled' }}
+        </span>
+
+        <!-- Chevron -->
+        <ChevronRightIcon
+          :class="[
+            'h-5 w-5 text-gray-400 transition-transform duration-200',
+            runtimeLimitsExpanded ? 'rotate-90' : ''
+          ]"
+        />
+      </div>
+
+      <!-- Expanded Content -->
+      <Transition name="section-expand">
+        <div v-if="runtimeLimitsExpanded" class="border-t border-gray-100 dark:border-gray-700">
+          <div class="p-5">
+            <!-- Enable/Disable Toggle -->
+            <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+              <div>
+                <p class="font-medium text-primary">Enable Runtime Limits</p>
+                <p class="text-sm text-secondary">
+                  Automatically stop the generator after maximum run time
+                </p>
+              </div>
+              <Toggle
+                v-model="runTimeConfig.runtime_limits_enabled"
+              />
+            </div>
+
+            <!-- Min/Max Run Time Inputs -->
+            <div :class="['grid grid-cols-1 sm:grid-cols-2 gap-6 transition-opacity', !runTimeConfig.runtime_limits_enabled ? 'opacity-50 pointer-events-none' : '']">
+              <div>
+                <Input
+                  v-model="runTimeConfig.min_run_minutes"
+                  type="number"
+                  label="Minimum Run Time (minutes)"
+                  :min="1"
+                  :max="60"
+                  :disabled="!runTimeConfig.runtime_limits_enabled"
+                />
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Minimum duration for each generator run
+                </p>
+              </div>
+              <div>
+                <Input
+                  v-model="runTimeConfig.max_run_minutes"
+                  type="number"
+                  label="Maximum Run Time (minutes)"
+                  :min="1"
+                  :max="1440"
+                  :disabled="!runTimeConfig.runtime_limits_enabled"
+                />
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Maximum duration before automatic shutdown
+                </p>
+              </div>
+            </div>
+
+            <!-- Action when max time reached -->
+            <div :class="['mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 transition-opacity', !runTimeConfig.runtime_limits_enabled ? 'opacity-50 pointer-events-none' : '']">
+              <p class="font-medium text-primary mb-3">When Maximum Time Reached</p>
+              <div class="space-y-3">
+                <button
+                  @click="runTimeConfig.max_runtime_action = 'manual_reset'"
+                  :disabled="!runTimeConfig.runtime_limits_enabled"
+                  :class="[
+                    'w-full p-4 rounded-lg border-2 text-left transition-all',
+                    runTimeConfig.max_runtime_action === 'manual_reset'
+                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-500/10'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  ]"
+                >
+                  <div class="flex items-center gap-3">
+                    <div :class="['w-5 h-5 rounded-full border-2 flex items-center justify-center', runTimeConfig.max_runtime_action === 'manual_reset' ? 'border-amber-500' : 'border-gray-400']">
+                      <div v-if="runTimeConfig.max_runtime_action === 'manual_reset'" class="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                    </div>
+                    <div>
+                      <p class="font-semibold text-primary">Require Manual Reset</p>
+                      <p class="text-sm text-secondary">Generator stays off until you manually acknowledge</p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  @click="runTimeConfig.max_runtime_action = 'cooldown'"
+                  :disabled="!runTimeConfig.runtime_limits_enabled"
+                  :class="[
+                    'w-full p-4 rounded-lg border-2 text-left transition-all',
+                    runTimeConfig.max_runtime_action === 'cooldown'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  ]"
+                >
+                  <div class="flex items-center gap-3">
+                    <div :class="['w-5 h-5 rounded-full border-2 flex items-center justify-center', runTimeConfig.max_runtime_action === 'cooldown' ? 'border-blue-500' : 'border-gray-400']">
+                      <div v-if="runTimeConfig.max_runtime_action === 'cooldown'" class="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
+                    </div>
+                    <div>
+                      <p class="font-semibold text-primary">Cooldown Period</p>
+                      <p class="text-sm text-secondary">Generator stays off for a set time, then Victron can restart it</p>
+                    </div>
+                  </div>
+                </button>
+
+                <!-- Cooldown Duration (shown only when cooldown selected) -->
+                <div v-if="runTimeConfig.max_runtime_action === 'cooldown'" class="pl-8 mt-3 grid grid-cols-2 gap-4">
+                  <div>
+                    <Input
+                      v-model="cooldownHours"
+                      type="number"
+                      label="Hours"
+                      :min="0"
+                      :max="23"
+                      :disabled="!runTimeConfig.runtime_limits_enabled"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      v-model="cooldownMinutes"
+                      type="number"
+                      label="Minutes"
+                      :min="0"
+                      :max="59"
+                      :disabled="!runTimeConfig.runtime_limits_enabled"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-end mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                :loading="savingRunTimeConfig"
+                @click="saveRunTimeConfig"
+              >
+                Save Run Time Settings
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </div>
 
     <!-- Statistics -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -566,11 +591,308 @@
       </Card>
     </div>
 
-    <!-- Generator Information -->
-    <GeneratorInfoCard />
+    <!-- Generator Information - Collapsible -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden">
+      <!-- Section Header (clickable) -->
+      <div
+        @click="generatorInfoExpanded = !generatorInfoExpanded"
+        class="flex items-center gap-4 p-5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+      >
+        <!-- Icon -->
+        <div class="flex-shrink-0 w-12 h-12 rounded-full bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center">
+          <InformationCircleIcon class="h-6 w-6 text-purple-500" />
+        </div>
 
-    <!-- Exercise Schedule -->
-    <ExerciseScheduleCard />
+        <!-- Title and Description -->
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-gray-900 dark:text-white text-lg">Generator Information</p>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Model, fuel capacity, and specifications</p>
+        </div>
+
+        <!-- Model Badge -->
+        <span
+          v-if="generatorInfoData.model_number"
+          class="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400"
+        >
+          {{ generatorInfoData.model_number }}
+        </span>
+
+        <!-- Chevron -->
+        <ChevronRightIcon
+          :class="[
+            'h-5 w-5 text-gray-400 transition-transform duration-200',
+            generatorInfoExpanded ? 'rotate-90' : ''
+          ]"
+        />
+      </div>
+
+      <!-- Expanded Content -->
+      <Transition name="section-expand">
+        <div v-if="generatorInfoExpanded" class="border-t border-gray-100 dark:border-gray-700">
+          <div class="p-5">
+            <!-- Edit Button -->
+            <div class="flex justify-end mb-4">
+              <Button
+                variant="secondary"
+                size="sm"
+                @click.stop="showGeneratorInfoEditModal = true"
+              >
+                <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit
+              </Button>
+            </div>
+
+            <div v-if="generatorInfoLoading" class="text-center py-8">
+              <div class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-purple-600 border-r-transparent"></div>
+              <p class="text-sm text-gray-500 mt-2">Loading generator info...</p>
+            </div>
+
+            <div v-else class="space-y-4">
+              <!-- Generator Identity -->
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Manufacturer</p>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                    {{ generatorInfoData.manufacturer || 'Not set' }}
+                  </p>
+                </div>
+                <div>
+                  <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Model</p>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                    {{ generatorInfoData.model_number || 'Not set' }}
+                  </p>
+                </div>
+                <div>
+                  <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Serial Number</p>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                    {{ generatorInfoData.serial_number || 'Not set' }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Fuel Configuration -->
+              <div class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Fuel Configuration</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Fuel Type</p>
+                    <p class="text-sm font-semibold mt-1">
+                      <span :class="generatorInfoFuelTypeBadgeClass">
+                        {{ formatFuelType(generatorInfoData.fuel_type) }}
+                      </span>
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Expected Load</p>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                      {{ generatorInfoData.load_expected ? `${generatorInfoData.load_expected}%` : 'Not set' }}
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Current Rate</p>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                      {{ currentConsumptionRate }} gal/hr
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Consumption Rates -->
+              <div class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Fuel Consumption Rates</h4>
+                <div class="grid grid-cols-2 gap-4">
+                  <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400">At 50% Load</p>
+                    <p class="text-lg font-bold text-gray-900 dark:text-white mt-1">
+                      {{ generatorInfoData.fuel_consumption_50 !== null ? `${generatorInfoData.fuel_consumption_50} gal/hr` : 'Not set' }}
+                    </p>
+                  </div>
+                  <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400">At 100% Load</p>
+                    <p class="text-lg font-bold text-gray-900 dark:text-white mt-1">
+                      {{ generatorInfoData.fuel_consumption_100 !== null ? `${generatorInfoData.fuel_consumption_100} gal/hr` : 'Not set' }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </div>
+
+    <!-- Generator Info Edit Modal -->
+    <GeneratorInfoEditModal
+      v-model="showGeneratorInfoEditModal"
+      :info="generatorInfoData"
+      @saved="handleGeneratorInfoSaved"
+    />
+
+    <!-- Exercise Schedule - Collapsible -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden">
+      <!-- Section Header (clickable) -->
+      <div
+        @click="exerciseScheduleExpanded = !exerciseScheduleExpanded"
+        class="flex items-center gap-4 p-5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+      >
+        <!-- Icon -->
+        <div class="flex-shrink-0 w-12 h-12 rounded-full bg-cyan-50 dark:bg-cyan-500/10 flex items-center justify-center">
+          <CalendarDaysIcon class="h-6 w-6 text-cyan-500" />
+        </div>
+
+        <!-- Title and Description -->
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-gray-900 dark:text-white text-lg">Exercise Schedule</p>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Automatic weekly exercise runs</p>
+        </div>
+
+        <!-- Status Badge -->
+        <span
+          :class="[
+            'flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium',
+            exerciseSchedule.enabled
+              ? 'bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400'
+              : 'bg-gray-50 text-gray-600 dark:bg-gray-500/10 dark:text-gray-400'
+          ]"
+        >
+          {{ exerciseSchedule.enabled ? 'Enabled' : 'Disabled' }}
+        </span>
+
+        <!-- Next Run Badge -->
+        <span
+          v-if="exerciseSchedule.enabled && exerciseSchedule.next_exercise_date"
+          class="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-400"
+        >
+          {{ formatExerciseDate(exerciseSchedule.next_exercise_date) }} {{ formatExerciseTime(exerciseSchedule.start_time) }}
+        </span>
+
+        <!-- Chevron -->
+        <ChevronRightIcon
+          :class="[
+            'h-5 w-5 text-gray-400 transition-transform duration-200',
+            exerciseScheduleExpanded ? 'rotate-90' : ''
+          ]"
+        />
+      </div>
+
+      <!-- Expanded Content -->
+      <Transition name="section-expand">
+        <div v-if="exerciseScheduleExpanded" class="border-t border-gray-100 dark:border-gray-700">
+          <div class="p-5">
+            <!-- Loading State -->
+            <div v-if="exerciseLoading" class="text-center py-8">
+              <div class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-cyan-600 border-r-transparent"></div>
+              <p class="text-sm text-gray-500 mt-2">Loading schedule...</p>
+            </div>
+
+            <div v-else class="space-y-6">
+              <!-- Enable Toggle & Edit Button Row -->
+              <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center gap-4">
+                  <Toggle
+                    :model-value="exerciseSchedule.enabled"
+                    :disabled="exerciseToggling"
+                    @update:model-value="handleExerciseToggle"
+                  />
+                  <span class="font-medium text-primary">
+                    {{ exerciseSchedule.enabled ? 'Schedule Active' : 'Schedule Disabled' }}
+                  </span>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  @click.stop="showExerciseEditModal = true"
+                >
+                  <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit Schedule
+                </Button>
+              </div>
+
+              <!-- Schedule Details Grid -->
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                  <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Frequency</p>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                    Every {{ exerciseSchedule.frequency_days }} days
+                  </p>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                  <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Start Time</p>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                    {{ formatExerciseTime(exerciseSchedule.start_time) }}
+                  </p>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                  <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Duration</p>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                    {{ exerciseSchedule.duration_minutes }} minutes
+                  </p>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                  <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Last Run</p>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white mt-1">
+                    {{ exerciseSchedule.last_exercise_date ? formatExerciseDate(exerciseSchedule.last_exercise_date) : 'Never' }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Next Exercise Info & Run Now Button -->
+              <div class="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div>
+                  <p class="text-sm text-secondary">Next Scheduled Exercise</p>
+                  <p class="text-lg font-semibold text-primary">
+                    <span v-if="exerciseSchedule.enabled && exerciseSchedule.next_exercise_date">
+                      {{ formatExerciseDate(exerciseSchedule.next_exercise_date) }} at {{ formatExerciseTime(exerciseSchedule.start_time) }}
+                    </span>
+                    <span v-else class="text-gray-400">
+                      {{ exerciseSchedule.enabled ? 'Calculating...' : 'Schedule disabled' }}
+                    </span>
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  :disabled="!canExerciseRunNow"
+                  :loading="exerciseRunningNow"
+                  @click.stop="handleExerciseRunNow"
+                >
+                  <PlayIcon class="w-4 h-4 mr-1" />
+                  Run Now
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </div>
+
+    <!-- Exercise Schedule Edit Modal -->
+    <ExerciseScheduleModal
+      v-model="showExerciseEditModal"
+      :schedule="exerciseSchedule"
+      @saved="handleExerciseScheduleSaved"
+    />
+
+    <!-- Confirm Exercise Run Now Modal -->
+    <Modal v-model="showExerciseConfirmRunNow" title="Run Exercise Now">
+      <p class="text-gray-600 dark:text-gray-400">
+        This will start an exercise run immediately for {{ exerciseSchedule.duration_minutes }} minutes.
+        Continue?
+      </p>
+      <template #footer>
+        <Button variant="secondary" @click="showExerciseConfirmRunNow = false">Cancel</Button>
+        <Button
+          variant="primary"
+          :loading="exerciseRunningNow"
+          @click="executeExerciseRunNow"
+        >
+          Start Exercise
+        </Button>
+      </template>
+    </Modal>
 
     <!-- Start Generator Modal -->
     <Modal v-model="showStartModal" title="Start Generator">
@@ -683,8 +1005,10 @@ import Button from '@/components/common/Button.vue'
 import Input from '@/components/common/Input.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Modal from '@/components/common/Modal.vue'
-import GeneratorInfoCard from '@/components/GeneratorInfoCard.vue'
-import ExerciseScheduleCard from '@/components/ExerciseScheduleCard.vue'
+import GeneratorInfoEditModal from '@/components/GeneratorInfoEditModal.vue'
+import ExerciseScheduleModal from '@/components/ExerciseScheduleModal.vue'
+import generatorInfoService from '@/services/generatorInfo'
+import exerciseService from '@/services/exercise'
 import {
   BoltIcon,
   ServerIcon,
@@ -693,6 +1017,7 @@ import {
   ExclamationTriangleIcon,
   CogIcon,
   CalendarIcon,
+  CalendarDaysIcon,
   HandRaisedIcon,
   BoltSlashIcon,
   ClockIcon,
@@ -700,6 +1025,8 @@ import {
   PlayIcon,
   StopIcon,
   ArrowPathIcon,
+  ChevronRightIcon,
+  InformationCircleIcon,
 } from '@heroicons/vue/24/outline'
 
 const generatorStore = useGeneratorStore()
@@ -771,6 +1098,39 @@ const cooldownMinutes = computed({
 
 // Override state
 const overrideEnabled = ref(false)
+
+// Collapsible section states (collapsed by default)
+const runtimeLimitsExpanded = ref(false)
+const generatorInfoExpanded = ref(false)
+const exerciseScheduleExpanded = ref(false)
+
+// Generator Info state
+const generatorInfoLoading = ref(true)
+const showGeneratorInfoEditModal = ref(false)
+const generatorInfoData = ref({
+  manufacturer: null,
+  model_number: null,
+  serial_number: null,
+  fuel_type: null,
+  load_expected: null,
+  fuel_consumption_50: null,
+  fuel_consumption_100: null,
+})
+
+// Exercise Schedule state
+const exerciseLoading = ref(true)
+const exerciseToggling = ref(false)
+const exerciseRunningNow = ref(false)
+const showExerciseEditModal = ref(false)
+const showExerciseConfirmRunNow = ref(false)
+const exerciseSchedule = ref({
+  enabled: false,
+  frequency_days: 7,
+  start_time: '10:00',
+  duration_minutes: 15,
+  last_exercise_date: null,
+  next_exercise_date: null,
+})
 
 // Stats
 const stats = ref(null)
@@ -1040,20 +1400,152 @@ async function fetchFuelUsage() {
   }
 }
 
-// Fetch generator info for fuel calculation
+// Fetch generator info for fuel calculation and info display
 async function fetchGeneratorInfo() {
+  generatorInfoLoading.value = true
   try {
-    const { generatorInfoApi } = await import('@/services/api')
-    const response = await generatorInfoApi.get()
+    const response = await generatorInfoService.get()
     if (response.data) {
+      // For fuel calculation
       generatorInfo.value = {
         fuel_consumption_50: response.data.fuel_consumption_50 || 0,
         fuel_consumption_100: response.data.fuel_consumption_100 || 0,
         load_expected: response.data.load_expected || 50,
       }
+      // For info display
+      generatorInfoData.value = response.data
     }
   } catch (err) {
     console.error('Failed to fetch generator info:', err)
+  } finally {
+    generatorInfoLoading.value = false
+  }
+}
+
+// Generator info computed properties
+const generatorInfoFuelTypeBadgeClass = computed(() => {
+  const type = generatorInfoData.value.fuel_type
+  const baseClasses = 'px-2 py-0.5 text-xs font-medium rounded-full'
+  switch (type) {
+    case 'lpg':
+      return `${baseClasses} bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400`
+    case 'natural_gas':
+      return `${baseClasses} bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400`
+    case 'diesel':
+      return `${baseClasses} bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400`
+    default:
+      return `${baseClasses} bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400`
+  }
+})
+
+const currentConsumptionRate = computed(() => {
+  if (generatorInfoData.value.load_expected === 50 && generatorInfoData.value.fuel_consumption_50 !== null) {
+    return generatorInfoData.value.fuel_consumption_50
+  } else if (generatorInfoData.value.load_expected === 100 && generatorInfoData.value.fuel_consumption_100 !== null) {
+    return generatorInfoData.value.fuel_consumption_100
+  }
+  return 'N/A'
+})
+
+function formatFuelType(type) {
+  const types = {
+    lpg: 'LPG (Propane)',
+    natural_gas: 'Natural Gas',
+    diesel: 'Diesel',
+  }
+  return types[type] || 'Not set'
+}
+
+function handleGeneratorInfoSaved(updatedInfo) {
+  generatorInfoData.value = updatedInfo
+  // Also update fuel calculation info
+  generatorInfo.value = {
+    fuel_consumption_50: updatedInfo.fuel_consumption_50 || 0,
+    fuel_consumption_100: updatedInfo.fuel_consumption_100 || 0,
+    load_expected: updatedInfo.load_expected || 50,
+  }
+}
+
+// Exercise Schedule functions
+const canExerciseRunNow = computed(() => {
+  return !generatorStore.isRunning && !exerciseRunningNow.value
+})
+
+function formatExerciseTime(time) {
+  if (!time) return 'Not set'
+  try {
+    const [hours, minutes] = time.split(':')
+    const h = parseInt(hours)
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    const displayHour = h % 12 || 12
+    return `${displayHour}:${minutes} ${ampm}`
+  } catch {
+    return time
+  }
+}
+
+function formatExerciseDate(dateStr) {
+  if (!dateStr) return 'Not set'
+  try {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    })
+  } catch {
+    return dateStr
+  }
+}
+
+async function fetchExerciseSchedule() {
+  exerciseLoading.value = true
+  try {
+    const response = await exerciseService.getSchedule()
+    exerciseSchedule.value = response.data
+  } catch (error) {
+    console.error('Failed to fetch exercise schedule:', error)
+  } finally {
+    exerciseLoading.value = false
+  }
+}
+
+async function handleExerciseToggle(enabled) {
+  exerciseToggling.value = true
+  try {
+    const response = await exerciseService.updateSchedule({ enabled })
+    exerciseSchedule.value = response.data
+    notificationStore.success(`Exercise scheduling ${enabled ? 'enabled' : 'disabled'}`)
+  } catch (error) {
+    console.error('Failed to toggle exercise schedule:', error)
+    notificationStore.error('Failed to update exercise schedule')
+  } finally {
+    exerciseToggling.value = false
+  }
+}
+
+function handleExerciseScheduleSaved(updatedSchedule) {
+  exerciseSchedule.value = updatedSchedule
+}
+
+function handleExerciseRunNow() {
+  showExerciseConfirmRunNow.value = true
+}
+
+async function executeExerciseRunNow() {
+  exerciseRunningNow.value = true
+  try {
+    await exerciseService.runNow()
+    notificationStore.success('Exercise run started')
+    showExerciseConfirmRunNow.value = false
+    await generatorStore.fetchState()
+    await fetchExerciseSchedule()
+  } catch (error) {
+    console.error('Failed to start exercise run:', error)
+    const message = error.response?.data?.detail || 'Failed to start exercise run'
+    notificationStore.error(message)
+  } finally {
+    exerciseRunningNow.value = false
   }
 }
 
@@ -1166,6 +1658,7 @@ onMounted(async () => {
       systemStore.fetchVictronStatus(),
       fetchFuelUsage(),
       fetchGeneratorInfo(),
+      fetchExerciseSchedule(),
     ])
     stats.value = generatorStore.stats
 
@@ -1238,5 +1731,24 @@ onUnmounted(() => {
 
 .animate-spin-slow {
   animation: spin-slow 3s linear infinite;
+}
+
+/* Section expand/collapse transitions */
+.section-expand-enter-active,
+.section-expand-leave-active {
+  transition: all 0.3s ease-out;
+  overflow: hidden;
+}
+
+.section-expand-enter-from,
+.section-expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+
+.section-expand-enter-to,
+.section-expand-leave-from {
+  opacity: 1;
+  max-height: 2000px;
 }
 </style>

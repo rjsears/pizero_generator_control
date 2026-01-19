@@ -88,6 +88,15 @@ from app.schemas.exercise_schedule import (
     ExerciseScheduleResponse,
     ExerciseScheduleUpdate,
 )
+from app.schemas.access_control import (
+    AccessControlResponse,
+    AccessControlUpdateRequest,
+    AddIPRangeRequest,
+    IPRange,
+    IPRangeActionResponse,
+    NginxReloadResponse,
+    UpdateIPRangeRequest,
+)
 
 __all__ = [
     # Auth
@@ -166,4 +175,12 @@ __all__ = [
     "ExerciseScheduleResponse",
     "ExerciseScheduleUpdate",
     "ExerciseRunNowResponse",
+    # Access Control
+    "AccessControlResponse",
+    "AccessControlUpdateRequest",
+    "AddIPRangeRequest",
+    "IPRange",
+    "IPRangeActionResponse",
+    "NginxReloadResponse",
+    "UpdateIPRangeRequest",
 ]
