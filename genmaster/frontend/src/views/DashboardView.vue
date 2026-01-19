@@ -414,7 +414,7 @@ import {
   HandRaisedIcon,
   BoltSlashIcon,
 } from '@heroicons/vue/24/outline'
-import { genslaveApi, systemApi } from '@/services/api'
+import { genslaveApi } from '@/services/api'
 
 const router = useRouter()
 const generatorStore = useGeneratorStore()
@@ -447,23 +447,15 @@ async function handleEmergencyStop() {
   }
 }
 
-// Toggle relay arm/disarm (GenSlave) - also syncs GenMaster automation
+// Toggle relay arm/disarm - GenSlave is the source of truth
 async function toggleRelayArm() {
   togglingRelay.value = true
   try {
     if (relayArmed.value) {
-      // Disarm both GenSlave relay and GenMaster automation
-      await Promise.all([
-        genslaveApi.disarm(),
-        systemApi.disarm(),
-      ])
+      await genslaveApi.disarm()
       relayArmed.value = false
     } else {
-      // Arm both GenSlave relay and GenMaster automation
-      await Promise.all([
-        genslaveApi.arm(),
-        systemApi.arm(),
-      ])
+      await genslaveApi.arm()
       relayArmed.value = true
     }
   } catch (err) {
