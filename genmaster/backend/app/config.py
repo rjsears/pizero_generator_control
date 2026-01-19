@@ -49,8 +49,9 @@ class Settings(BaseSettings):
         )
 
     # GenSlave Communication
-    slave_api_url: str = "http://genslave:8000"
+    slave_api_url: str = "http://genslave:8001"
     slave_api_secret: str = "change-me"
+    genslave_ip: Optional[str] = None
 
     # Heartbeat Settings
     heartbeat_interval_seconds: int = 60

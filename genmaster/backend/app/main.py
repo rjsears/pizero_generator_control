@@ -63,6 +63,47 @@ scheduler_service: Optional[SchedulerService] = None
 webhook_service: Optional[WebhookService] = None
 
 
+async def sync_env_to_database() -> None:
+    """Sync critical settings from environment variables to database config.
+
+    This ensures that values set in .env (via setup.sh) are reflected in the
+    database config table, which is what the heartbeat and health services use.
+
+    Only updates values that are explicitly set in the environment (not defaults).
+    """
+    from app.database import AsyncSessionLocal
+    from app.models import Config
+
+    async with AsyncSessionLocal() as db:
+        config = await Config.get_instance(db)
+
+        updates = []
+
+        # Sync slave_api_url if set in environment (not the default)
+        if settings.slave_api_url and settings.slave_api_url != "http://genslave:8001":
+            if config.slave_api_url != settings.slave_api_url:
+                config.slave_api_url = settings.slave_api_url
+                updates.append(f"slave_api_url={settings.slave_api_url}")
+
+        # Sync slave_api_secret if set in environment (not the default)
+        if settings.slave_api_secret and settings.slave_api_secret != "change-me":
+            if config.slave_api_secret != settings.slave_api_secret:
+                config.slave_api_secret = settings.slave_api_secret
+                updates.append("slave_api_secret=***")
+
+        # Sync genslave_ip if set in environment
+        if settings.genslave_ip:
+            if config.genslave_ip != settings.genslave_ip:
+                config.genslave_ip = settings.genslave_ip
+                updates.append(f"genslave_ip={settings.genslave_ip}")
+
+        if updates:
+            await db.commit()
+            logger.info(f"Synced env vars to database config: {', '.join(updates)}")
+        else:
+            logger.debug("Database config already in sync with environment")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup/shutdown."""
@@ -79,6 +120,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("=" * 60)
 
     try:
+        # Sync environment variables to database config first
+        # This ensures .env values (from setup.sh) are reflected in the database
+        await sync_env_to_database()
+
         # Initialize webhook service first (used by state machine)
         webhook_service = WebhookService()
         logger.info("Webhook service initialized")
