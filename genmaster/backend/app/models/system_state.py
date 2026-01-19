@@ -80,6 +80,13 @@ class SystemState(Base):
     slave_relay_state: Mapped[Optional[bool]] = mapped_column(nullable=True)
     slave_relay_armed: Mapped[Optional[bool]] = mapped_column(nullable=True)
 
+    # Runtime Lockout/Cooldown
+    runtime_lockout_active: Mapped[bool] = mapped_column(default=False)
+    runtime_lockout_started: Mapped[Optional[int]] = mapped_column(nullable=True)
+    runtime_lockout_reason: Mapped[Optional[str]] = mapped_column(nullable=True)
+    cooldown_active: Mapped[bool] = mapped_column(default=False)
+    cooldown_end_time: Mapped[Optional[int]] = mapped_column(nullable=True)
+
     # Metadata
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()
@@ -119,7 +126,18 @@ class SystemState(Base):
             return False
         if self.slave_connection_status == "disconnected":
             return False
+        if self.runtime_lockout_active:
+            return False
         return True
+
+    def is_cooldown_expired(self) -> bool:
+        """Check if cooldown period has expired."""
+        import time
+        if not self.cooldown_active:
+            return True
+        if self.cooldown_end_time is None:
+            return True
+        return time.time() >= self.cooldown_end_time
 
     def is_armed(self) -> bool:
         """Check if relay is armed (cached from last heartbeat)."""

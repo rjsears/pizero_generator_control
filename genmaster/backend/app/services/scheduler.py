@@ -23,7 +23,7 @@ from apscheduler.triggers.date import DateTrigger
 from sqlalchemy.future import select
 
 from app.database import AsyncSessionLocal
-from app.models import ScheduledRun
+from app.models import Config, ScheduledRun
 
 if TYPE_CHECKING:
     from app.services.state_machine import StateMachine
@@ -52,6 +52,8 @@ class SchedulerService:
         self._scheduler = AsyncIOScheduler()
         self._running = False
         self._auto_stop_jobs: dict[int, str] = {}  # run_id -> job_id
+        self._max_runtime_jobs: dict[int, str] = {}  # run_id -> job_id
+        self._cooldown_job_id: Optional[str] = None
 
     def start(self) -> None:
         """Start the scheduler."""
@@ -295,3 +297,172 @@ class SchedulerService:
     def is_running(self) -> bool:
         """Check if scheduler is running."""
         return self._running
+
+    # =========================================================================
+    # Runtime Limits Scheduling
+    # =========================================================================
+
+    async def schedule_max_runtime_stop(self, run_id: int, max_minutes: int) -> None:
+        """
+        Schedule automatic stop when max runtime is reached.
+
+        Args:
+            run_id: ID of the generator run
+            max_minutes: Maximum runtime in minutes
+        """
+        job_id = f"max_runtime_stop_{run_id}"
+
+        stop_time = datetime.now(timezone.utc).timestamp() + (max_minutes * 60)
+        run_date = datetime.fromtimestamp(stop_time, tz=timezone.utc)
+
+        self._scheduler.add_job(
+            self._execute_max_runtime_stop,
+            DateTrigger(run_date=run_date),
+            args=[run_id],
+            id=job_id,
+            name=f"Max runtime stop for run {run_id}",
+            replace_existing=True,
+        )
+
+        self._max_runtime_jobs[run_id] = job_id
+        logger.info(
+            f"Scheduled max runtime stop for run {run_id} in {max_minutes} minutes"
+        )
+
+    async def _execute_max_runtime_stop(self, run_id: int) -> None:
+        """
+        Execute max runtime stop for a run.
+
+        Args:
+            run_id: ID of the run that reached max runtime
+        """
+        logger.warning(f"Executing max runtime stop for run {run_id}")
+
+        # Clean up job tracking
+        self._max_runtime_jobs.pop(run_id, None)
+
+        # Check if this run is still active
+        status = await self.state_machine.get_generator_status()
+        if status.current_run_id != run_id:
+            logger.debug(
+                f"Run {run_id} is no longer active, skipping max runtime stop"
+            )
+            return
+
+        # Stop the generator with max_runtime reason
+        await self.state_machine.stop_generator("max_runtime")
+
+        # Get config to determine action
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Config).where(Config.id == 1))
+            config = result.scalar_one_or_none()
+
+            if not config or not config.runtime_limits_enabled:
+                logger.info("Runtime limits disabled, no post-stop action")
+                return
+
+            if config.max_runtime_action == "manual_reset":
+                # Activate lockout requiring manual acknowledgment
+                await self.state_machine.activate_runtime_lockout("max_runtime_reached")
+            elif config.max_runtime_action == "cooldown":
+                # Activate cooldown period
+                await self.state_machine.activate_cooldown(config.cooldown_duration_minutes)
+                # Schedule cooldown end
+                await self.schedule_cooldown_end(config.cooldown_duration_minutes)
+
+    def cancel_max_runtime_stop(self, run_id: int) -> bool:
+        """
+        Cancel scheduled max runtime stop for a run.
+
+        Args:
+            run_id: ID of the run
+
+        Returns:
+            True if cancelled, False if not found
+        """
+        job_id = self._max_runtime_jobs.pop(run_id, None)
+        if job_id and self._scheduler.get_job(job_id):
+            self._scheduler.remove_job(job_id)
+            logger.info(f"Cancelled max runtime stop for run {run_id}")
+            return True
+        return False
+
+    async def schedule_cooldown_end(self, duration_minutes: int) -> None:
+        """
+        Schedule cooldown expiration.
+
+        Args:
+            duration_minutes: Duration of cooldown in minutes
+        """
+        job_id = "cooldown_end"
+
+        # Cancel existing cooldown job if any
+        if self._cooldown_job_id and self._scheduler.get_job(self._cooldown_job_id):
+            self._scheduler.remove_job(self._cooldown_job_id)
+
+        end_time = datetime.now(timezone.utc).timestamp() + (duration_minutes * 60)
+        run_date = datetime.fromtimestamp(end_time, tz=timezone.utc)
+
+        self._scheduler.add_job(
+            self._execute_cooldown_end,
+            DateTrigger(run_date=run_date),
+            id=job_id,
+            name="Cooldown period end",
+            replace_existing=True,
+        )
+
+        self._cooldown_job_id = job_id
+        logger.info(f"Scheduled cooldown end in {duration_minutes} minutes")
+
+    async def _execute_cooldown_end(self) -> None:
+        """Execute cooldown end - clear cooldown and potentially restart generator."""
+        logger.info("Executing cooldown end")
+
+        self._cooldown_job_id = None
+
+        # Handle cooldown expiry (this will check if Victron should restart)
+        await self.state_machine.handle_cooldown_expiry()
+
+        # Check if we should auto-restart due to Victron signal
+        async with AsyncSessionLocal() as db:
+            from app.models import SystemState
+            result = await db.execute(select(SystemState).where(SystemState.id == 1))
+            state = result.scalar_one_or_none()
+
+            result = await db.execute(select(Config).where(Config.id == 1))
+            config = result.scalar_one_or_none()
+
+            if (
+                state
+                and config
+                and state.victron_signal_state
+                and state.slave_relay_armed
+                and not state.override_enabled
+                and not state.generator_running
+            ):
+                logger.info(
+                    "Cooldown expired with Victron signal active - restarting generator"
+                )
+                try:
+                    run = await self.state_machine.start_generator("victron")
+                    # Schedule max runtime stop for the new run if limits enabled
+                    if config.runtime_limits_enabled:
+                        await self.schedule_max_runtime_stop(
+                            run.id, config.max_run_minutes
+                        )
+                except ValueError as e:
+                    logger.warning(f"Could not restart generator after cooldown: {e}")
+
+    def cancel_cooldown_end(self) -> bool:
+        """
+        Cancel scheduled cooldown end.
+
+        Returns:
+            True if cancelled, False if not found
+        """
+        if self._cooldown_job_id and self._scheduler.get_job(self._cooldown_job_id):
+            self._scheduler.remove_job(self._cooldown_job_id)
+            self._cooldown_job_id = None
+            logger.info("Cancelled cooldown end job")
+            return True
+        return False

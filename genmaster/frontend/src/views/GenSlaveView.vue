@@ -6,7 +6,7 @@
   Version 1.0.0 - January 18th, 2026
 
   Dedicated view for GenSlave health monitoring with detailed
-  system metrics, network info, relay control, and real-time status.
+  system metrics, network info, and real-time status.
 
   Richard J. Sears
   richardjsears@protonmail.com
@@ -21,7 +21,7 @@
       <div>
         <h1 class="text-2xl font-bold text-primary">GenSlave</h1>
         <p class="text-secondary mt-1">
-          Remote generator controller health, status, and relay control
+          Remote generator controller health and status monitoring
         </p>
       </div>
     </div>
@@ -64,75 +64,6 @@
               <BoltIcon :class="['h-4 w-4', testingConnection ? 'animate-pulse' : '']" />
               Test
             </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ARM/DISARM Banner -->
-      <div
-        :class="[
-          'rounded-xl p-4 border-2 relative overflow-hidden transition-all',
-          relayArmed
-            ? 'bg-gradient-to-r from-red-500/20 to-red-500/10 border-red-500'
-            : 'bg-gradient-to-r from-gray-500/20 to-gray-500/10 border-gray-400 dark:border-gray-600'
-        ]"
-      >
-        <div class="flex items-center justify-between flex-wrap gap-4">
-          <div class="flex items-center gap-4">
-            <div
-              :class="[
-                'p-3 rounded-xl',
-                relayArmed ? 'bg-red-500/30' : 'bg-gray-500/30'
-              ]"
-            >
-              <ShieldExclamationIcon
-                :class="[
-                  'h-8 w-8',
-                  relayArmed ? 'text-red-500' : 'text-gray-500'
-                ]"
-              />
-            </div>
-            <div>
-              <h3 class="text-lg font-bold text-primary">
-                Relay Status:
-                <span :class="relayArmed ? 'text-red-500' : 'text-gray-500'">
-                  {{ relayArmed ? 'ARMED' : 'DISARMED' }}
-                </span>
-              </h3>
-              <p class="text-sm text-secondary">
-                {{ relayArmed ? 'Generator can be started via relay control' : 'Relay is disabled - generator cannot be started remotely' }}
-              </p>
-            </div>
-          </div>
-          <div class="flex items-center gap-4">
-            <button
-              @click="toggleRelayArm"
-              :disabled="armingRelay || !slaveInfo.online"
-              :class="[
-                'relative inline-flex h-8 w-16 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-                relayArmed
-                  ? 'bg-red-500 focus:ring-red-500'
-                  : 'bg-gray-400 focus:ring-gray-500',
-                (armingRelay || !slaveInfo.online) ? 'opacity-50 cursor-not-allowed' : ''
-              ]"
-            >
-              <span
-                :class="[
-                  'inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform',
-                  relayArmed ? 'translate-x-9' : 'translate-x-1'
-                ]"
-              />
-            </button>
-            <span
-              :class="[
-                'px-3 py-1 rounded-full text-sm font-bold',
-                relayArmed
-                  ? 'bg-red-500 text-white'
-                  : 'bg-gray-400 text-white'
-              ]"
-            >
-              {{ relayArmed ? 'ARMED' : 'SAFE' }}
-            </span>
           </div>
         </div>
       </div>
@@ -602,7 +533,6 @@ import {
   BoltIcon,
   ServerIcon,
   ExclamationTriangleIcon,
-  ShieldExclamationIcon,
   ClipboardDocumentIcon,
   EyeIcon,
   EyeSlashIcon,
@@ -631,8 +561,7 @@ const slaveSystemInfo = ref(null)  // GET /api/system
 const slaveHealthStatus = ref(null)  // GET /api/health
 const slaveFailsafeStatus = ref(null)  // GET /api/failsafe
 const slaveRelayState = ref(null)  // GET /api/relay/state
-const relayArmed = ref(false)
-const armingRelay = ref(false)
+const relayArmed = ref(false)  // Read-only display, control is on Generator page
 
 // GenSlave connection settings
 const slaveConfig = ref({
@@ -763,27 +692,6 @@ async function testSlaveConnection() {
     notificationStore.error(`Connection failed: ${error.response?.data?.detail || error.message}`)
   } finally {
     testingConnection.value = false
-  }
-}
-
-// Toggle relay ARM/DISARM
-async function toggleRelayArm() {
-  armingRelay.value = true
-  try {
-    if (relayArmed.value) {
-      await genslaveApi.disarm()
-      relayArmed.value = false
-      notificationStore.success('Relay disarmed')
-    } else {
-      await genslaveApi.arm()
-      relayArmed.value = true
-      notificationStore.success('Relay armed - generator can now be started')
-    }
-  } catch (err) {
-    notificationStore.error('Failed to toggle relay arm state')
-    console.error('Failed to toggle relay arm state:', err)
-  } finally {
-    armingRelay.value = false
   }
 }
 

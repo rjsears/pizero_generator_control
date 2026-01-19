@@ -23,12 +23,6 @@ const routes = [
   },
   {
     path: '/',
-    name: 'dashboard',
-    component: () => import('../views/DashboardView.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/generator',
     name: 'generator',
     component: () => import('../views/GeneratorView.vue'),
     meta: { requiresAuth: true },
@@ -101,7 +95,7 @@ router.beforeEach(async (to, from, next) => {
   }
   // Check if route is guest-only (like login)
   else if (to.meta.guest && authStore.isAuthenticated) {
-    next({ name: 'dashboard' })
+    next({ name: 'generator' })
   }
   else {
     next()

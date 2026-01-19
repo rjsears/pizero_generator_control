@@ -34,7 +34,7 @@ class GeneratorRun(Base):
         ),
         CheckConstraint(
             "stop_reason IS NULL OR stop_reason IN "
-            "('victron', 'manual', 'scheduled_end', 'exercise_end', 'comm_loss', 'override', 'error')",
+            "('victron', 'manual', 'scheduled_end', 'exercise_end', 'comm_loss', 'override', 'error', 'max_runtime')",
             name="chk_stop_reason",
         ),
         Index("idx_generator_runs_start_time", "start_time"),

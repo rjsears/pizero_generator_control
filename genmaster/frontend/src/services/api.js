@@ -122,6 +122,12 @@ export const generatorApi = {
   getHistory: (params = {}) => api.get('/generator/history', { params }),
   getStats: () => api.get('/generator/stats'),
   getRun: (runId) => api.get(`/generator/history/${runId}`),
+  // Fuel tracking
+  getFuelUsage: () => api.get('/generator/fuel-usage'),
+  resetFuelTracking: () => api.post('/generator/fuel-usage/reset'),
+  // Runtime limits
+  getRuntimeLimitsStatus: () => api.get('/generator/runtime-limits'),
+  clearLockout: (acknowledge = true) => api.post('/generator/clear-lockout', { acknowledge }),
 }
 
 // GenMaster-specific: GenSlave API

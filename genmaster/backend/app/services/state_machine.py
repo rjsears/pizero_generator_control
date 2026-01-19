@@ -278,6 +278,21 @@ class StateMachine:
         async with AsyncSessionLocal() as db:
             state = await self._get_state(db)
 
+            # For manual starts, check and clear cooldown (but not lockout)
+            if trigger == "manual":
+                if state.runtime_lockout_active:
+                    raise ValueError(
+                        "Cannot start - runtime lockout is active. "
+                        "Clear the lockout first by acknowledging the max runtime event."
+                    )
+                # Clear cooldown on manual start
+                if state.cooldown_active:
+                    state.cooldown_active = False
+                    state.cooldown_end_time = None
+                    logger.info("Cooldown cleared due to manual start")
+                    await db.commit()
+                    await self.log_event("COOLDOWN_CLEARED_MANUAL_START", {})
+
             # Validate state transition
             if not state.can_start_generator():
                 if state.generator_running:
@@ -286,6 +301,11 @@ class StateMachine:
                     raise ValueError("Cannot start - force_stop override is active")
                 if state.slave_connection_status == "disconnected":
                     raise ValueError("Cannot start - GenSlave is disconnected")
+                if state.runtime_lockout_active:
+                    raise ValueError(
+                        "Cannot start - runtime lockout is active. "
+                        "Clear the lockout first."
+                    )
                 raise ValueError("Generator cannot be started in current state")
 
             # Turn on the relay via GenSlave
@@ -438,6 +458,7 @@ class StateMachine:
         """
         async with AsyncSessionLocal() as db:
             state = await self._get_state(db)
+            config = await self._get_config(db)
 
             # Update signal state
             state.victron_signal_state = signal_active
@@ -462,6 +483,32 @@ class StateMachine:
 
             # Take action based on signal
             if signal_active and not state.generator_running:
+                # Check runtime lockout
+                if state.runtime_lockout_active:
+                    logger.warning(
+                        "Victron signal active but runtime lockout is active - "
+                        "cannot start generator until lockout is cleared"
+                    )
+                    await self.log_event(
+                        "VICTRON_START_BLOCKED_LOCKOUT",
+                        {"lockout_reason": state.runtime_lockout_reason},
+                        severity="WARNING",
+                    )
+                    return
+
+                # Check cooldown
+                if state.cooldown_active and not state.is_cooldown_expired():
+                    remaining = state.cooldown_end_time - int(time.time()) if state.cooldown_end_time else 0
+                    logger.info(
+                        f"Victron signal active but cooldown is active - "
+                        f"{remaining}s remaining before restart allowed"
+                    )
+                    await self.log_event(
+                        "VICTRON_START_BLOCKED_COOLDOWN",
+                        {"cooldown_remaining_seconds": remaining},
+                    )
+                    return
+
                 logger.info("Victron signal active - starting generator")
                 await self.start_generator("victron")
             elif not signal_active and state.generator_running:
@@ -708,3 +755,188 @@ class StateMachine:
                 await self._webhook_service.send(event, data)
             except Exception as e:
                 logger.error(f"Failed to send webhook: {e}")
+
+    # =========================================================================
+    # Runtime Lockout/Cooldown Operations
+    # =========================================================================
+
+    async def check_runtime_lockout(self) -> bool:
+        """
+        Check if runtime lockout blocks starting the generator.
+
+        Returns:
+            True if lockout is active and blocks start
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            return state.runtime_lockout_active
+
+    async def check_cooldown_active(self) -> bool:
+        """
+        Check if cooldown is active and not yet expired.
+
+        Returns:
+            True if cooldown is active and not expired
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            if not state.cooldown_active:
+                return False
+            return not state.is_cooldown_expired()
+
+    async def activate_runtime_lockout(self, reason: str) -> None:
+        """
+        Activate runtime lockout requiring manual acknowledgment.
+
+        Args:
+            reason: Reason for the lockout (e.g., "max_runtime_reached")
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+
+            state.runtime_lockout_active = True
+            state.runtime_lockout_started = int(time.time())
+            state.runtime_lockout_reason = reason
+
+            await db.commit()
+
+            logger.warning(f"Runtime lockout activated: {reason}")
+            await self.log_event(
+                "RUNTIME_LOCKOUT_ACTIVATED",
+                {"reason": reason},
+                severity="WARNING",
+            )
+            await self._send_webhook(
+                "runtime.lockout.activated",
+                {"reason": reason},
+            )
+
+    async def activate_cooldown(self, duration_minutes: int) -> None:
+        """
+        Activate cooldown period before generator can be restarted.
+
+        Args:
+            duration_minutes: Duration of cooldown in minutes
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+
+            end_time = int(time.time()) + (duration_minutes * 60)
+            state.cooldown_active = True
+            state.cooldown_end_time = end_time
+
+            await db.commit()
+
+            logger.info(f"Cooldown activated for {duration_minutes} minutes")
+            await self.log_event(
+                "COOLDOWN_ACTIVATED",
+                {"duration_minutes": duration_minutes, "end_time": end_time},
+            )
+            await self._send_webhook(
+                "runtime.cooldown.activated",
+                {"duration_minutes": duration_minutes, "end_time": end_time},
+            )
+
+    async def clear_runtime_lockout(self) -> bool:
+        """
+        Clear runtime lockout after user acknowledgment.
+
+        Returns:
+            True if lockout was cleared, False if wasn't active
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+
+            if not state.runtime_lockout_active:
+                return False
+
+            state.runtime_lockout_active = False
+            state.runtime_lockout_started = None
+            state.runtime_lockout_reason = None
+
+            await db.commit()
+
+            logger.info("Runtime lockout cleared by user acknowledgment")
+            await self.log_event("RUNTIME_LOCKOUT_CLEARED", {})
+            await self._send_webhook("runtime.lockout.cleared", {})
+
+            return True
+
+    async def clear_cooldown(self) -> bool:
+        """
+        Clear cooldown period.
+
+        Returns:
+            True if cooldown was cleared, False if wasn't active
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+
+            if not state.cooldown_active:
+                return False
+
+            state.cooldown_active = False
+            state.cooldown_end_time = None
+
+            await db.commit()
+
+            logger.info("Cooldown cleared")
+            await self.log_event("COOLDOWN_CLEARED", {})
+            await self._send_webhook("runtime.cooldown.cleared", {})
+
+            return True
+
+    async def get_runtime_limits_status(self) -> dict:
+        """
+        Get current runtime limits status.
+
+        Returns:
+            Dict with configuration and lockout/cooldown state
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            config = await self._get_config(db)
+
+            cooldown_remaining = None
+            if state.cooldown_active and state.cooldown_end_time:
+                remaining = state.cooldown_end_time - int(time.time())
+                cooldown_remaining = max(0, remaining)
+
+            return {
+                "enabled": config.runtime_limits_enabled,
+                "min_run_minutes": config.min_run_minutes,
+                "max_run_minutes": config.max_run_minutes,
+                "max_runtime_action": config.max_runtime_action,
+                "cooldown_duration_minutes": config.cooldown_duration_minutes,
+                "lockout_active": state.runtime_lockout_active,
+                "lockout_started": state.runtime_lockout_started,
+                "lockout_reason": state.runtime_lockout_reason,
+                "cooldown_active": state.cooldown_active,
+                "cooldown_end_time": state.cooldown_end_time,
+                "cooldown_remaining_seconds": cooldown_remaining,
+            }
+
+    async def handle_cooldown_expiry(self) -> None:
+        """
+        Handle cooldown expiry - clear cooldown and check if Victron signal
+        should restart the generator.
+        """
+        await self.clear_cooldown()
+
+        # Check if Victron signal is still active and should restart
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            config = await self._get_config(db)
+
+            if (
+                state.victron_signal_state
+                and state.slave_relay_armed
+                and not state.override_enabled
+                and config.runtime_limits_enabled
+            ):
+                logger.info(
+                    "Cooldown expired with Victron signal active - "
+                    "checking if generator should restart"
+                )
+                # Don't auto-restart here, let the normal Victron signal handler
+                # take care of it on next check

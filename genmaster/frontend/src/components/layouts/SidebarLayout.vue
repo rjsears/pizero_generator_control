@@ -19,7 +19,6 @@ import { useDebugStore } from '../../stores/debug'
 import AboutDialog from '../common/AboutDialog.vue'
 import HelpDialog from '../common/HelpDialog.vue'
 import {
-  HomeIcon,
   BoltIcon,
   ServerIcon,
   CalendarDaysIcon,
@@ -49,7 +48,6 @@ const showAbout = ref(false)
 const showHelp = ref(false)
 
 const navItems = [
-  { name: 'Dashboard', route: 'dashboard', icon: HomeIcon, color: 'text-blue-500' },
   { name: 'Generator', route: 'generator', icon: BoltIcon, color: 'text-amber-500' },
   { name: 'GenSlave', route: 'genslave', icon: ServerIcon, color: 'text-emerald-500' },
   { name: 'Schedule', route: 'schedule', icon: CalendarDaysIcon, color: 'text-cyan-500' },

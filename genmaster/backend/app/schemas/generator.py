@@ -97,7 +97,7 @@ class GeneratorRunHistory(BaseModel):
     duration_minutes: Optional[float] = Field(None, description="Duration in minutes")
     trigger_type: Literal["victron", "manual", "scheduled", "exercise"]
     end_reason: Optional[
-        Literal["victron", "manual", "scheduled_end", "exercise_end", "comm_loss", "override", "error"]
+        Literal["victron", "manual", "scheduled_end", "exercise_end", "comm_loss", "override", "error", "max_runtime"]
     ] = Field(None, description="Why the run ended")
     scheduled_run_id: Optional[int] = None
     notes: Optional[str] = None
@@ -145,3 +145,76 @@ class GeneratorStats(BaseModel):
                 "runtime_by_trigger": {"victron": 36000, "manual": 10800, "scheduled": 7200},
             }
         }
+
+
+class RuntimeLimitsStatus(BaseModel):
+    """Current runtime limits status including lockout/cooldown state."""
+
+    # Feature configuration
+    enabled: bool = Field(description="Whether runtime limits feature is enabled")
+    min_run_minutes: int = Field(description="Minimum run time in minutes")
+    max_run_minutes: int = Field(description="Maximum run time in minutes")
+    max_runtime_action: str = Field(description="Action when max runtime reached")
+    cooldown_duration_minutes: int = Field(description="Cooldown period duration in minutes")
+
+    # Lockout state
+    lockout_active: bool = Field(description="Whether runtime lockout is active")
+    lockout_started: Optional[int] = Field(None, description="Unix timestamp when lockout started")
+    lockout_reason: Optional[str] = Field(None, description="Reason for lockout")
+
+    # Cooldown state
+    cooldown_active: bool = Field(description="Whether cooldown is active")
+    cooldown_end_time: Optional[int] = Field(None, description="Unix timestamp when cooldown ends")
+    cooldown_remaining_seconds: Optional[int] = Field(
+        None, description="Seconds remaining in cooldown"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "enabled": True,
+                "min_run_minutes": 5,
+                "max_run_minutes": 480,
+                "max_runtime_action": "cooldown",
+                "cooldown_duration_minutes": 60,
+                "lockout_active": False,
+                "lockout_started": None,
+                "lockout_reason": None,
+                "cooldown_active": True,
+                "cooldown_end_time": 1705330000,
+                "cooldown_remaining_seconds": 1800,
+            }
+        }
+
+
+class LockoutClearRequest(BaseModel):
+    """Request to clear runtime lockout."""
+
+    acknowledge: bool = Field(
+        description="Acknowledge that you understand the generator reached max runtime"
+    )
+
+
+class LockoutClearResponse(BaseModel):
+    """Response after clearing runtime lockout."""
+
+    success: bool
+    message: str
+
+
+class FuelUsageResponse(BaseModel):
+    """Fuel usage tracking response."""
+
+    total_fuel_used: float = Field(description="Total fuel used in gallons since reset")
+    reset_timestamp: Optional[int] = Field(
+        None, description="Unix timestamp when fuel tracking was last reset"
+    )
+    runs_counted: int = Field(description="Number of runs included in the total")
+
+
+class FuelResetResponse(BaseModel):
+    """Response after resetting fuel tracking."""
+
+    success: bool
+    message: str
+    reset_timestamp: int = Field(description="Unix timestamp of the reset")

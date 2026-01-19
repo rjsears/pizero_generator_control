@@ -22,6 +22,8 @@ from app.schemas.auth import (
 from app.schemas.backup import BackupInfo, BackupListResponse, BackupResponse
 from app.schemas.config import ConfigResponse, ConfigUpdateRequest
 from app.schemas.generator import (
+    FuelResetResponse,
+    FuelUsageResponse,
     GeneratorHistoryResponse,
     GeneratorRunHistory,
     GeneratorStartRequest,
@@ -30,6 +32,9 @@ from app.schemas.generator import (
     GeneratorStatus,
     GeneratorStopRequest,
     GeneratorStopResponse,
+    LockoutClearRequest,
+    LockoutClearResponse,
+    RuntimeLimitsStatus,
 )
 from app.schemas.health import (
     HealthCheck,
@@ -108,6 +113,11 @@ __all__ = [
     "GeneratorHistoryResponse",
     "GeneratorRunHistory",
     "GeneratorStats",
+    "RuntimeLimitsStatus",
+    "LockoutClearRequest",
+    "LockoutClearResponse",
+    "FuelUsageResponse",
+    "FuelResetResponse",
     # Health
     "HealthCheck",
     "SlaveHealth",

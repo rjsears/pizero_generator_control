@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy.future import select
 
 from app.dependencies import AdminUser, DbSession
-from app.models import Config
+from app.models import Config, SystemState
 from app.schemas import ConfigResponse, ConfigUpdateRequest
 
 router = APIRouter()
@@ -58,6 +58,11 @@ async def get_config(
         ssl_enabled=config.ssl_enabled,
         ssl_domain=config.ssl_domain,
         event_log_retention_days=config.event_log_retention_days,
+        runtime_limits_enabled=config.runtime_limits_enabled,
+        min_run_minutes=config.min_run_minutes,
+        max_run_minutes=config.max_run_minutes,
+        max_runtime_action=config.max_runtime_action,
+        cooldown_duration_minutes=config.cooldown_duration_minutes,
     )
 
 
@@ -81,8 +86,35 @@ async def update_config(
 
     # Update only provided fields
     update_data = request.model_dump(exclude_unset=True)
+
+    # Validate max_run_minutes > min_run_minutes
+    new_min = update_data.get("min_run_minutes", config.min_run_minutes)
+    new_max = update_data.get("max_run_minutes", config.max_run_minutes)
+    if new_max <= new_min:
+        raise HTTPException(
+            status_code=400,
+            detail=f"max_run_minutes ({new_max}) must be greater than min_run_minutes ({new_min})"
+        )
+
+    # Check if runtime_limits_enabled is being disabled
+    was_enabled = config.runtime_limits_enabled
+    will_be_disabled = update_data.get("runtime_limits_enabled") is False
+
     for field, value in update_data.items():
         setattr(config, field, value)
+
+    # If runtime limits is being disabled, clear any active lockout or cooldown
+    if was_enabled and will_be_disabled:
+        state_result = await db.execute(select(SystemState).where(SystemState.id == 1))
+        state = state_result.scalar_one_or_none()
+        if state:
+            if state.runtime_lockout_active:
+                state.runtime_lockout_active = False
+                state.runtime_lockout_started = None
+                state.runtime_lockout_reason = None
+            if state.cooldown_active:
+                state.cooldown_active = False
+                state.cooldown_end_time = None
 
     await db.commit()
     await db.refresh(config)
@@ -108,4 +140,9 @@ async def update_config(
         ssl_enabled=config.ssl_enabled,
         ssl_domain=config.ssl_domain,
         event_log_retention_days=config.event_log_retention_days,
+        runtime_limits_enabled=config.runtime_limits_enabled,
+        min_run_minutes=config.min_run_minutes,
+        max_run_minutes=config.max_run_minutes,
+        max_runtime_action=config.max_runtime_action,
+        cooldown_duration_minutes=config.cooldown_duration_minutes,
     )

@@ -18,8 +18,10 @@ from sqlalchemy import func
 from sqlalchemy.future import select
 
 from app.dependencies import DbSession
-from app.models import GeneratorRun
+from app.models import Config, GeneratorRun
 from app.schemas import (
+    FuelResetResponse,
+    FuelUsageResponse,
     GeneratorHistoryResponse,
     GeneratorRunHistory,
     GeneratorStartRequest,
@@ -28,6 +30,9 @@ from app.schemas import (
     GeneratorStatus,
     GeneratorStopRequest,
     GeneratorStopResponse,
+    LockoutClearRequest,
+    LockoutClearResponse,
+    RuntimeLimitsStatus,
 )
 
 router = APIRouter()
@@ -62,6 +67,7 @@ async def get_generator_state(
 @router.post("/start", response_model=GeneratorStartResponse)
 async def start_generator(
     request: GeneratorStartRequest,
+    db: DbSession,
     state_machine=Depends(get_state_machine),
     scheduler_service=Depends(get_scheduler_service),
 ) -> GeneratorStartResponse:
@@ -80,6 +86,14 @@ async def start_generator(
         if request.duration_minutes:
             await scheduler_service.schedule_auto_stop(
                 run.id, request.duration_minutes
+            )
+
+        # Schedule max runtime stop if runtime limits are enabled
+        result = await db.execute(select(Config).where(Config.id == 1))
+        config = result.scalar_one_or_none()
+        if config and config.runtime_limits_enabled:
+            await scheduler_service.schedule_max_runtime_stop(
+                run.id, config.max_run_minutes
             )
 
         return GeneratorStartResponse(
@@ -110,9 +124,10 @@ async def stop_generator(
 
     run_id = status.current_run_id
 
-    # Cancel any scheduled auto-stop
+    # Cancel any scheduled auto-stop and max runtime stop
     if run_id:
         scheduler_service.cancel_auto_stop(run_id)
+        scheduler_service.cancel_max_runtime_stop(run_id)
 
     # Stop generator
     run = await state_machine.stop_generator(
@@ -217,4 +232,125 @@ async def get_generator_stats(
         average_runtime_seconds=round(total_runtime / total_runs, 1) if total_runs > 0 else 0,
         runs_by_trigger=runs_by_trigger,
         runtime_by_trigger=runtime_by_trigger,
+    )
+
+
+@router.get("/runtime-limits", response_model=RuntimeLimitsStatus)
+async def get_runtime_limits_status(
+    state_machine=Depends(get_state_machine),
+) -> RuntimeLimitsStatus:
+    """
+    Get current runtime limits status.
+
+    Returns configuration and lockout/cooldown state.
+    """
+    status = await state_machine.get_runtime_limits_status()
+    return RuntimeLimitsStatus(**status)
+
+
+@router.post("/clear-lockout", response_model=LockoutClearResponse)
+async def clear_runtime_lockout(
+    request: LockoutClearRequest,
+    state_machine=Depends(get_state_machine),
+    scheduler_service=Depends(get_scheduler_service),
+) -> LockoutClearResponse:
+    """
+    Clear runtime lockout after user acknowledgment.
+
+    Requires acknowledgment that the user understands the generator
+    reached maximum runtime.
+    """
+    if not request.acknowledge:
+        raise HTTPException(
+            status_code=400,
+            detail="Must acknowledge the max runtime event to clear lockout"
+        )
+
+    # Check if lockout is actually active
+    status = await state_machine.get_runtime_limits_status()
+    if not status["lockout_active"]:
+        raise HTTPException(
+            status_code=409,
+            detail="No lockout is currently active"
+        )
+
+    # Clear the lockout
+    cleared = await state_machine.clear_runtime_lockout()
+
+    if cleared:
+        return LockoutClearResponse(
+            success=True,
+            message="Runtime lockout cleared successfully"
+        )
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to clear lockout"
+        )
+
+
+@router.get("/fuel-usage", response_model=FuelUsageResponse)
+async def get_fuel_usage(
+    db: DbSession,
+) -> FuelUsageResponse:
+    """
+    Get total fuel usage since last reset.
+
+    Sums estimated_fuel_used from all generator runs since the fuel tracking
+    reset timestamp.
+    """
+    # Get config for reset timestamp
+    result = await db.execute(select(Config).where(Config.id == 1))
+    config = result.scalar_one_or_none()
+
+    reset_timestamp = config.fuel_tracking_reset_timestamp if config else None
+
+    # Build query for runs since reset
+    query = select(GeneratorRun).where(GeneratorRun.stop_time.isnot(None))
+    if reset_timestamp:
+        query = query.where(GeneratorRun.start_time >= reset_timestamp)
+
+    result = await db.execute(query)
+    runs = result.scalars().all()
+
+    # Sum fuel usage
+    total_fuel = sum(
+        r.estimated_fuel_used or 0.0 for r in runs if r.estimated_fuel_used
+    )
+
+    return FuelUsageResponse(
+        total_fuel_used=round(total_fuel, 4),
+        reset_timestamp=reset_timestamp,
+        runs_counted=len(runs),
+    )
+
+
+@router.post("/fuel-usage/reset", response_model=FuelResetResponse)
+async def reset_fuel_tracking(
+    db: DbSession,
+) -> FuelResetResponse:
+    """
+    Reset fuel usage tracking.
+
+    Sets the reset timestamp to now, so future fuel usage calculations
+    only count runs after this point.
+    """
+    import time
+
+    now = int(time.time())
+
+    # Update config
+    result = await db.execute(select(Config).where(Config.id == 1))
+    config = result.scalar_one_or_none()
+
+    if not config:
+        raise HTTPException(status_code=500, detail="Config not found")
+
+    config.fuel_tracking_reset_timestamp = now
+    await db.commit()
+
+    return FuelResetResponse(
+        success=True,
+        message="Fuel tracking reset successfully",
+        reset_timestamp=now,
     )
