@@ -73,6 +73,16 @@ class Config(Base):
     # Event Log Retention
     event_log_retention_days: Mapped[int] = mapped_column(default=30)
 
+    # Run Time Limits
+    runtime_limits_enabled: Mapped[bool] = mapped_column(default=False)
+    min_run_minutes: Mapped[int] = mapped_column(default=5)
+    max_run_minutes: Mapped[int] = mapped_column(default=480)
+    max_runtime_action: Mapped[str] = mapped_column(default="manual_reset")  # 'manual_reset' or 'cooldown'
+    cooldown_duration_minutes: Mapped[int] = mapped_column(default=60)
+
+    # Fuel Tracking
+    fuel_tracking_reset_timestamp: Mapped[Optional[int]] = mapped_column(nullable=True, default=None)
+
     # Metadata
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()

@@ -60,6 +60,23 @@ class ConfigResponse(BaseModel):
         description="Number of days to retain event logs"
     )
 
+    # Run Time Limits
+    runtime_limits_enabled: bool = Field(
+        description="Whether runtime limits feature is enabled"
+    )
+    min_run_minutes: int = Field(
+        description="Minimum run time in minutes before generator can be stopped"
+    )
+    max_run_minutes: int = Field(
+        description="Maximum run time in minutes before automatic shutdown"
+    )
+    max_runtime_action: str = Field(
+        description="Action when max runtime reached: 'manual_reset' or 'cooldown'"
+    )
+    cooldown_duration_minutes: int = Field(
+        description="Duration in minutes for cooldown period before restart allowed"
+    )
+
     class Config:
         from_attributes = True
 
@@ -103,3 +120,10 @@ class ConfigUpdateRequest(BaseModel):
 
     # Event Log
     event_log_retention_days: Optional[int] = Field(None, ge=1, le=365)
+
+    # Run Time Limits
+    runtime_limits_enabled: Optional[bool] = None
+    min_run_minutes: Optional[int] = Field(None, ge=1, le=60)
+    max_run_minutes: Optional[int] = Field(None, ge=1, le=1440)
+    max_runtime_action: Optional[str] = Field(None, pattern=r"^(manual_reset|cooldown)$")
+    cooldown_duration_minutes: Optional[int] = Field(None, ge=1, le=1440)
