@@ -127,6 +127,33 @@ async def root():
     }
 
 
+@app.get("/api/health")
+async def public_health_check():
+    """
+    Public health check endpoint (no auth required).
+
+    Used by GenMaster setup and load balancers to verify GenSlave is responding.
+    For detailed health info with auth, use the authenticated endpoints.
+    """
+    failsafe_status = failsafe_monitor.get_status()
+    status = "healthy"
+
+    if failsafe_status["failsafe_triggered"]:
+        status = "degraded"
+
+    if relay_service.is_mock_mode and not settings.MOCK_HAT_MODE:
+        status = "degraded"
+
+    return {
+        "status": status,
+        "version": settings.APP_VERSION,
+        "relay_state": relay_service.get_state(),
+        "armed": relay_service.is_armed,
+        "failsafe_active": failsafe_status["failsafe_triggered"],
+        "mock_mode": relay_service.is_mock_mode,
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
 
