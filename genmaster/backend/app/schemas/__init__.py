@@ -22,6 +22,7 @@ from app.schemas.auth import (
 from app.schemas.backup import BackupInfo, BackupListResponse, BackupResponse
 from app.schemas.config import ConfigResponse, ConfigUpdateRequest
 from app.schemas.generator import (
+    GeneratorHistoryResponse,
     GeneratorRunHistory,
     GeneratorStartRequest,
     GeneratorStartResponse,
@@ -93,6 +94,7 @@ __all__ = [
     "GeneratorStartResponse",
     "GeneratorStopRequest",
     "GeneratorStopResponse",
+    "GeneratorHistoryResponse",
     "GeneratorRunHistory",
     "GeneratorStats",
     # Health

@@ -20,6 +20,7 @@ from sqlalchemy.future import select
 from app.dependencies import DbSession
 from app.models import GeneratorRun
 from app.schemas import (
+    GeneratorHistoryResponse,
     GeneratorRunHistory,
     GeneratorStartRequest,
     GeneratorStartResponse,
@@ -127,41 +128,49 @@ async def stop_generator(
     )
 
 
-@router.get("/history", response_model=List[GeneratorRunHistory])
+@router.get("/history", response_model=GeneratorHistoryResponse)
 async def get_generator_history(
     db: DbSession,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     trigger_type: Optional[str] = Query(None),
-) -> List[GeneratorRunHistory]:
+) -> GeneratorHistoryResponse:
     """
     Get generator run history.
 
     Supports pagination and filtering by trigger type.
     """
-    query = select(GeneratorRun).order_by(GeneratorRun.start_time.desc())
-
+    # Build base query
+    base_query = select(GeneratorRun)
     if trigger_type:
-        query = query.where(GeneratorRun.trigger_type == trigger_type)
+        base_query = base_query.where(GeneratorRun.trigger_type == trigger_type)
 
-    query = query.offset(offset).limit(limit)
+    # Get total count
+    count_query = select(func.count()).select_from(base_query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Get paginated runs
+    query = base_query.order_by(GeneratorRun.start_time.desc()).offset(offset).limit(limit)
     result = await db.execute(query)
     runs = result.scalars().all()
 
-    return [
+    # Map to response schema with frontend-expected field names
+    run_list = [
         GeneratorRunHistory(
             id=run.id,
-            start_time=run.start_time,
-            stop_time=run.stop_time,
-            duration_seconds=run.duration_seconds,
+            started_at=run.start_time,
+            ended_at=run.stop_time,
+            duration_minutes=round(run.duration_seconds / 60, 1) if run.duration_seconds else None,
             trigger_type=run.trigger_type,
-            stop_reason=run.stop_reason,
+            end_reason=run.stop_reason,
             scheduled_run_id=run.scheduled_run_id,
             notes=run.notes,
-            created_at=run.created_at.isoformat(),
         )
         for run in runs
     ]
+
+    return GeneratorHistoryResponse(runs=run_list, total=total)
 
 
 @router.get("/stats", response_model=GeneratorStats)

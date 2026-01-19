@@ -92,19 +92,25 @@ class GeneratorRunHistory(BaseModel):
     """Historical generator run record."""
 
     id: int
-    start_time: int
-    stop_time: Optional[int]
-    duration_seconds: Optional[int]
+    started_at: int = Field(description="Unix timestamp when run started")
+    ended_at: Optional[int] = Field(None, description="Unix timestamp when run ended")
+    duration_minutes: Optional[float] = Field(None, description="Duration in minutes")
     trigger_type: Literal["victron", "manual", "scheduled"]
-    stop_reason: Optional[
+    end_reason: Optional[
         Literal["victron", "manual", "scheduled_end", "comm_loss", "override", "error"]
-    ]
-    scheduled_run_id: Optional[int]
-    notes: Optional[str]
-    created_at: str
+    ] = Field(None, description="Why the run ended")
+    scheduled_run_id: Optional[int] = None
+    notes: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class GeneratorHistoryResponse(BaseModel):
+    """Paginated generator run history response."""
+
+    runs: list[GeneratorRunHistory] = Field(description="List of generator runs")
+    total: int = Field(description="Total number of runs matching filters")
 
 
 class GeneratorStats(BaseModel):
