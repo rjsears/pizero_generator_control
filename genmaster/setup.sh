@@ -1757,7 +1757,7 @@ validate_genslave() {
     while [ $attempt -le $max_attempts ]; do
         health_response=$(curl -s --connect-timeout 10 --max-time 15 \
             -H "X-API-Key: ${GENSLAVE_API_SECRET}" \
-            "$health_url" 2>/dev/null)
+            "$health_url" 2>/dev/null || true)
 
         if [ -n "$health_response" ]; then
             print_success "GenSlave API is responding"
@@ -1773,7 +1773,7 @@ validate_genslave() {
                 validation_passed=false
             fi
         fi
-        ((attempt++))
+        attempt=$((attempt + 1))
     done
 
     echo ""
