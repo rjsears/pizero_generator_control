@@ -312,6 +312,63 @@ def _get_uptime() -> int:
         return 0
 
 
+def _get_default_gateway() -> Optional[str]:
+    """Get default gateway IP address."""
+    try:
+        # Read from /proc/net/route
+        with open("/proc/net/route", "r") as f:
+            for line in f.readlines()[1:]:  # Skip header
+                parts = line.strip().split()
+                if len(parts) >= 3:
+                    # Default route has destination 00000000
+                    if parts[1] == "00000000":
+                        # Gateway is in hex, little-endian
+                        gateway_hex = parts[2]
+                        # Convert hex to IP (little-endian)
+                        gateway_bytes = bytes.fromhex(gateway_hex)
+                        gateway_ip = ".".join(str(b) for b in reversed(gateway_bytes))
+                        return gateway_ip
+    except Exception:
+        pass
+
+    # Fallback: try ip route command
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["ip", "route", "show", "default"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            # Format: "default via 192.168.1.1 dev eth0"
+            parts = result.stdout.strip().split()
+            if len(parts) >= 3 and parts[0] == "default" and parts[1] == "via":
+                return parts[2]
+    except Exception:
+        pass
+
+    return None
+
+
+def _get_dns_servers() -> list[str]:
+    """Get DNS server IP addresses."""
+    dns_servers = []
+
+    try:
+        with open("/etc/resolv.conf", "r") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("nameserver"):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        dns_servers.append(parts[1])
+    except Exception:
+        pass
+
+    return dns_servers
+
+
 def _get_network_interfaces() -> list[NetworkInfo]:
     """Get network interface information including WiFi signal strength."""
     interfaces = []
