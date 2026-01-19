@@ -55,12 +55,14 @@
               <div
                 :class="[
                   'p-2 rounded-lg',
+                  relayStateLoading ? 'bg-gray-100 dark:bg-gray-500/20' :
                   relayArmed ? 'bg-amber-100 dark:bg-amber-500/20' : 'bg-gray-100 dark:bg-gray-500/20'
                 ]"
               >
                 <ShieldExclamationIcon
                   :class="[
                     'h-5 w-5',
+                    relayStateLoading ? 'text-gray-400 animate-pulse' :
                     relayArmed ? 'text-amber-500' : 'text-gray-500'
                   ]"
                 />
@@ -70,22 +72,23 @@
                 <p
                   :class="[
                     'text-xl font-bold',
+                    relayStateLoading ? 'text-gray-400' :
                     relayArmed ? 'text-amber-500' : 'text-gray-500'
                   ]"
                 >
-                  {{ relayArmed ? 'Armed' : 'Disarmed' }}
+                  {{ relayStateLoading ? 'Loading...' : (relayArmed ? 'Armed' : 'Disarmed') }}
                 </p>
               </div>
             </div>
             <button
               @click="toggleRelayArm"
-              :disabled="togglingRelay || !slaveOnline"
+              :disabled="togglingRelay || relayStateLoading || !slaveOnline"
               :class="[
                 'relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
                 relayArmed
                   ? 'bg-amber-500 focus:ring-amber-500'
                   : 'bg-gray-400 focus:ring-gray-500',
-                (togglingRelay || !slaveOnline) ? 'opacity-50 cursor-not-allowed' : ''
+                (togglingRelay || relayStateLoading || !slaveOnline) ? 'opacity-50 cursor-not-allowed' : ''
               ]"
             >
               <span
@@ -131,15 +134,15 @@
             </div>
             <button
               @click="toggleGenerator"
-              :disabled="generatorToggleLoading || !relayArmed"
+              :disabled="generatorToggleLoading || relayStateLoading || !relayArmed"
               :class="[
                 'relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
                 generatorStore.isRunning
                   ? 'bg-green-500 focus:ring-green-500'
                   : 'bg-gray-400 focus:ring-gray-500',
-                (generatorToggleLoading || !relayArmed) ? 'opacity-50 cursor-not-allowed' : ''
+                (generatorToggleLoading || relayStateLoading || !relayArmed) ? 'opacity-50 cursor-not-allowed' : ''
               ]"
-              :title="!relayArmed ? 'Relay must be armed to control generator' : ''"
+              :title="relayStateLoading ? 'Loading relay state...' : (!relayArmed ? 'Relay must be armed to control generator' : '')"
             >
               <span
                 :class="[
@@ -426,7 +429,8 @@ const metricsAvailable = ref(false)
 let refreshInterval = null
 
 // Relay arm/disarm state (GenSlave)
-const relayArmed = ref(false)
+const relayArmed = ref(null)  // null = loading, false = disarmed, true = armed
+const relayStateLoading = ref(true)
 const togglingRelay = ref(false)
 
 // Generator toggle state
@@ -493,25 +497,31 @@ async function toggleGenerator() {
 
 // Fetch relay state from GenSlave
 async function fetchRelayState() {
+  relayStateLoading.value = true
   try {
     const response = await genslaveApi.getRelayState()
     relayArmed.value = response.data?.armed || false
   } catch (err) {
     console.error('Failed to fetch relay state:', err)
     relayArmed.value = false
+  } finally {
+    relayStateLoading.value = false
   }
 }
 
 // Fetch data on mount and set up polling
 onMounted(async () => {
+  // Fetch relay state and generator state immediately (fast, critical for UX)
+  // Don't wait for slow metrics calls
+  fetchRelayState()  // Fire and forget - will update UI when done
+  generatorStore.fetchState()  // Fire and forget
+
   try {
     await Promise.all([
       systemStore.fetchHealth(),
       systemStore.fetchSlaveHealth(),
       systemStore.fetchVictronStatus(),
       metricsStore.fetchDashboardMetrics(),
-      fetchRelayState(),
-      generatorStore.fetchState(),
     ])
     metricsAvailable.value = true
   } catch (err) {
@@ -527,6 +537,7 @@ onMounted(async () => {
       systemStore.fetchSlaveHealth(),
       systemStore.fetchVictronStatus(),
       metricsStore.fetchDashboardMetrics(),
+      fetchRelayState(),
     ])
   }, 60000)
 })
