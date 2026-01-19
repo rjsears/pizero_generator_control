@@ -1,4 +1,5 @@
 .claude
+CLAUDE.md
 .env
 .mcp.json
 *.credentials
