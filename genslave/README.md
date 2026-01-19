@@ -20,11 +20,17 @@ GenSlave is designed to be deployed as a Docker container on a headless Raspberr
 - [Configuration](#configuration)
 - [API Authentication](#api-authentication)
 - [API Endpoints](#api-endpoints)
+- [Notifications](#notifications)
 - [LCD Display](#lcd-display)
 - [Failsafe System](#failsafe-system)
 - [Managing a Headless Pi](#managing-a-headless-pi)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
+
+## Additional Documentation
+
+- **[API.md](API.md)** - Complete API reference with all endpoints
+- **[NOTIFICATIONS.md](NOTIFICATIONS.md)** - Notification setup guide for 80+ services
 
 ---
 
@@ -124,9 +130,9 @@ GENSLAVE_API_SECRET=your-secret-from-genmaster
 
 # Save and exit (Ctrl+X, Y, Enter)
 
-# Restart the container to apply changes
+# Restart the container to apply changes (--force-recreate ensures .env is reloaded)
 cd /opt/genslave
-sudo docker-compose up -d
+sudo docker-compose up -d --force-recreate genslave
 ```
 
 **To verify the secret is set:**
@@ -346,7 +352,7 @@ The arming system prevents accidental relay activation. When disarmed, relay com
 {
   "success": true,
   "armed": true,
-  "message": "Automation armed",
+  "message": "Relay armed",
   "armed_at": 1705612800
 }
 ```
@@ -357,7 +363,7 @@ The arming system prevents accidental relay activation. When disarmed, relay com
 {
   "success": true,
   "armed": false,
-  "message": "Automation disarmed",
+  "message": "Relay disarmed",
   "warning": "Relay state unchanged - use explicit off command if needed"
 }
 ```
@@ -423,6 +429,39 @@ Allows GenMaster to push configuration changes.
 ```
 
 *Note: Changes are applied in memory only and do not persist across restarts.*
+
+---
+
+## Notifications
+
+GenSlave supports notifications via [Apprise](https://github.com/caronc/apprise), providing access to **80+ notification services** including:
+
+- **Push:** Pushover, Pushbullet, Join
+- **Chat:** Telegram, Slack, Discord, Microsoft Teams
+- **SMS:** Twilio, Nexmo, AWS SNS
+- **Email:** SMTP, Gmail, SendGrid
+
+### Notification Types
+
+1. **Failsafe Triggered** - Sent when communication with GenMaster is lost
+2. **Communication Restored** - Sent when GenMaster reconnects after a failsafe (reminds you to re-arm)
+3. **Test** - Manual test to verify configuration
+
+### Quick Setup
+
+```bash
+# Configure notifications
+curl -X POST -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"apprise_urls": ["tgram://bottoken/chatid"]}' \
+  http://genslave:8001/api/system/notifications
+
+# Test notifications
+curl -X POST -H "X-API-Key: YOUR_KEY" \
+  http://genslave:8001/api/system/notifications/test
+```
+
+For complete setup instructions, see **[NOTIFICATIONS.md](NOTIFICATIONS.md)**.
 
 ---
 
