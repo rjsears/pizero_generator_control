@@ -1646,26 +1646,24 @@ configure_genslave() {
 
         # Show the API secret prominently - user needs this for GenSlave setup
         echo ""
-        echo -e "  ${YELLOW}NOTE:${NC} GenSlave must be installed and running on the Pi Zero 2W"
-        echo -e "  ${YELLOW}      with the same API secret for communication to work.${NC}"
-        echo ""
         echo -e "  ${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "  ${GREEN}║${NC}  ${WHITE}IMPORTANT: Copy this API secret for GenSlave setup!${NC}           ${GREEN}║${NC}"
         echo -e "  ${GREEN}╠════════════════════════════════════════════════════════════════╣${NC}"
         echo -e "  ${GREEN}║${NC}                                                                ${GREEN}║${NC}"
         echo -e "  ${GREEN}║${NC}  ${CYAN}SLAVE_API_SECRET=${GENSLAVE_API_SECRET}${NC}  ${GREEN}║${NC}"
         echo -e "  ${GREEN}║${NC}                                                                ${GREEN}║${NC}"
-        echo -e "  ${GREEN}║${NC}  ${GRAY}You will need this when running GenSlave setup.${NC}              ${GREEN}║${NC}"
         echo -e "  ${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
+        echo -e "  ${YELLOW}If GenSlave is not yet configured:${NC}"
+        echo -e "  ${WHITE}1.${NC} Copy the API secret above"
+        echo -e "  ${WHITE}2.${NC} Run GenSlave setup on your Pi Zero 2W"
+        echo -e "  ${WHITE}3.${NC} Enter this API secret when prompted during GenSlave setup"
+        echo ""
 
-        if confirm_prompt "Is GenSlave already installed and running?" "n"; then
-            validate_genslave
-        else
-            echo ""
-            print_info "GenSlave URL saved. You can validate the connection later with:"
-            echo -e "    ${CYAN}./setup.sh --genslave${NC}"
-        fi
+        # Always test the connection
+        echo ""
+        print_info "Testing connection to GenSlave..."
+        validate_genslave
 
         print_success "GenSlave configured"
     else
