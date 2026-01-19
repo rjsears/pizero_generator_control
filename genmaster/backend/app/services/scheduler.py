@@ -208,7 +208,7 @@ class SchedulerService:
                 )
 
     async def schedule_auto_stop(
-        self, run_id: int, duration_minutes: int
+        self, run_id: int, duration_minutes: int, stop_reason: str = "scheduled_end"
     ) -> None:
         """
         Schedule automatic stop after duration.
@@ -216,6 +216,7 @@ class SchedulerService:
         Args:
             run_id: ID of the generator run
             duration_minutes: Minutes until auto-stop
+            stop_reason: Reason to use when stopping (default: scheduled_end)
         """
         job_id = f"auto_stop_{run_id}"
 
@@ -227,7 +228,7 @@ class SchedulerService:
         self._scheduler.add_job(
             self._execute_auto_stop,
             DateTrigger(run_date=run_date),
-            args=[run_id],
+            args=[run_id, stop_reason],
             id=job_id,
             name=f"Auto-stop run {run_id}",
             replace_existing=True,
@@ -235,17 +236,18 @@ class SchedulerService:
 
         self._auto_stop_jobs[run_id] = job_id
         logger.info(
-            f"Scheduled auto-stop for run {run_id} in {duration_minutes} minutes"
+            f"Scheduled auto-stop for run {run_id} in {duration_minutes} minutes (reason: {stop_reason})"
         )
 
-    async def _execute_auto_stop(self, run_id: int) -> None:
+    async def _execute_auto_stop(self, run_id: int, stop_reason: str = "scheduled_end") -> None:
         """
         Execute automatic stop for a run.
 
         Args:
             run_id: ID of the run to stop
+            stop_reason: Reason to use when stopping
         """
-        logger.info(f"Executing auto-stop for run {run_id}")
+        logger.info(f"Executing auto-stop for run {run_id} (reason: {stop_reason})")
 
         # Clean up job tracking
         self._auto_stop_jobs.pop(run_id, None)
@@ -259,7 +261,7 @@ class SchedulerService:
             return
 
         # Stop the generator
-        await self.state_machine.stop_generator("scheduled_end")
+        await self.state_machine.stop_generator(stop_reason)
 
     def cancel_auto_stop(self, run_id: int) -> bool:
         """

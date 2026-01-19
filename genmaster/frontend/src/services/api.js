@@ -210,6 +210,19 @@ export const configApi = {
   update: (data) => api.put('/config/', data),
 }
 
+// Generator Info API
+export const generatorInfoApi = {
+  get: () => api.get('/generator-info/'),
+  update: (data) => api.patch('/generator-info/', data),
+}
+
+// Exercise Schedule API
+export const exerciseApi = {
+  getSchedule: () => api.get('/exercise/'),
+  updateSchedule: (data) => api.patch('/exercise/', data),
+  runNow: () => api.post('/exercise/run-now'),
+}
+
 export const settingsApi = {
   list: (category) => api.get('/settings/', { params: { category } }),
   get: (key) => api.get(`/settings/${key}`),
@@ -276,3 +289,5 @@ api.settings = {
   ...settingsApi,
   getAll: () => api.get('/settings/'),
 }
+api.generatorInfo = generatorInfoApi
+api.exercise = exerciseApi

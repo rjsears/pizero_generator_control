@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.database import AsyncSessionLocal
-from app.models import Config, EventLog, GeneratorRun, SystemState
+from app.models import Config, EventLog, GeneratorInfo, GeneratorRun, SystemState
 from app.schemas import (
     FullSystemStatus,
     GeneratorStatus,
@@ -301,13 +301,22 @@ class StateMachine:
 
             logger.info("GenSlave relay turned ON")
 
-            # Create run record
+            # Fetch generator info for fuel tracking
+            gen_info = await GeneratorInfo.get_instance(db)
+            fuel_type = gen_info.fuel_type
+            load_expected = gen_info.load_expected
+            consumption_rate = gen_info.get_consumption_rate()
+
+            # Create run record with fuel tracking data
             start_time = int(time.time())
             run = GeneratorRun(
                 start_time=start_time,
                 trigger_type=trigger,
                 scheduled_run_id=scheduled_run_id,
                 notes=notes,
+                fuel_type_at_run=fuel_type,
+                load_at_run=load_expected,
+                fuel_consumption_rate=consumption_rate,
             )
             db.add(run)
             await db.flush()
@@ -374,14 +383,19 @@ class StateMachine:
             # Update run record if exists
             run = None
             if run_id:
-                from sqlalchemy.future import select
-
                 result = await db.execute(
                     select(GeneratorRun).where(GeneratorRun.id == run_id)
                 )
                 run = result.scalar_one_or_none()
                 if run:
                     run.complete(stop_time, reason)
+                    # Calculate estimated fuel used if we have consumption rate
+                    if run.fuel_consumption_rate and run.duration_seconds:
+                        # Formula: (runtime_seconds / 3600) * fuel_consumption_rate
+                        run.estimated_fuel_used = round(
+                            (run.duration_seconds / 3600) * run.fuel_consumption_rate,
+                            3
+                        )
 
             # Update system state
             state.generator_running = False

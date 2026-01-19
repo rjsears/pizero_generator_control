@@ -61,6 +61,12 @@ class GeneratorRun(Base):
     # Notes
     notes: Mapped[Optional[str]] = mapped_column(nullable=True)
 
+    # Fuel tracking - snapshot of fuel configuration at run time
+    fuel_type_at_run: Mapped[Optional[str]] = mapped_column(nullable=True)  # 'lpg', 'natural_gas', 'diesel'
+    load_at_run: Mapped[Optional[int]] = mapped_column(nullable=True)  # 50 or 100
+    fuel_consumption_rate: Mapped[Optional[float]] = mapped_column(nullable=True)  # gal/hr rate used
+    estimated_fuel_used: Mapped[Optional[float]] = mapped_column(nullable=True)  # calculated total gallons
+
     # Metadata
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 

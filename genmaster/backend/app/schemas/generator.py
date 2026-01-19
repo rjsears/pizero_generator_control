@@ -101,6 +101,11 @@ class GeneratorRunHistory(BaseModel):
     ] = Field(None, description="Why the run ended")
     scheduled_run_id: Optional[int] = None
     notes: Optional[str] = None
+    # Fuel tracking fields
+    fuel_type_at_run: Optional[str] = Field(None, description="Fuel type used during this run")
+    load_at_run: Optional[int] = Field(None, description="Load setting during this run (50 or 100)")
+    fuel_consumption_rate: Optional[float] = Field(None, description="Fuel consumption rate (gal/hr)")
+    estimated_fuel_used: Optional[float] = Field(None, description="Estimated fuel consumed (gallons)")
 
     class Config:
         from_attributes = True
