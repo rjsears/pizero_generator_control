@@ -119,10 +119,10 @@ export const useContainerStore = defineStore('containers', () => {
     }
   }
 
-  async function recreateContainer(name, pull = false) {
+  async function recreateContainer(name, pullImage = false) {
     try {
       const response = await api.post(`/containers/${name}/recreate`, null, {
-        params: { pull }
+        params: { pull_image: pullImage }
       })
       await fetchContainers()
       return response.data
