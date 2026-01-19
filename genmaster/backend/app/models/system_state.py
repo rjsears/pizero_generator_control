@@ -36,7 +36,7 @@ class SystemState(Base):
     __table_args__ = (
         CheckConstraint("id = 1", name="chk_single_row"),
         CheckConstraint(
-            "run_trigger IN ('idle', 'victron', 'manual', 'scheduled')",
+            "run_trigger IN ('idle', 'victron', 'manual', 'scheduled', 'exercise')",
             name="chk_run_trigger",
         ),
         CheckConstraint(

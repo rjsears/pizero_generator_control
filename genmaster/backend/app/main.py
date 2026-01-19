@@ -30,7 +30,9 @@ from app.routers import (
     config,
     containers,
     dev,
+    exercise,
     generator,
+    generator_info,
     health,
     metrics,
     notifications,
@@ -40,6 +42,7 @@ from app.routers import (
     system,
     terminal,
 )
+from app.services.exercise_scheduler import ExerciseSchedulerService
 from app.services.gpio_monitor import GPIOMonitor
 from app.services.heartbeat import HeartbeatService
 from app.services.metrics_service import get_metrics_service
@@ -60,6 +63,7 @@ state_machine: Optional[StateMachine] = None
 gpio_monitor: Optional[GPIOMonitor] = None
 heartbeat_service: Optional[HeartbeatService] = None
 scheduler_service: Optional[SchedulerService] = None
+exercise_scheduler_service: Optional[ExerciseSchedulerService] = None
 webhook_service: Optional[WebhookService] = None
 
 
@@ -104,10 +108,74 @@ async def sync_env_to_database() -> None:
             logger.debug("Database config already in sync with environment")
 
 
+async def sync_generator_info_to_database() -> None:
+    """Sync generator info from environment variables to database.
+
+    This allows generator info to be pre-configured via .env file.
+    Only updates values that are explicitly set in the environment.
+    """
+    import os
+    from app.database import AsyncSessionLocal
+    from app.models import GeneratorInfo
+
+    async with AsyncSessionLocal() as db:
+        info = await GeneratorInfo.get_instance(db)
+        updates = []
+
+        # Check for environment variables and sync to database
+        if os.getenv("GEN_INFO_MANUFACTURER"):
+            val = os.getenv("GEN_INFO_MANUFACTURER")
+            if info.manufacturer != val:
+                info.manufacturer = val
+                updates.append(f"manufacturer={val}")
+
+        if os.getenv("GEN_INFO_MODEL_NUMBER"):
+            val = os.getenv("GEN_INFO_MODEL_NUMBER")
+            if info.model_number != val:
+                info.model_number = val
+                updates.append(f"model_number={val}")
+
+        if os.getenv("GEN_INFO_SERIAL_NUMBER"):
+            val = os.getenv("GEN_INFO_SERIAL_NUMBER")
+            if info.serial_number != val:
+                info.serial_number = val
+                updates.append(f"serial_number={val}")
+
+        if os.getenv("GEN_INFO_FUEL_TYPE"):
+            val = os.getenv("GEN_INFO_FUEL_TYPE")
+            if info.fuel_type != val:
+                info.fuel_type = val
+                updates.append(f"fuel_type={val}")
+
+        if os.getenv("GEN_INFO_LOAD_EXPECTED"):
+            val = int(os.getenv("GEN_INFO_LOAD_EXPECTED"))
+            if info.load_expected != val:
+                info.load_expected = val
+                updates.append(f"load_expected={val}")
+
+        if os.getenv("GEN_INFO_FUEL_CONSUMPTION_50"):
+            val = float(os.getenv("GEN_INFO_FUEL_CONSUMPTION_50"))
+            if info.fuel_consumption_50 != val:
+                info.fuel_consumption_50 = val
+                updates.append(f"fuel_consumption_50={val}")
+
+        if os.getenv("GEN_INFO_FUEL_CONSUMPTION_100"):
+            val = float(os.getenv("GEN_INFO_FUEL_CONSUMPTION_100"))
+            if info.fuel_consumption_100 != val:
+                info.fuel_consumption_100 = val
+                updates.append(f"fuel_consumption_100={val}")
+
+        if updates:
+            await db.commit()
+            logger.info(f"Synced generator info from env vars: {', '.join(updates)}")
+        else:
+            logger.debug("Generator info already in sync with environment")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup/shutdown."""
-    global state_machine, gpio_monitor, heartbeat_service, scheduler_service, webhook_service
+    global state_machine, gpio_monitor, heartbeat_service, scheduler_service, exercise_scheduler_service, webhook_service
 
     # =========================================================================
     # Startup
@@ -150,6 +218,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         scheduler_service = SchedulerService(state_machine)
         scheduler_service.start()
         logger.info("Scheduler service started")
+
+        # Initialize exercise scheduler service
+        exercise_scheduler_service = ExerciseSchedulerService(state_machine, scheduler_service)
+        await exercise_scheduler_service.start()
+        logger.info("Exercise scheduler service started")
+
+        # Sync generator info from environment variables
+        await sync_generator_info_to_database()
 
         # Initialize metrics collection service
         metrics_service = get_metrics_service()
@@ -206,7 +282,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await metrics_svc.stop()
         logger.info("Metrics service stopped")
 
-        # Stop scheduler first (no new runs)
+        # Stop exercise scheduler first
+        if exercise_scheduler_service:
+            await exercise_scheduler_service.stop()
+            logger.info("Exercise scheduler service stopped")
+
+        # Stop scheduler (no new runs)
         if scheduler_service:
             scheduler_service.stop()
             logger.info("Scheduler service stopped")
@@ -272,6 +353,8 @@ app.include_router(settings_router.router, prefix="/api/settings", tags=["Settin
 app.include_router(dev.router, prefix="/api/dev", tags=["Development"])
 app.include_router(terminal.router, prefix="/api/terminal", tags=["Terminal"])
 app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
+app.include_router(generator_info.router, prefix="/api/generator-info", tags=["Generator Info"])
+app.include_router(exercise.router, prefix="/api/exercise", tags=["Exercise"])
 
 
 # Root status endpoint

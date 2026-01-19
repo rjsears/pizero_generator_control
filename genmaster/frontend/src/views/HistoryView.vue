@@ -177,13 +177,21 @@
                   </div>
                 </div>
 
-                <!-- Fuel Used (placeholder) -->
+                <!-- Fuel Used -->
                 <div class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
                   <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
                     Fuel Used
                   </div>
-                  <div class="text-sm font-semibold text-gray-400 dark:text-gray-500 italic">
-                    Coming soon
+                  <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                    <span v-if="run.estimated_fuel_used !== null && run.estimated_fuel_used !== undefined">
+                      {{ run.estimated_fuel_used.toFixed(2) }} gal
+                      <span v-if="run.fuel_type_at_run" class="text-xs text-gray-500 dark:text-gray-400 ml-1">
+                        ({{ formatFuelType(run.fuel_type_at_run) }})
+                      </span>
+                    </span>
+                    <span v-else class="text-gray-400 dark:text-gray-500 italic">
+                      {{ run.ended_at ? 'N/A' : 'In progress' }}
+                    </span>
                   </div>
                 </div>
 
@@ -355,6 +363,15 @@ function formatEndReason(endReason) {
     error: 'Error occurred',
   }
   return reasons[endReason] || endReason
+}
+
+function formatFuelType(fuelType) {
+  const types = {
+    lpg: 'LPG',
+    natural_gas: 'Natural Gas',
+    diesel: 'Diesel',
+  }
+  return types[fuelType] || fuelType || 'Unknown'
 }
 
 function getStatusBadgeClass(endReason) {

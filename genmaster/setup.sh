@@ -2430,6 +2430,15 @@ REDIS_CONTAINER=${REDIS_CONTAINER:-genmaster_redis}
 
 # Docker Socket Access (for container management UI)
 DOCKER_GID=${DOCKER_GID:-999}
+
+# Generator Information (optional - can be configured via UI)
+GEN_INFO_MANUFACTURER=
+GEN_INFO_MODEL_NUMBER=
+GEN_INFO_SERIAL_NUMBER=
+GEN_INFO_FUEL_TYPE=
+GEN_INFO_LOAD_EXPECTED=
+GEN_INFO_FUEL_CONSUMPTION_50=
+GEN_INFO_FUEL_CONSUMPTION_100=
 EOF
 
     # Add Cloudflare Tunnel if enabled

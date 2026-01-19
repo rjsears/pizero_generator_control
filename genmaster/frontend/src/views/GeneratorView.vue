@@ -275,6 +275,12 @@
         </Card>
       </div>
 
+      <!-- Generator Information -->
+      <GeneratorInfoCard />
+
+      <!-- Exercise Schedule -->
+      <ExerciseScheduleCard />
+
     <!-- Confirm Modal -->
     <Modal v-model="showConfirm" :title="confirmTitle">
       <p class="text-gray-600 dark:text-gray-400">{{ confirmMessage }}</p>
@@ -299,6 +305,8 @@ import Button from '@/components/common/Button.vue'
 import Input from '@/components/common/Input.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Modal from '@/components/common/Modal.vue'
+import GeneratorInfoCard from '@/components/GeneratorInfoCard.vue'
+import ExerciseScheduleCard from '@/components/ExerciseScheduleCard.vue'
 import { ShieldExclamationIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
 
 const generatorStore = useGeneratorStore()

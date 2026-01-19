@@ -166,6 +166,10 @@ async def get_generator_history(
             end_reason=run.stop_reason,
             scheduled_run_id=run.scheduled_run_id,
             notes=run.notes,
+            fuel_type_at_run=run.fuel_type_at_run,
+            load_at_run=run.load_at_run,
+            fuel_consumption_rate=run.fuel_consumption_rate,
+            estimated_fuel_used=run.estimated_fuel_used,
         )
         for run in runs
     ]

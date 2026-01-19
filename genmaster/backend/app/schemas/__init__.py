@@ -72,6 +72,17 @@ from app.schemas.system import (
     VictronStatus,
 )
 from app.schemas.webhook import WebhookConfig, WebhookEvent, WebhookPayload
+from app.schemas.generator_info import (
+    FuelTypeEnum,
+    GeneratorInfoResponse,
+    GeneratorInfoUpdate,
+    LoadExpectedEnum,
+)
+from app.schemas.exercise_schedule import (
+    ExerciseRunNowResponse,
+    ExerciseScheduleResponse,
+    ExerciseScheduleUpdate,
+)
 
 __all__ = [
     # Auth
@@ -136,4 +147,13 @@ __all__ = [
     "SendNotificationResponse",
     "TestChannelRequest",
     "TestChannelResponse",
+    # Generator Info
+    "FuelTypeEnum",
+    "LoadExpectedEnum",
+    "GeneratorInfoResponse",
+    "GeneratorInfoUpdate",
+    # Exercise Schedule
+    "ExerciseScheduleResponse",
+    "ExerciseScheduleUpdate",
+    "ExerciseRunNowResponse",
 ]
