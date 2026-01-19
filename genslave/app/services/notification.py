@@ -211,7 +211,7 @@ class NotificationService:
             f"Generator relay has been turned OFF due to lost communication "
             f"with GenMaster.\n\n"
             f"No heartbeat received for {timeout_seconds} seconds.\n\n"
-            f"Please check GenMaster connectivity and restart automation "
+            f"Please check GenMaster connectivity and re-arm the relay "
             f"when communication is restored."
         )
 
