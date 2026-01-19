@@ -1659,9 +1659,11 @@ configure_genslave() {
         echo -e "  ${WHITE}2.${NC} Run GenSlave setup on your Pi Zero 2W"
         echo -e "  ${WHITE}3.${NC} Enter this API secret when prompted during GenSlave setup"
         echo ""
-
-        # Always test the connection
+        echo -ne "  ${WHITE}Press Enter when GenSlave is configured and running to test the connection...${NC}"
+        read -r
         echo ""
+
+        # Test the connection
         print_info "Testing connection to GenSlave..."
         validate_genslave
 
