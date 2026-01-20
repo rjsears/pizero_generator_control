@@ -2981,13 +2981,13 @@ EOF
         cat >> "${SCRIPT_DIR}/nginx/nginx.conf" << 'EOF'
 
         # Portainer Container Management - INTERNAL ACCESS ONLY
-        # (configured with --base-url /portainer)
+        # Note: Portainer runs with --base-url /portainer, so pass full URI (no trailing slash)
         location /portainer/ {
             if ($access_level = "external") {
                 return 403;
             }
 
-            proxy_pass http://genmaster_portainer:9000/;
+            proxy_pass http://genmaster_portainer:9000;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -2998,7 +2998,11 @@ EOF
 
         # Portainer WebSocket endpoint
         location /portainer/api/websocket/ {
-            proxy_pass http://genmaster_portainer:9000/api/websocket/;
+            if ($access_level = "external") {
+                return 403;
+            }
+
+            proxy_pass http://genmaster_portainer:9000;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
