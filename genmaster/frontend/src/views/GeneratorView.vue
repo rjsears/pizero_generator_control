@@ -1329,15 +1329,6 @@ async function toggleRelayArm() {
   }
 }
 
-// Quick toggle generator (from top bar)
-async function handleQuickToggle() {
-  if (generatorStore.isRunning) {
-    showStopConfirm.value = true
-  } else {
-    showStartModal.value = true
-  }
-}
-
 // Handle stop button click
 function handleStop() {
   showStopConfirm.value = true
