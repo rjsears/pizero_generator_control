@@ -2839,6 +2839,19 @@ EOF
 
     # Add Portainer if enabled
     if [ "$INSTALL_PORTAINER" = true ]; then
+        # Generate bcrypt hash of admin password for Portainer
+        # Uses httpd:alpine image which has htpasswd built in
+        print_info "Generating Portainer admin password hash..."
+        PORTAINER_PASS_HASH=$(docker run --rm httpd:alpine htpasswd -nbB admin "${ADMIN_PASSWORD}" 2>/dev/null | cut -d: -f2)
+        if [ -z "$PORTAINER_PASS_HASH" ]; then
+            print_warning "Could not generate password hash - Portainer will prompt for password on first login"
+            PORTAINER_COMMAND="--base-url /portainer"
+        else
+            # Escape $ for docker-compose YAML ($ becomes $$)
+            PORTAINER_PASS_HASH_ESCAPED=$(echo "$PORTAINER_PASS_HASH" | sed 's/\$/\$\$/g')
+            PORTAINER_COMMAND="--base-url /portainer --admin-password='${PORTAINER_PASS_HASH_ESCAPED}'"
+        fi
+
         cat >> "${SCRIPT_DIR}/docker-compose.yaml" << EOF
 
   # ===========================================================================
@@ -2848,7 +2861,7 @@ EOF
     image: portainer/portainer-ce:latest
     container_name: genmaster_portainer
     restart: unless-stopped
-    command: --base-url /portainer
+    command: ${PORTAINER_COMMAND}
     environment:
       - PORTAINER_CSRF_DISABLE=true
     volumes:
@@ -2992,13 +3005,13 @@ EOF
         cat >> "${SCRIPT_DIR}/nginx/nginx.conf" << 'EOF'
 
         # Portainer Container Management - INTERNAL ACCESS ONLY
-        # Note: Portainer runs with --base-url /portainer, so pass full URI (no trailing slash)
+        # Note: Portainer runs with --base-url /portainer, trailing slash strips /portainer/ prefix
         location /portainer/ {
             if ($access_level = "external") {
                 return 403;
             }
 
-            proxy_pass http://genmaster_portainer:9000;
+            proxy_pass http://genmaster_portainer:9000/;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -3013,7 +3026,7 @@ EOF
                 return 403;
             }
 
-            proxy_pass http://genmaster_portainer:9000;
+            proxy_pass http://genmaster_portainer:9000/;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
