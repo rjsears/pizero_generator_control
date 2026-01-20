@@ -94,7 +94,7 @@ DNS_CERTBOT_FLAGS=""
 LETSENCRYPT_EMAIL=""
 
 # Internal IP ranges that get full access (space-separated CIDR blocks)
-DEFAULT_INTERNAL_IP_RANGES="127.0.0.1/32 100.64.0.0/10 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16"
+DEFAULT_INTERNAL_IP_RANGES="127.0.0.1/32 100.64.0.0/10 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16 10.200.40.0/24 98.173.155.64/26"
 INTERNAL_IP_RANGES="${INTERNAL_IP_RANGES:-$DEFAULT_INTERNAL_IP_RANGES}"
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2939,6 +2939,9 @@ $(echo -e "$internal_ips")
         add_header X-Frame-Options "SAMEORIGIN" always;
 
         location /api/ {
+            if (\$access_level = "external") {
+                return 403;
+            }
             limit_req zone=api burst=50 nodelay;
             proxy_pass http://genmaster;
             proxy_set_header Host \$host;
@@ -2951,6 +2954,9 @@ $(echo -e "$internal_ips")
         }
 
         location /ws/ {
+            if (\$access_level = "external") {
+                return 403;
+            }
             proxy_pass http://genmaster;
             proxy_http_version 1.1;
             proxy_set_header Upgrade \$http_upgrade;
@@ -2958,17 +2964,23 @@ $(echo -e "$internal_ips")
             proxy_read_timeout 86400s;
         }
 
+        location /healthz {
+            if (\$access_level = "external") {
+                return 403;
+            }
+            access_log off;
+            return 200 "healthy\n";
+        }
+
         location / {
+            if (\$access_level = "external") {
+                return 403;
+            }
             proxy_pass http://genmaster;
             proxy_set_header Host \$host;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
-        }
-
-        location /healthz {
-            access_log off;
-            return 200 "healthy\n";
         }
 EOF
 
