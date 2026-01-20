@@ -16,6 +16,7 @@ Revises:
 Create Date: 2026-01-15
 """
 
+import os
 from typing import Sequence, Union
 
 import bcrypt as bcrypt_lib
@@ -419,12 +420,17 @@ def upgrade() -> None:
     # Insert default config row (singleton)
     op.execute("INSERT INTO config (id) VALUES (1);")
 
-    # Insert default admin user (password: admin - CHANGE IN PRODUCTION!)
-    admin_password_hash = bcrypt_lib.hashpw("admin".encode(), bcrypt_lib.gensalt()).decode()
+    # Insert default admin user (uses ADMIN_PASSWORD from env, falls back to 'admin')
+    admin_username = os.environ.get("ADMIN_USERNAME", "admin")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "admin")
+    if admin_password == "admin" or not admin_password:
+        print("WARNING: Using default admin password 'admin' - please change this!")
+        admin_password = "admin"
+    admin_password_hash = bcrypt_lib.hashpw(admin_password.encode(), bcrypt_lib.gensalt()).decode()
     op.execute(
         f"""
         INSERT INTO users (username, password_hash, is_active, is_admin)
-        VALUES ('admin', '{admin_password_hash}', true, true);
+        VALUES ('{admin_username}', '{admin_password_hash}', true, true);
         """
     )
 
