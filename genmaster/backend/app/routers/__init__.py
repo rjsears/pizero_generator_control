@@ -25,6 +25,7 @@ from app.routers import (
     schedule,
     settings,
     system,
+    system_notifications,
     terminal,
 )
 
@@ -42,5 +43,6 @@ __all__ = [
     "schedule",
     "settings",
     "system",
+    "system_notifications",
     "terminal",
 ]

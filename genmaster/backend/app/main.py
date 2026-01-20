@@ -40,6 +40,7 @@ from app.routers import (
     schedule,
     settings as settings_router,
     system,
+    system_notifications,
     terminal,
 )
 from app.services.exercise_scheduler import ExerciseSchedulerService
@@ -355,6 +356,7 @@ app.include_router(terminal.router, prefix="/api/terminal", tags=["Terminal"])
 app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
 app.include_router(generator_info.router, prefix="/api/generator-info", tags=["Generator Info"])
 app.include_router(exercise.router, prefix="/api/exercise", tags=["Exercise"])
+app.include_router(system_notifications.router, prefix="/api/system-notifications", tags=["System Notifications"])
 
 
 # Root status endpoint

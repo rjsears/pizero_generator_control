@@ -23,6 +23,14 @@ from app.models.notifications import (
     NotificationHistory,
 )
 from app.models.scheduled_runs import ScheduledRun
+from app.models.system_notifications import (
+    SystemNotificationContainerConfig,
+    SystemNotificationEvent,
+    SystemNotificationGlobalSettings,
+    SystemNotificationHistory,
+    SystemNotificationState,
+    SystemNotificationTarget,
+)
 from app.models.session import Session
 from app.models.settings import Settings
 from app.models.system_state import SystemState
@@ -41,6 +49,12 @@ __all__ = [
     "ScheduledRun",
     "Session",
     "Settings",
+    "SystemNotificationContainerConfig",
+    "SystemNotificationEvent",
+    "SystemNotificationGlobalSettings",
+    "SystemNotificationHistory",
+    "SystemNotificationState",
+    "SystemNotificationTarget",
     "SystemState",
     "User",
 ]
