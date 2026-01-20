@@ -213,11 +213,13 @@ async def get_slave_full_system(
 @router.post("/relay/arm")
 async def arm_relay(
     slave_client=Depends(get_slave_client),
+    state_machine=Depends(get_state_machine),
 ) -> dict[str, Any]:
     """
     Arm the relay on GenSlave.
 
     Enables remote generator control via relay.
+    Also updates GenMaster's database to track the armed state.
     """
     response = await slave_client.arm_relay()
 
@@ -226,6 +228,10 @@ async def arm_relay(
             status_code=502,
             detail=response.error or "Failed to arm relay on GenSlave",
         )
+
+    # Update GenMaster's database to track the armed state
+    # This ensures heartbeat sync sends armed=True
+    await state_machine.set_armed_state(True)
 
     return {
         "success": True,
@@ -237,11 +243,13 @@ async def arm_relay(
 @router.post("/relay/disarm")
 async def disarm_relay(
     slave_client=Depends(get_slave_client),
+    state_machine=Depends(get_state_machine),
 ) -> dict[str, Any]:
     """
     Disarm the relay on GenSlave.
 
     Disables remote generator control via relay.
+    Also updates GenMaster's database to track the disarmed state.
     """
     response = await slave_client.disarm_relay()
 
@@ -250,6 +258,9 @@ async def disarm_relay(
             status_code=502,
             detail=response.error or "Failed to disarm relay on GenSlave",
         )
+
+    # Update GenMaster's database to track the disarmed state
+    await state_machine.set_armed_state(False)
 
     return {
         "success": True,
