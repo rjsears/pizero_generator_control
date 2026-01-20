@@ -2722,6 +2722,7 @@ services:
       - genmaster_logs:/app/logs
       - genmaster_data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./nginx:/app/nginx
     depends_on:
       db:
         condition: service_healthy
