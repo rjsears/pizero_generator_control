@@ -51,7 +51,13 @@
       "Bash(gh pr merge:*)",
       "Bash(docker buildx build:*)",
       "Bash(git merge:*)",
-      "Bash(gh pr edit:*)"
+      "Bash(gh pr edit:*)",
+      "Bash(git stash:*)",
+      "Bash(gh pr view:*)",
+      "Bash(docker logs:*)",
+      "Bash(npm run lint)",
+      "Bash(git diff:*)",
+      "Bash(python3 -m py_compile:*)"
     ]
   }
 }
