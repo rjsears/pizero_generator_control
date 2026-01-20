@@ -505,3 +505,102 @@ async def get_default_ip_ranges_endpoint(
     Requires admin authentication.
     """
     return get_default_ip_ranges()
+
+
+# Debug Mode endpoints
+
+
+class DebugModeResponse(BaseModel):
+    """Debug mode response."""
+
+    enabled: bool
+
+
+class DebugModeRequest(BaseModel):
+    """Debug mode update request."""
+
+    enabled: bool
+
+
+@router.get("/debug", response_model=DebugModeResponse)
+async def get_debug_mode(
+    db: DbSession,
+) -> DebugModeResponse:
+    """
+    Get current debug mode status.
+    """
+    setting = await Settings.get(db, "debug_mode")
+    enabled = setting.value if setting else False
+    return DebugModeResponse(enabled=bool(enabled))
+
+
+@router.put("/debug", response_model=DebugModeResponse)
+async def set_debug_mode(
+    data: DebugModeRequest,
+    db: DbSession,
+    admin: AdminUser,
+) -> DebugModeResponse:
+    """
+    Set debug mode.
+
+    Requires admin authentication.
+    """
+    await Settings.set(db, "debug_mode", data.enabled, "Enable debug mode")
+    return DebugModeResponse(enabled=data.enabled)
+
+
+# Security Settings endpoints
+
+
+class SecuritySettingsResponse(BaseModel):
+    """Security settings response."""
+
+    session_timeout: int = 30
+    max_login_attempts: int = 5
+    lockout_duration: int = 15
+
+
+class SecuritySettingsRequest(BaseModel):
+    """Security settings update request."""
+
+    value: SecuritySettingsResponse
+
+
+@router.get("/security", response_model=Dict[str, Any])
+async def get_security_settings(
+    db: DbSession,
+) -> Dict[str, Any]:
+    """
+    Get security settings.
+    """
+    setting = await Settings.get(db, "security")
+    if setting and isinstance(setting.value, dict):
+        return {"value": setting.value}
+    # Return defaults
+    return {
+        "value": {
+            "session_timeout": 30,
+            "max_login_attempts": 5,
+            "lockout_duration": 15,
+        }
+    }
+
+
+@router.put("/security", response_model=Dict[str, Any])
+async def set_security_settings(
+    data: SecuritySettingsRequest,
+    db: DbSession,
+    admin: AdminUser,
+) -> Dict[str, Any]:
+    """
+    Set security settings.
+
+    Requires admin authentication.
+    """
+    await Settings.set(
+        db,
+        "security",
+        data.value.model_dump(),
+        "Security settings (session timeout, login attempts, lockout)",
+    )
+    return {"value": data.value.model_dump()}
