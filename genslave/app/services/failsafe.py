@@ -70,6 +70,9 @@ class FailsafeMonitor:
         self._last_heartbeat = now
         self._heartbeat_count += 1
 
+        # Log received heartbeat data for debugging
+        logger.debug(f"Heartbeat received: {data}")
+
         # Update dynamic timeout from GenMaster's heartbeat interval
         heartbeat_interval = data.get("heartbeat_interval")
         if heartbeat_interval is not None and heartbeat_interval > 0:
@@ -77,10 +80,16 @@ class FailsafeMonitor:
             if new_timeout != self._dynamic_timeout:
                 logger.info(
                     f"Failsafe timeout updated: {self._dynamic_timeout or settings.FAILSAFE_TIMEOUT_SECONDS}s -> "
-                    f"{new_timeout}s (heartbeat_interval={heartbeat_interval}s)"
+                    f"{new_timeout}s (heartbeat_interval={heartbeat_interval}s, 3x multiplier)"
                 )
                 self._dynamic_timeout = new_timeout
                 self._heartbeat_interval = heartbeat_interval
+        elif self._heartbeat_count == 1:
+            # First heartbeat but no interval - log warning
+            logger.warning(
+                f"First heartbeat received but no heartbeat_interval in data. "
+                f"Using fallback timeout: {settings.FAILSAFE_TIMEOUT_SECONDS}s. Data: {data}"
+            )
 
         # Clear failsafe if it was triggered
         if self._failsafe_triggered:
@@ -192,8 +201,11 @@ class FailsafeMonitor:
     async def _trigger_failsafe(self) -> None:
         """Trigger failsafe action - stop the generator."""
         timeout = self._get_effective_timeout()
+        elapsed = int(time.time()) - self._last_heartbeat if self._last_heartbeat else timeout
+
         logger.warning(
-            f"FAILSAFE TRIGGERED - No heartbeat for {timeout}s"
+            f"FAILSAFE TRIGGERED - No heartbeat for {elapsed}s (timeout: {timeout}s, "
+            f"heartbeat_interval: {self._heartbeat_interval}s, source: {'genmaster' if self._dynamic_timeout else 'config'})"
         )
 
         self._failsafe_triggered = True
@@ -205,7 +217,8 @@ class FailsafeMonitor:
             logger.info(f"Failsafe relay OFF: {'success' if success else 'failed'}")
 
         # Send notifications via Apprise (primary method)
-        await notification_service.send_failsafe_alert(settings.FAILSAFE_TIMEOUT_SECONDS)
+        # Use actual timeout, not config default
+        await notification_service.send_failsafe_alert(timeout)
 
         # Send legacy webhook notification (if configured)
         await self._send_failsafe_webhook()
