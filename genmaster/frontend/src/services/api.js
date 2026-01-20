@@ -147,6 +147,13 @@ export const genslaveApi = {
   arm: () => api.post('/health/relay/arm'),
   disarm: () => api.post('/health/relay/disarm'),
   getRelayState: () => api.get('/health/relay/state'),
+  // Cached status endpoints (instant response from background polling)
+  getStatusCached: () => api.get('/health/slave/cached'),
+  getHealthCached: () => api.get('/health/slave/cached/health'),
+  getRelayCached: () => api.get('/health/slave/cached/relay'),
+  getFailsafeCached: () => api.get('/health/slave/cached/failsafe'),
+  getSystemCached: () => api.get('/health/slave/cached/system'),
+  refreshCache: () => api.post('/health/slave/cached/refresh'),
 }
 
 // GenMaster-specific: Schedule API

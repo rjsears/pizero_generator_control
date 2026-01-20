@@ -49,6 +49,7 @@ from app.services.heartbeat import HeartbeatService
 from app.services.metrics_service import get_metrics_service
 from app.services.scheduler import SchedulerService
 from app.services.slave_client import SlaveClient
+from app.services.slave_status_service import get_slave_status_service
 from app.services.state_machine import StateMachine
 from app.services.webhook import WebhookService
 
@@ -215,6 +216,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await heartbeat_service.start()
         logger.info("Heartbeat service started")
 
+        # Initialize slave status service (background polling for UI performance)
+        slave_status_service = get_slave_status_service()
+        await slave_status_service.start()
+        logger.info("Slave status service started")
+
         # Initialize scheduler service
         scheduler_service = SchedulerService(state_machine)
         scheduler_service.start()
@@ -292,6 +298,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if scheduler_service:
             scheduler_service.stop()
             logger.info("Scheduler service stopped")
+
+        # Stop slave status service
+        slave_status_svc = get_slave_status_service()
+        await slave_status_svc.stop()
+        logger.info("Slave status service stopped")
 
         # Stop heartbeat service
         if heartbeat_service:

@@ -233,6 +233,10 @@ async def arm_relay(
     # This ensures heartbeat sync sends armed=True
     await state_machine.set_armed_state(True)
 
+    # Update the slave status cache immediately
+    service = get_slave_status_service()
+    await service.update_relay_state(armed=True)
+
     return {
         "success": True,
         "armed": True,
@@ -261,6 +265,10 @@ async def disarm_relay(
 
     # Update GenMaster's database to track the disarmed state
     await state_machine.set_armed_state(False)
+
+    # Update the slave status cache immediately
+    service = get_slave_status_service()
+    await service.update_relay_state(armed=False)
 
     return {
         "success": True,
@@ -292,6 +300,103 @@ async def get_relay_arm_state(
         "armed": response.data.get("armed", False) if response.data else False,
         "relay_on": response.data.get("relay_on", False) if response.data else False,
     }
+
+
+# =========================================================================
+# Cached Slave Status Endpoints (instant response from background polling)
+# =========================================================================
+
+
+def get_slave_status_service():
+    """Get the slave status service singleton."""
+    from app.services.slave_status_service import get_slave_status_service as _get_service
+    return _get_service()
+
+
+def _wrap_cached_response(
+    data: dict[str, Any],
+    service,
+) -> dict[str, Any]:
+    """Wrap cached data with metadata for the response."""
+    cache = service.cache
+    now = int(time.time())
+    cache_age = now - cache.last_successful_fetch if cache.last_successful_fetch else None
+
+    return {
+        "data": data,
+        "is_online": cache.is_online,
+        "is_stale": cache_age is not None and cache_age > service.STALE_THRESHOLD,
+        "cache_age_seconds": cache_age,
+        "last_error": cache.last_error,
+    }
+
+
+@router.get("/slave/cached")
+async def get_slave_cached_status() -> dict[str, Any]:
+    """
+    Get all cached GenSlave status data.
+
+    Returns instant response from background polling cache.
+    Includes health, relay state, failsafe, and system info.
+    """
+    service = get_slave_status_service()
+    return service.get_combined_status()
+
+
+@router.get("/slave/cached/health")
+async def get_slave_cached_health() -> dict[str, Any]:
+    """
+    Get cached GenSlave health status.
+
+    Returns instant response from background polling cache.
+    """
+    service = get_slave_status_service()
+    return _wrap_cached_response(service.get_health(), service)
+
+
+@router.get("/slave/cached/relay")
+async def get_slave_cached_relay() -> dict[str, Any]:
+    """
+    Get cached GenSlave relay state.
+
+    Returns instant response from background polling cache.
+    """
+    service = get_slave_status_service()
+    return _wrap_cached_response(service.get_relay_state(), service)
+
+
+@router.get("/slave/cached/failsafe")
+async def get_slave_cached_failsafe() -> dict[str, Any]:
+    """
+    Get cached GenSlave failsafe status.
+
+    Returns instant response from background polling cache.
+    """
+    service = get_slave_status_service()
+    return _wrap_cached_response(service.get_failsafe(), service)
+
+
+@router.get("/slave/cached/system")
+async def get_slave_cached_system() -> dict[str, Any]:
+    """
+    Get cached GenSlave system info.
+
+    Returns instant response from background polling cache.
+    Note: System info is polled less frequently (every 30s).
+    """
+    service = get_slave_status_service()
+    return _wrap_cached_response(service.get_system_info(), service)
+
+
+@router.post("/slave/cached/refresh")
+async def refresh_slave_cache() -> dict[str, Any]:
+    """
+    Force an immediate refresh of all cached GenSlave data.
+
+    Use sparingly - the background polling should be sufficient for most cases.
+    """
+    service = get_slave_status_service()
+    return await service.force_refresh()
 
 
 @router.post("/rotate-api-key")

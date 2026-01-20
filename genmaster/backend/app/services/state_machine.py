@@ -32,6 +32,7 @@ from app.schemas import (
 if TYPE_CHECKING:
     from app.services.webhook import WebhookService
 
+from app.services.slave_status_service import get_slave_status_service
 from app.services.system_notification_engine import SystemNotificationEngine
 
 logger = logging.getLogger(__name__)
@@ -334,6 +335,10 @@ class StateMachine:
 
             logger.info("GenSlave relay turned ON")
 
+            # Update the slave status cache immediately
+            slave_status_service = get_slave_status_service()
+            await slave_status_service.update_relay_state(relay_on=True)
+
             # Fetch generator info for fuel tracking
             gen_info = await GeneratorInfo.get_instance(db)
             fuel_type = gen_info.fuel_type
@@ -426,6 +431,10 @@ class StateMachine:
                 # Continue anyway to update state - relay may already be off
 
             logger.info("GenSlave relay turned OFF")
+
+            # Update the slave status cache immediately
+            slave_status_service = get_slave_status_service()
+            await slave_status_service.update_relay_state(relay_on=False)
 
             stop_time = int(time.time())
             run_id = state.current_run_id

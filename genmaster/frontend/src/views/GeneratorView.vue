@@ -78,26 +78,37 @@
             <div
               :class="[
                 'p-2 rounded-lg',
-                slaveOnline ? 'bg-emerald-100 dark:bg-emerald-500/20' : 'bg-red-100 dark:bg-red-500/20'
+                slaveOnline ? (slaveStaleIndicator ? 'bg-amber-100 dark:bg-amber-500/20' : 'bg-emerald-100 dark:bg-emerald-500/20') : 'bg-red-100 dark:bg-red-500/20'
               ]"
             >
               <ServerIcon
                 :class="[
                   'h-5 w-5',
-                  slaveOnline ? 'text-emerald-500' : 'text-red-500'
+                  slaveOnline ? (slaveStaleIndicator ? 'text-amber-500' : 'text-emerald-500') : 'text-red-500'
                 ]"
               />
             </div>
-            <div>
+            <div class="flex-1">
               <p class="text-sm text-secondary">GenSlave</p>
               <p
                 :class="[
                   'text-xl font-bold',
-                  slaveOnline ? 'text-emerald-500' : 'text-red-500'
+                  slaveOnline ? (slaveStaleIndicator ? 'text-amber-500' : 'text-emerald-500') : 'text-red-500'
                 ]"
               >
                 {{ slaveOnline ? 'Online' : 'Offline' }}
               </p>
+            </div>
+            <!-- Staleness/Offline Badge -->
+            <div v-if="!slaveOnline" class="flex-shrink-0">
+              <span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300">
+                Last known state
+              </span>
+            </div>
+            <div v-else-if="slaveStaleIndicator" class="flex-shrink-0">
+              <span class="px-2 py-1 text-xs font-medium rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                Stale ({{ slaveCacheAgeDisplay }}s)
+              </span>
             </div>
           </div>
         </div>
@@ -1048,6 +1059,7 @@ const localRunTimeSeconds = ref(0)
 const localRunTimeMinutes = computed(() => Math.floor(localRunTimeSeconds.value / 60))
 let runtimeInterval = null
 let refreshInterval = null
+let slowRefreshInterval = null
 
 // Modal states
 const showStartModal = ref(false)
@@ -1166,6 +1178,8 @@ const canStop = computed(() => generatorStore.canStop)
 const actionLoading = computed(() => generatorStore.actionLoading)
 
 const slaveOnline = computed(() => systemStore.isSlaveOnline)
+const slaveStaleIndicator = computed(() => systemStore.isSlaveStale)
+const slaveCacheAgeDisplay = computed(() => systemStore.slaveCacheAge)
 const victronActive = computed(() => systemStore.victronInputActive)
 
 const generatorStateText = computed(() => {
@@ -1287,16 +1301,19 @@ function updateRuntimeTimer() {
   }
 }
 
-// Fetch relay state
+// Fetch relay state (using cached endpoint for instant response)
 async function fetchRelayState() {
   relayStateLoading.value = true
   try {
-    const response = await genslaveApi.getRelayState()
+    // Use cached endpoint for instant response
+    const response = await genslaveApi.getRelayCached()
+    const data = response.data?.data || response.data
+
     // Only update if we got a valid response with an explicit armed value
-    if (response.data && typeof response.data.armed === 'boolean') {
-      relayArmed.value = response.data.armed
+    if (data && typeof data.armed === 'boolean') {
+      relayArmed.value = data.armed
     } else {
-      console.warn('Relay state response missing armed field:', response.data)
+      console.warn('Relay state response missing armed field:', data)
       // Keep previous value if response is malformed
     }
   } catch (err) {
@@ -1637,9 +1654,10 @@ watch(() => generatorStore.isRunning, (isRunning) => {
 
 // Lifecycle
 onMounted(async () => {
-  // Fetch relay state and generator state immediately
+  // Fetch relay state and generator state immediately using cached endpoints
   fetchRelayState()
   generatorStore.fetchState()
+  systemStore.fetchSlaveStatusCached()  // Start with cached status
 
   try {
     await Promise.all([
@@ -1686,26 +1704,35 @@ onMounted(async () => {
   // Load runtime limits status (lockout/cooldown state)
   await fetchRuntimeLimitsStatus()
 
-  // Refresh every 60 seconds
+  // Fast refresh every 2 seconds using cached endpoints (instant responses)
   refreshInterval = setInterval(async () => {
     await Promise.all([
       generatorStore.fetchStatus(),
-      generatorStore.fetchStats(),
-      systemStore.fetchHealth(),
-      systemStore.fetchSlaveHealth(),
-      systemStore.fetchVictronStatus(),
-      fetchRelayState(),
-      fetchFuelUsage(),
-      fetchRuntimeLimitsStatus(),
+      systemStore.fetchSlaveStatusCached(),  // Use cached endpoint for instant response
+      fetchRelayState(),  // Uses cached endpoint
     ])
     // Update runtime timer based on new status
     updateRuntimeTimer()
-  }, 60000)
+  }, 2000)
+
+  // Slow refresh every 30 seconds for less critical data
+  slowRefreshInterval = setInterval(async () => {
+    await Promise.all([
+      generatorStore.fetchStats(),
+      systemStore.fetchHealth(),
+      systemStore.fetchVictronStatus(),
+      fetchFuelUsage(),
+      fetchRuntimeLimitsStatus(),
+    ])
+  }, 30000)
 })
 
 onUnmounted(() => {
   if (refreshInterval) {
     clearInterval(refreshInterval)
+  }
+  if (slowRefreshInterval) {
+    clearInterval(slowRefreshInterval)
   }
   if (runtimeInterval) {
     clearInterval(runtimeInterval)

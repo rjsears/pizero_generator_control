@@ -12,6 +12,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import systemService from '@/services/system'
+import { genslaveApi } from '@/services/api'
 import { useNotificationStore } from './notifications'
 
 export const useSystemStore = defineStore('system', () => {
@@ -24,6 +25,12 @@ export const useSystemStore = defineStore('system', () => {
   const loading = ref(false)
   const error = ref(null)
 
+  // Cached slave status state
+  const slaveOnline = ref(null)
+  const slaveStale = ref(false)
+  const slaveCacheAge = ref(null)
+  const slaveLastError = ref(null)
+
   // Getters
   // Note: Backend returns ram_percent, disk_percent, temperature_celsius
   const cpuPercent = computed(() => health.value?.cpu_percent || 0)
@@ -33,8 +40,18 @@ export const useSystemStore = defineStore('system', () => {
   const uptime = computed(() => health.value?.uptime_seconds || 0)
 
   // Note: Backend returns connection_status ("connected", "disconnected", "unknown")
-  const isSlaveOnline = computed(() => slaveHealth.value?.connection_status === 'connected')
+  // Also use cached slave online status if available
+  const isSlaveOnline = computed(() => {
+    // Prefer cached status (from background polling service)
+    if (slaveOnline.value !== null) {
+      return slaveOnline.value
+    }
+    // Fallback to heartbeat-based connection status
+    return slaveHealth.value?.connection_status === 'connected'
+  })
   const slaveLastSeen = computed(() => slaveHealth.value?.last_heartbeat_received || null)
+  const isSlaveStale = computed(() => slaveStale.value)
+  const slaveError = computed(() => slaveLastError.value)
 
   const victronInputActive = computed(() => victronStatus.value?.input_active || false)
   const victronLastChange = computed(() => victronStatus.value?.last_change || null)
@@ -90,6 +107,34 @@ export const useSystemStore = defineStore('system', () => {
       slaveHealth.value = response.data
     } catch {
       slaveHealth.value = { online: false }
+    }
+  }
+
+  async function fetchSlaveStatusCached() {
+    // Fetch from the cached endpoint (instant response)
+    try {
+      const response = await genslaveApi.getStatusCached()
+      const data = response.data
+      slaveOnline.value = data.is_online
+      slaveStale.value = data.is_stale
+      slaveCacheAge.value = data.cache_age_seconds
+      slaveLastError.value = data.last_error
+      return data
+    } catch {
+      // If the cached endpoint fails, mark as unknown
+      slaveOnline.value = null
+      slaveStale.value = true
+      return null
+    }
+  }
+
+  async function fetchSlaveRelayCached() {
+    // Fetch cached relay state (instant response)
+    try {
+      const response = await genslaveApi.getRelayCached()
+      return response.data
+    } catch {
+      return null
     }
   }
 
@@ -157,6 +202,11 @@ export const useSystemStore = defineStore('system', () => {
     victronStatus,
     loading,
     error,
+    // Cached slave status state
+    slaveOnline,
+    slaveStale,
+    slaveCacheAge,
+    slaveLastError,
 
     // Getters
     cpuPercent,
@@ -165,6 +215,8 @@ export const useSystemStore = defineStore('system', () => {
     temperature,
     uptime,
     isSlaveOnline,
+    isSlaveStale,
+    slaveError,
     slaveLastSeen,
     victronInputActive,
     victronLastChange,
@@ -174,6 +226,8 @@ export const useSystemStore = defineStore('system', () => {
     fetchHealth,
     fetchStatus,
     fetchSlaveHealth,
+    fetchSlaveStatusCached,
+    fetchSlaveRelayCached,
     fetchSlaveDetails,
     fetchVictronStatus,
     rebootSystem,
