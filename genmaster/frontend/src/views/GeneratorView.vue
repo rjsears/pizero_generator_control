@@ -1689,6 +1689,8 @@ onMounted(async () => {
   // Refresh every 60 seconds
   refreshInterval = setInterval(async () => {
     await Promise.all([
+      generatorStore.fetchStatus(),
+      generatorStore.fetchStats(),
       systemStore.fetchHealth(),
       systemStore.fetchSlaveHealth(),
       systemStore.fetchVictronStatus(),
@@ -1696,6 +1698,8 @@ onMounted(async () => {
       fetchFuelUsage(),
       fetchRuntimeLimitsStatus(),
     ])
+    // Update runtime timer based on new status
+    updateRuntimeTimer()
   }, 60000)
 })
 
