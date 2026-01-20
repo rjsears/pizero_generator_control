@@ -101,4 +101,125 @@ export default {
     const response = await api.post('/notifications/send', data)
     return response.data
   },
+
+  // ============================================================================
+  // System Notification Event Methods
+  // ============================================================================
+
+  async getSystemEvents(category = null, enabledOnly = false) {
+    const params = {}
+    if (category) params.category = category
+    if (enabledOnly) params.enabled_only = enabledOnly
+    const response = await api.get('/system-notifications/events', { params })
+    return response.data
+  },
+
+  async getSystemEvent(id) {
+    const response = await api.get(`/system-notifications/events/${id}`)
+    return response.data
+  },
+
+  async updateSystemEvent(id, data) {
+    const response = await api.put(`/system-notifications/events/${id}`, data)
+    return response.data
+  },
+
+  async resetEventTemplate(id, resetTitle = true, resetMessage = true) {
+    const response = await api.post(`/system-notifications/events/${id}/reset-template`, {
+      reset_title: resetTitle,
+      reset_message: resetMessage,
+    })
+    return response.data
+  },
+
+  async bulkUpdateEvents(eventIds, updates) {
+    const response = await api.post('/system-notifications/events/bulk-update', {
+      event_ids: eventIds,
+      ...updates,
+    })
+    return response.data
+  },
+
+  // ============================================================================
+  // Global Settings Methods
+  // ============================================================================
+
+  async getGlobalSettings() {
+    const response = await api.get('/system-notifications/settings')
+    return response.data
+  },
+
+  async updateGlobalSettings(data) {
+    const response = await api.put('/system-notifications/settings', data)
+    return response.data
+  },
+
+  // ============================================================================
+  // Container Config Methods
+  // ============================================================================
+
+  async getContainerConfigs() {
+    const response = await api.get('/system-notifications/containers')
+    return response.data
+  },
+
+  async discoverContainers() {
+    const response = await api.get('/system-notifications/containers/discover')
+    return response.data
+  },
+
+  async createContainerConfig(data) {
+    const response = await api.post('/system-notifications/containers', data)
+    return response.data
+  },
+
+  async updateContainerConfig(id, data) {
+    const response = await api.put(`/system-notifications/containers/${id}`, data)
+    return response.data
+  },
+
+  async deleteContainerConfig(id) {
+    const response = await api.delete(`/system-notifications/containers/${id}`)
+    return response.data
+  },
+
+  // ============================================================================
+  // System Notification History Methods
+  // ============================================================================
+
+  async getSystemHistory(page = 1, pageSize = 50, filters = {}) {
+    const params = { page, page_size: pageSize, ...filters }
+    const response = await api.get('/system-notifications/history', { params })
+    return response.data
+  },
+
+  async getSystemHistoryStats() {
+    const response = await api.get('/system-notifications/history/stats')
+    return response.data
+  },
+
+  async cleanupHistory(days = 60) {
+    const response = await api.delete('/system-notifications/history/cleanup', {
+      params: { days },
+    })
+    return response.data
+  },
+
+  // ============================================================================
+  // Test Methods
+  // ============================================================================
+
+  async triggerTestNotification(eventType, eventData = {}, skipRateLimiting = true) {
+    const response = await api.post('/system-notifications/trigger', {
+      event_type: eventType,
+      event_data: eventData,
+      skip_rate_limiting: skipRateLimiting,
+    })
+    return response.data
+  },
+
+  async testEventNotification(eventType) {
+    const response = await api.post(`/system-notifications/test-event/${eventType}`)
+    return response.data
+  },
 }

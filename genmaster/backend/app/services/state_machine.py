@@ -32,7 +32,20 @@ from app.schemas import (
 if TYPE_CHECKING:
     from app.services.webhook import WebhookService
 
+from app.services.system_notification_engine import SystemNotificationEngine
+
 logger = logging.getLogger(__name__)
+
+# Global notification engine instance
+_notification_engine: Optional[SystemNotificationEngine] = None
+
+
+def get_notification_engine() -> SystemNotificationEngine:
+    """Get or create the notification engine singleton."""
+    global _notification_engine
+    if _notification_engine is None:
+        _notification_engine = SystemNotificationEngine()
+    return _notification_engine
 
 
 class StateMachine:
@@ -364,6 +377,12 @@ class StateMachine:
                 {"run_id": run.id, "trigger": trigger},
             )
 
+            # Trigger system notification
+            await self._trigger_system_notification(
+                "generator_started",
+                {"run_id": run.id, "trigger": trigger, "notes": notes},
+            )
+
             return run
 
     async def stop_generator(
@@ -445,6 +464,17 @@ class StateMachine:
             await self._send_webhook(
                 f"generator.stopped.{reason}",
                 {"run_id": run_id, "reason": reason},
+            )
+
+            # Trigger system notification
+            duration_seconds = run.duration_seconds if run else None
+            await self._trigger_system_notification(
+                "generator_stopped",
+                {
+                    "run_id": run_id,
+                    "reason": reason,
+                    "duration_seconds": duration_seconds,
+                },
             )
 
             return run
@@ -552,6 +582,10 @@ class StateMachine:
 
             await self.log_event("OVERRIDE_ENABLED", {"type": override_type})
             await self._send_webhook("override.enabled", {"type": override_type})
+            await self._trigger_system_notification(
+                "manual_override_enabled",
+                {"override_type": override_type},
+            )
 
     async def disable_override(self) -> str:
         """
@@ -572,6 +606,10 @@ class StateMachine:
 
             await self.log_event("OVERRIDE_DISABLED", {"previous_type": previous_type})
             await self._send_webhook("override.disabled", {"previous_type": previous_type})
+            await self._trigger_system_notification(
+                "manual_override_disabled",
+                {"previous_type": previous_type},
+            )
 
             return previous_type
 
@@ -637,6 +675,10 @@ class StateMachine:
                     logger.info("GenSlave connection restored")
                     await self.log_event("COMMUNICATION_RESTORED", {"latency_ms": latency_ms})
                     await self._send_webhook("communication.restored", {})
+                    await self._trigger_system_notification(
+                        "genslave_heartbeat_restored",
+                        {"latency_ms": latency_ms},
+                    )
                 elif state.slave_connection_status == "unknown":
                     state.slave_connection_status = "connected"
 
@@ -660,6 +702,10 @@ class StateMachine:
                     )
                     await self._send_webhook(
                         "communication.lost",
+                        {"missed_count": state.missed_heartbeat_count},
+                    )
+                    await self._trigger_system_notification(
+                        "genslave_heartbeat_lost",
                         {"missed_count": state.missed_heartbeat_count},
                     )
 
@@ -755,6 +801,35 @@ class StateMachine:
                 await self._webhook_service.send(event, data)
             except Exception as e:
                 logger.error(f"Failed to send webhook: {e}")
+
+    async def _trigger_system_notification(
+        self,
+        event_type: str,
+        event_data: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """
+        Trigger a system notification for the given event type.
+
+        Args:
+            event_type: The event type (e.g., "generator_started")
+            event_data: Data to use for template variable substitution
+        """
+        try:
+            engine = get_notification_engine()
+            async with AsyncSessionLocal() as db:
+                result = await engine.trigger_notification(
+                    db=db,
+                    event_type=event_type,
+                    event_data=event_data or {},
+                )
+                if result.success:
+                    logger.debug(f"System notification sent for {event_type}")
+                elif result.status == "suppressed":
+                    logger.debug(f"System notification suppressed for {event_type}: {result.suppression_reason}")
+                else:
+                    logger.warning(f"System notification failed for {event_type}: {result.error_message}")
+        except Exception as e:
+            logger.error(f"Failed to trigger system notification: {e}")
 
     # =========================================================================
     # Runtime Lockout/Cooldown Operations
