@@ -20,6 +20,7 @@ import { useDebugStore } from '../stores/debug'
 import { settingsApi, authApi } from '../services/api'
 import Card from '../components/common/Card.vue'
 import LoadingSpinner from '../components/common/LoadingSpinner.vue'
+import EnvironmentSettings from '../components/settings/EnvironmentSettings.vue'
 import {
   Cog6ToothIcon,
   PaintBrushIcon,
@@ -104,13 +105,6 @@ const commonNetworks = [
   { name: 'Local (10.x.x.x)', range: '10.0.0.0/8', description: 'Local network' },
   { name: 'Docker (172.x.x.x)', range: '172.16.0.0/12', description: 'Docker networks' },
 ]
-
-// Environment variables state
-const envVars = ref([])
-const loadingEnvVars = ref(false)
-const savingEnvVars = ref(false)
-const envRestartRequired = ref(false)
-const editingEnvVar = ref(null)
 
 // User profile state
 const userProfile = ref(null)
@@ -322,45 +316,6 @@ async function reloadNginx() {
   }
 }
 
-// Load environment variables
-async function loadEnvVars() {
-  loadingEnvVars.value = true
-  try {
-    const response = await settingsApi.get('environment')
-    envVars.value = response.data?.value || []
-    envRestartRequired.value = false
-  } catch {
-    // Default environment variables if not configured
-    envVars.value = [
-      { key: 'APP_DEBUG', value: 'false', description: 'Enable debug mode', sensitive: false },
-      { key: 'DATABASE_URL', value: '***', description: 'Database connection string', sensitive: true },
-      { key: 'SECRET_KEY', value: '***', description: 'Application secret key', sensitive: true },
-    ]
-  } finally {
-    loadingEnvVars.value = false
-  }
-}
-
-// Update environment variable
-async function updateEnvVar(index) {
-  if (envVars.value[index].sensitive && envVars.value[index].value === '***') {
-    editingEnvVar.value = null
-    return
-  }
-
-  savingEnvVars.value = true
-  try {
-    await settingsApi.update('environment', { value: envVars.value })
-    envRestartRequired.value = true
-    editingEnvVar.value = null
-    notificationStore.success('Environment variable updated')
-  } catch {
-    notificationStore.error('Failed to update environment variable')
-  } finally {
-    savingEnvVars.value = false
-  }
-}
-
 // Load user profile
 async function loadUserProfile() {
   loadingProfile.value = true
@@ -386,8 +341,6 @@ onMounted(() => {
 watch(activeTab, (tab) => {
   if (tab === 'access' && accessControl.value.ip_ranges.length === 0) {
     loadIpRanges()
-  } else if (tab === 'environment' && envVars.value.length === 0) {
-    loadEnvVars()
   } else if (tab === 'account' && !userProfile.value) {
     loadUserProfile()
   }
@@ -859,106 +812,9 @@ watch(activeTab, (tab) => {
         </Card>
       </div>
 
-      <!-- Environment Tab -->
-      <div v-if="activeTab === 'environment'" class="space-y-6">
-        <!-- Header Banner -->
-        <div class="relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-500 via-blue-500 to-cyan-500 p-6 text-white shadow-lg">
-          <div class="absolute inset-0 bg-black/10"></div>
-          <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
-          <div class="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
-          <div class="relative flex items-center gap-4">
-            <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
-              <DocumentTextIcon class="h-8 w-8" />
-            </div>
-            <div>
-              <h2 class="text-2xl font-bold">Environment Variables</h2>
-              <p class="text-white/80">View and configure application environment</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Restart Warning -->
-        <div v-if="envRestartRequired" class="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-          <div class="flex items-start gap-3">
-            <ExclamationTriangleIcon class="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <h5 class="font-medium text-amber-800 dark:text-amber-300">Restart Required</h5>
-              <p class="mt-1 text-sm text-amber-700 dark:text-amber-400">
-                Environment changes require a container restart to take effect.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <Card title="Environment Variables" subtitle="Application configuration values">
-          <LoadingSpinner v-if="loadingEnvVars" size="sm" text="Loading environment..." />
-          <template v-else>
-            <div class="space-y-3">
-              <div
-                v-for="(envVar, index) in envVars"
-                :key="envVar.key"
-                class="group relative rounded-xl border border-gray-200 dark:border-gray-700 p-4 transition-all hover:border-indigo-300 dark:hover:border-indigo-600"
-              >
-                <div class="flex items-start justify-between">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <code class="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 rounded text-sm font-mono text-indigo-700 dark:text-indigo-400">
-                        {{ envVar.key }}
-                      </code>
-                      <span v-if="envVar.sensitive" class="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                        Sensitive
-                      </span>
-                    </div>
-                    <p class="text-sm text-muted mt-1">{{ envVar.description }}</p>
-                  </div>
-                </div>
-
-                <div v-if="editingEnvVar === index" class="mt-3 flex items-center gap-2">
-                  <input
-                    v-model="envVars[index].value"
-                    :type="envVar.sensitive ? 'password' : 'text'"
-                    class="input text-sm flex-1 font-mono"
-                    :placeholder="envVar.sensitive ? 'Enter new value' : envVar.value"
-                    @keyup.enter="updateEnvVar(index)"
-                  />
-                  <button @click="updateEnvVar(index)" class="btn-primary btn-sm">
-                    <CheckIcon class="h-4 w-4" />
-                  </button>
-                  <button @click="editingEnvVar = null" class="btn-secondary btn-sm">
-                    <XMarkIcon class="h-4 w-4" />
-                  </button>
-                </div>
-                <div v-else class="mt-2 flex items-center justify-between">
-                  <code class="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded text-sm font-mono text-gray-700 dark:text-gray-300">
-                    {{ envVar.sensitive ? '••••••••' : envVar.value }}
-                  </code>
-                  <button
-                    @click="editingEnvVar = index"
-                    class="text-sm text-blue-500 hover:underline flex items-center gap-1"
-                  >
-                    <PencilIcon class="h-3 w-3" /> Edit
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Info Section -->
-            <div class="mt-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-              <div class="flex gap-3">
-                <svg class="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                  <h5 class="font-medium text-blue-800 dark:text-blue-300">About Environment Variables</h5>
-                  <p class="mt-1 text-sm text-blue-700 dark:text-blue-400">
-                    Sensitive values are masked for security. Changes to environment variables require a container restart.
-                    Edit with caution as incorrect values may prevent the application from starting.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </template>
-        </Card>
+      <!-- Environment Tab - Uses EnvironmentSettings component with warning gate -->
+      <div v-if="activeTab === 'environment'">
+        <EnvironmentSettings />
       </div>
 
       <!-- Account Tab -->
