@@ -93,6 +93,9 @@ const channelsExpanded = ref(true)
 const groupsExpanded = ref(true)
 const historyExpanded = ref(true)
 
+// History sub-tab ('channels' for channel tests, 'system' for system events)
+const historyTab = ref('channels')
+
 // Testing state
 const testingChannelId = ref(null)
 
@@ -765,7 +768,104 @@ async function executeDelete() {
 
       <!-- History Tab -->
       <template v-if="mainTab === 'history'">
-        <SystemNotificationHistory />
+        <!-- History Sub-tabs -->
+        <div class="flex gap-2 mb-4">
+          <button
+            @click="historyTab = 'channels'"
+            :class="[
+              'px-4 py-2 rounded-lg text-sm font-medium transition-all border',
+              historyTab === 'channels'
+                ? 'bg-amber-500/15 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30'
+                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-transparent'
+            ]"
+          >
+            Channel Tests
+          </button>
+          <button
+            @click="historyTab = 'system'"
+            :class="[
+              'px-4 py-2 rounded-lg text-sm font-medium transition-all border',
+              historyTab === 'system'
+                ? 'bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-transparent'
+            ]"
+          >
+            System Events
+          </button>
+        </div>
+
+        <!-- Channel Test History -->
+        <Card v-if="historyTab === 'channels'" :padding="false">
+          <div
+            @click="historyExpanded = !historyExpanded"
+            class="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-lg bg-amber-100 dark:bg-amber-500/20">
+                <ClockIcon class="h-5 w-5 text-amber-500" />
+              </div>
+              <div>
+                <h3 class="font-semibold text-primary">Channel Test History</h3>
+                <p class="text-sm text-secondary">Test notifications sent to channels</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                {{ history.length }} total
+              </span>
+              <ChevronDownIcon v-if="historyExpanded" class="h-5 w-5 text-secondary" />
+              <ChevronRightIcon v-else class="h-5 w-5 text-secondary" />
+            </div>
+          </div>
+
+          <Transition name="collapse">
+            <div v-if="historyExpanded" class="px-4 pb-4 border-t border-gray-200 dark:border-gray-700">
+              <!-- Empty State -->
+              <EmptyState
+                v-if="history.length === 0"
+                :icon="ClockIcon"
+                title="No test notifications sent yet"
+                description="Test notification history will appear here when you test channels."
+                class="pt-4"
+              />
+
+              <!-- History List -->
+              <div v-else class="space-y-2 pt-3">
+                <div
+                  v-for="item in history"
+                  :key="item.id"
+                  class="flex items-center justify-between p-4 bg-surface-hover rounded-lg border border-gray-200 dark:border-gray-700"
+                >
+                  <div class="flex items-center space-x-3">
+                    <div :class="['w-10 h-10 rounded-full flex items-center justify-center', item.success ? 'bg-green-100 dark:bg-green-500/20' : 'bg-red-100 dark:bg-red-500/20']">
+                      <CheckIcon v-if="item.success" class="w-5 h-5 text-green-600" />
+                      <XMarkIcon v-else class="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                      <p class="font-medium text-primary">{{ item.title }}</p>
+                      <p class="text-sm text-secondary">
+                        <span class="font-medium">{{ item.channel_name || 'Unknown' }}</span>
+                        <span class="mx-2 text-muted">-</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                          {{ formatEventType(item.event_type) }}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm text-secondary">{{ formatDate(item.sent_at) }}</p>
+                    <p v-if="item.error_message" class="text-xs text-red-500 truncate max-w-xs mt-1">{{ item.error_message }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        </Card>
+
+        <!-- System Event History -->
+        <template v-if="historyTab === 'system'">
+          <SystemNotificationHistory />
+        </template>
       </template>
     </template>
 
