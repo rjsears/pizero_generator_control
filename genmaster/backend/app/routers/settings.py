@@ -184,72 +184,6 @@ async def set_security_settings(
     return {"value": data.value.model_dump()}
 
 
-# Generic key-value settings endpoints
-# NOTE: These catch-all routes must come AFTER specific routes like /debug and /security
-
-
-@router.get("/{key}", response_model=SettingResponse)
-async def get_setting(
-    key: str,
-    db: DbSession,
-) -> SettingResponse:
-    """
-    Get a specific setting by key.
-    """
-    setting = await Settings.get(db, key)
-    if not setting:
-        raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
-
-    return SettingResponse(
-        key=setting.key,
-        value=setting.value,
-        description=setting.description,
-        updated_at=setting.updated_at.isoformat(),
-    )
-
-
-@router.put("/{key}", response_model=SettingResponse)
-async def set_setting(
-    key: str,
-    data: SettingValue,
-    db: DbSession,
-    admin: AdminUser,
-) -> SettingResponse:
-    """
-    Set or update a setting.
-
-    Requires admin authentication.
-    """
-    setting = await Settings.set(db, key, data.value, data.description)
-    return SettingResponse(
-        key=setting.key,
-        value=setting.value,
-        description=setting.description,
-        updated_at=setting.updated_at.isoformat(),
-    )
-
-
-@router.delete("/{key}")
-async def delete_setting(
-    key: str,
-    db: DbSession,
-    admin: AdminUser,
-) -> dict:
-    """
-    Delete a setting.
-
-    Requires admin authentication.
-    """
-    setting = await Settings.get(db, key)
-    if not setting:
-        raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
-
-    await db.delete(setting)
-    await db.commit()
-
-    return {"success": True, "message": f"Setting '{key}' deleted"}
-
-
 # Webhook-specific endpoints
 
 
@@ -610,3 +544,74 @@ async def get_default_ip_ranges_endpoint(
     Requires admin authentication.
     """
     return get_default_ip_ranges()
+
+
+# =============================================================================
+# Generic key-value settings endpoints
+# IMPORTANT: These /{key} catch-all routes MUST be at the END of the file
+# because FastAPI matches routes in order. If these come before specific
+# routes like /debug, /security, /webhooks, /access-control, the catch-all
+# will intercept those requests.
+# =============================================================================
+
+
+@router.get("/{key}", response_model=SettingResponse)
+async def get_setting(
+    key: str,
+    db: DbSession,
+) -> SettingResponse:
+    """
+    Get a specific setting by key.
+    """
+    setting = await Settings.get(db, key)
+    if not setting:
+        raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
+
+    return SettingResponse(
+        key=setting.key,
+        value=setting.value,
+        description=setting.description,
+        updated_at=setting.updated_at.isoformat(),
+    )
+
+
+@router.put("/{key}", response_model=SettingResponse)
+async def set_setting(
+    key: str,
+    data: SettingValue,
+    db: DbSession,
+    admin: AdminUser,
+) -> SettingResponse:
+    """
+    Set or update a setting.
+
+    Requires admin authentication.
+    """
+    setting = await Settings.set(db, key, data.value, data.description)
+    return SettingResponse(
+        key=setting.key,
+        value=setting.value,
+        description=setting.description,
+        updated_at=setting.updated_at.isoformat(),
+    )
+
+
+@router.delete("/{key}")
+async def delete_setting(
+    key: str,
+    db: DbSession,
+    admin: AdminUser,
+) -> dict:
+    """
+    Delete a setting.
+
+    Requires admin authentication.
+    """
+    setting = await Settings.get(db, key)
+    if not setting:
+        raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
+
+    await db.delete(setting)
+    await db.commit()
+
+    return {"success": True, "message": f"Setting '{key}' deleted"}
