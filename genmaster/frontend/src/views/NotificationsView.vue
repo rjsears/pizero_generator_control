@@ -41,7 +41,7 @@ import {
   HashtagIcon,
   Cog6ToothIcon,
 } from '@heroicons/vue/24/outline'
-import ConfigureNotifications from '@/components/notifications/ConfigureNotifications.vue'
+import SystemNotificationsSettings from '@/components/settings/SystemNotificationsSettings.vue'
 import SystemNotificationHistory from '@/components/notifications/SystemNotificationHistory.vue'
 
 const notifications = useNotificationStore()
@@ -761,9 +761,9 @@ async function executeDelete() {
         </Card>
       </template>
 
-      <!-- Configure Tab -->
+      <!-- Configure Tab - System Notifications Settings -->
       <template v-if="mainTab === 'configure'">
-        <ConfigureNotifications :channels="channels" :groups="groups" @refresh-channels="loadData" />
+        <SystemNotificationsSettings />
       </template>
 
       <!-- History Tab -->

@@ -1,12 +1,11 @@
 <!--
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-/management/frontend/src/components/settings/SystemNotificationsSettings.vue
+/genmaster/frontend/src/components/settings/SystemNotificationsSettings.vue
 
-Part of the "n8n_nginx/n8n_management" suite
-Version 3.0.0 - January 1st, 2026
+Part of the "RPi Generator Control" suite
+Version 3.0.0 - January 2026
 
 Richard J. Sears
-richard@n8nmanagement.net
 https://github.com/rjsears
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
@@ -14,7 +13,8 @@ https://github.com/rjsears
 import { ref, onMounted, computed, watch } from 'vue'
 import { useNotificationStore } from '../../stores/notifications'
 import { useThemeStore } from '../../stores/theme'
-import api from '../../services/api'
+import api from '@/services/api'
+import notificationsService from '@/services/notifications'
 import Card from '../common/Card.vue'
 import LoadingSpinner from '../common/LoadingSpinner.vue'
 import ConfirmDialog from '../common/ConfirmDialog.vue'
@@ -40,6 +40,8 @@ import {
   FireIcon,
   ArrowDownTrayIcon,
   ShieldExclamationIcon,
+  BoltIcon,
+  WifiIcon,
   PlusIcon,
   TrashIcon,
   AdjustmentsHorizontalIcon,
@@ -75,6 +77,7 @@ const showAddTargetModal = ref(false)
 const selectedEventForTarget = ref(null)
 const expandedRateLimiting = ref(false)
 const expandedDailyDigest = ref(false)
+const expandedGenSlave = ref(false)
 
 // Maintenance mode form state
 const maintenanceDuration = ref('1h')
@@ -145,13 +148,13 @@ const getRateLimitSeverityClass = (value) => {
   }
 }
 
-// Category grouping
+// Category grouping - GenMaster categories
 const categoryInfo = {
-  backup: { label: 'Backup Events', icon: CircleStackIcon, color: 'emerald', description: 'Notifications for backup operations' },
-  container: { label: 'Container Events', icon: CubeIcon, color: 'blue', description: 'Docker container health and status alerts' },
-  system: { label: 'Docker Host System Events', icon: CpuChipIcon, color: 'purple', description: 'Docker host system resource monitoring' },
+  generator: { label: 'Generator Events', icon: BoltIcon, color: 'emerald', description: 'Generator start/stop, runtime limits, and relay events' },
+  genslave: { label: 'GenSlave Events', icon: WifiIcon, color: 'blue', description: 'Communication status and GenSlave host monitoring' },
+  genmaster: { label: 'GenMaster Events', icon: CpuChipIcon, color: 'purple', description: 'GenMaster host resource monitoring' },
   ssl: { label: 'SSL Certificate Events', icon: ShieldCheckIcon, color: 'amber', description: 'SSL/TLS certificate expiration monitoring' },
-  security: { label: 'Security Events', icon: ShieldExclamationIcon, color: 'red', description: 'Security and access notifications' },
+  container: { label: 'Container Events', icon: CubeIcon, color: 'cyan', description: 'Docker container health and status alerts' },
 }
 
 // SSL configuration status
@@ -895,9 +898,9 @@ onMounted(() => {
               globalSettings?.maintenance_mode
                 ? ''
                 : expandedCategories.has(category)
-                    ? (category === 'backup' ? 'bg-emerald-50 dark:bg-emerald-500/10 border-b border-emerald-200 dark:border-emerald-500/20'
+                    ? (category === 'generator' ? 'bg-emerald-50 dark:bg-emerald-500/10 border-b border-emerald-200 dark:border-emerald-500/20'
                         : category === 'container' ? 'bg-blue-50 dark:bg-blue-500/10 border-b border-blue-200 dark:border-blue-500/20'
-                        : category === 'security' ? 'bg-red-50 dark:bg-red-500/10 border-b border-red-200 dark:border-red-500/20'
+                        : category === 'genslave' ? 'bg-red-50 dark:bg-red-500/10 border-b border-red-200 dark:border-red-500/20'
                         : category === 'ssl' ? 'bg-amber-50 dark:bg-amber-500/10 border-b border-amber-200 dark:border-amber-500/20'
                         : 'bg-purple-50 dark:bg-purple-500/10 border-b border-purple-200 dark:border-purple-500/20')
                     : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
@@ -907,9 +910,9 @@ onMounted(() => {
               <div :class="[
                 'p-3 rounded-xl',
                 expandedCategories.has(category)
-                  ? category === 'backup' ? 'bg-emerald-100 dark:bg-emerald-500/20'
+                  ? category === 'generator' ? 'bg-emerald-100 dark:bg-emerald-500/20'
                     : category === 'container' ? 'bg-blue-100 dark:bg-blue-500/20'
-                    : category === 'security' ? 'bg-red-100 dark:bg-red-500/20'
+                    : category === 'genslave' ? 'bg-red-100 dark:bg-red-500/20'
                     : category === 'ssl' ? 'bg-amber-100 dark:bg-amber-500/20'
                     : 'bg-purple-100 dark:bg-purple-500/20'
                   : 'bg-gray-100 dark:bg-gray-700'
@@ -918,9 +921,9 @@ onMounted(() => {
                   :is="categoryInfo[category]?.icon || BellIcon"
                   :class="[
                     'h-6 w-6',
-                    category === 'backup' ? 'text-emerald-500'
+                    category === 'generator' ? 'text-emerald-500'
                       : category === 'container' ? 'text-blue-500'
-                      : category === 'security' ? 'text-red-500'
+                      : category === 'genslave' ? 'text-red-500'
                       : category === 'ssl' ? 'text-amber-500'
                       : 'text-purple-500'
                   ]"
@@ -930,9 +933,9 @@ onMounted(() => {
                 <h3 :class="[
                   'font-bold text-lg',
                   expandedCategories.has(category)
-                    ? category === 'backup' ? 'text-emerald-700 dark:text-emerald-400'
+                    ? category === 'generator' ? 'text-emerald-700 dark:text-emerald-400'
                       : category === 'container' ? 'text-blue-700 dark:text-blue-400'
-                      : category === 'security' ? 'text-red-700 dark:text-red-400'
+                      : category === 'genslave' ? 'text-red-700 dark:text-red-400'
                       : category === 'ssl' ? 'text-amber-700 dark:text-amber-400'
                       : 'text-purple-700 dark:text-purple-400'
                     : 'text-primary'
@@ -947,9 +950,9 @@ onMounted(() => {
             <div class="flex items-center gap-4">
               <div :class="[
                 'px-4 py-2 rounded-full font-semibold text-sm',
-                category === 'backup' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+                category === 'generator' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
                   : category === 'container' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
-                  : category === 'security' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
+                  : category === 'genslave' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
                   : category === 'ssl' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
                   : 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400'
               ]">
@@ -971,17 +974,17 @@ onMounted(() => {
                   <div class="flex items-center gap-3">
                     <div :class="[
                       'p-2 rounded-lg',
-                      category === 'backup' ? 'bg-emerald-100 dark:bg-emerald-500/20'
+                      category === 'generator' ? 'bg-emerald-100 dark:bg-emerald-500/20'
                         : category === 'container' ? 'bg-blue-100 dark:bg-blue-500/20'
-                        : category === 'security' ? 'bg-red-100 dark:bg-red-500/20'
+                        : category === 'genslave' ? 'bg-red-100 dark:bg-red-500/20'
                         : category === 'ssl' ? 'bg-amber-100 dark:bg-amber-500/20'
                         : 'bg-purple-100 dark:bg-purple-500/20'
                     ]">
                       <BellAlertIcon :class="[
                         'h-5 w-5',
-                        category === 'backup' ? 'text-emerald-500'
+                        category === 'generator' ? 'text-emerald-500'
                           : category === 'container' ? 'text-blue-500'
-                          : category === 'security' ? 'text-red-500'
+                          : category === 'genslave' ? 'text-red-500'
                           : category === 'ssl' ? 'text-amber-500'
                           : 'text-purple-500'
                       ]" />
@@ -995,9 +998,9 @@ onMounted(() => {
                     @click.stop="openApplyToAllModal(category)"
                     :class="[
                       'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all',
-                      category === 'backup' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30'
+                      category === 'generator' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30'
                         : category === 'container' ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30'
-                        : category === 'security' ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
+                        : category === 'genslave' ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
                         : category === 'ssl' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/30'
                         : 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-500/20 dark:text-purple-400 dark:hover:bg-purple-500/30'
                     ]"
@@ -1103,9 +1106,9 @@ onMounted(() => {
                             <!-- Header - Subtle colored top border only -->
                             <div :class="[
                               'px-6 py-4 border-b border-gray-400 dark:border-gray-700',
-                              event.category === 'backup' ? 'border-t-4 border-t-emerald-400'
+                              event.category === 'generator' ? 'border-t-4 border-t-emerald-400'
                                 : event.category === 'container' ? 'border-t-4 border-t-blue-400'
-                                : event.category === 'security' ? 'border-t-4 border-t-red-400'
+                                : event.category === 'genslave' ? 'border-t-4 border-t-red-400'
                                 : event.category === 'ssl' ? 'border-t-4 border-t-amber-400'
                                 : 'border-t-4 border-t-purple-400'
                             ]">
@@ -1114,9 +1117,9 @@ onMounted(() => {
                                   :is="categoryInfo[event.category]?.icon || BellIcon"
                                   :class="[
                                     'h-5 w-5',
-                                    event.category === 'backup' ? 'text-emerald-500'
+                                    event.category === 'generator' ? 'text-emerald-500'
                                       : event.category === 'container' ? 'text-blue-500'
-                                      : event.category === 'security' ? 'text-red-500'
+                                      : event.category === 'genslave' ? 'text-red-500'
                                       : event.category === 'ssl' ? 'text-amber-500'
                                       : 'text-purple-500'
                                   ]"
@@ -1171,9 +1174,9 @@ onMounted(() => {
                                     @change="updateEvent(event, 'frequency', $event.target.value)"
                                     :class="[
                                       'w-full bg-gray-50 dark:bg-gray-700 border-2 rounded-xl px-4 py-3 text-primary',
-                                      event.category === 'backup' ? 'border-gray-400 dark:border-gray-600 focus:border-emerald-400 focus:ring-emerald-400'
+                                      event.category === 'generator' ? 'border-gray-400 dark:border-gray-600 focus:border-emerald-400 focus:ring-emerald-400'
                                         : event.category === 'container' ? 'border-gray-400 dark:border-gray-600 focus:border-blue-400 focus:ring-blue-400'
-                                        : event.category === 'security' ? 'border-gray-400 dark:border-gray-600 focus:border-red-400 focus:ring-red-400'
+                                        : event.category === 'genslave' ? 'border-gray-400 dark:border-gray-600 focus:border-red-400 focus:ring-red-400'
                                         : event.category === 'ssl' ? 'border-gray-400 dark:border-gray-600 focus:border-amber-400 focus:ring-amber-400'
                                         : 'border-gray-400 dark:border-gray-600 focus:border-purple-400 focus:ring-purple-400'
                                     ]"
@@ -1196,9 +1199,9 @@ onMounted(() => {
                                       step="5"
                                       :class="[
                                         'w-full h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer',
-                                        event.category === 'backup' ? 'accent-emerald-500'
+                                        event.category === 'generator' ? 'accent-emerald-500'
                                           : event.category === 'container' ? 'accent-blue-500'
-                                          : event.category === 'security' ? 'accent-red-500'
+                                          : event.category === 'genslave' ? 'accent-red-500'
                                           : event.category === 'ssl' ? 'accent-amber-500'
                                           : 'accent-purple-500'
                                       ]"
@@ -1207,9 +1210,9 @@ onMounted(() => {
                                       <span class="text-xs text-secondary">0 min</span>
                                       <span :class="[
                                         'text-lg font-bold',
-                                        event.category === 'backup' ? 'text-emerald-600 dark:text-emerald-400'
+                                        event.category === 'generator' ? 'text-emerald-600 dark:text-emerald-400'
                                           : event.category === 'container' ? 'text-blue-600 dark:text-blue-400'
-                                          : event.category === 'security' ? 'text-red-600 dark:text-red-400'
+                                          : event.category === 'genslave' ? 'text-red-600 dark:text-red-400'
                                           : event.category === 'ssl' ? 'text-amber-600 dark:text-amber-400'
                                           : 'text-purple-600 dark:text-purple-400'
                                       ]">{{ event.cooldown_minutes }} min</span>
@@ -1352,9 +1355,9 @@ onMounted(() => {
                                     @click="openAddTargetModal(event)"
                                     :class="[
                                       'flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-xl transition-all',
-                                      event.category === 'backup' ? 'bg-emerald-500 hover:bg-emerald-600'
+                                      event.category === 'generator' ? 'bg-emerald-500 hover:bg-emerald-600'
                                         : event.category === 'container' ? 'bg-blue-500 hover:bg-blue-600'
-                                        : event.category === 'security' ? 'bg-red-500 hover:bg-red-600'
+                                        : event.category === 'genslave' ? 'bg-red-500 hover:bg-red-600'
                                         : event.category === 'ssl' ? 'bg-amber-500 hover:bg-amber-600'
                                         : 'bg-purple-500 hover:bg-purple-600'
                                     ]"
@@ -1386,9 +1389,9 @@ onMounted(() => {
                                       <div :class="[
                                         'w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white',
                                         target.escalation_level === 1
-                                          ? event.category === 'backup' ? 'bg-emerald-500'
+                                          ? event.category === 'generator' ? 'bg-emerald-500'
                                             : event.category === 'container' ? 'bg-blue-500'
-                                            : event.category === 'security' ? 'bg-red-500'
+                                            : event.category === 'genslave' ? 'bg-red-500'
                                             : event.category === 'ssl' ? 'bg-amber-500'
                                             : 'bg-purple-500'
                                           : 'bg-orange-500'
@@ -1413,6 +1416,105 @@ onMounted(() => {
 
                     </div>
                   </Transition>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        </div>
+
+        <!-- GenSlave Targeting Section -->
+        <div class="flex items-center gap-4 pt-6 pb-2">
+          <div class="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
+          <div class="flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-100 dark:bg-blue-500/20">
+            <WifiIcon class="h-4 w-4 text-blue-500 dark:text-blue-400" />
+            <span class="text-sm font-medium text-blue-600 dark:text-blue-300">GenSlave Remote</span>
+          </div>
+          <div class="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
+        </div>
+
+        <!-- GenSlave Notification Targeting Card -->
+        <div class="bg-surface rounded-xl border border-[var(--color-border)] overflow-hidden">
+          <button
+            @click="expandedGenSlave = !expandedGenSlave"
+            class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-500/20">
+                <WifiIcon class="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div class="text-left">
+                <h3 class="font-semibold text-primary">GenSlave Notification Forwarding</h3>
+                <p class="text-sm text-secondary">Forward alerts to the remote GenSlave controller</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
+                Coming Soon
+              </span>
+              <ChevronDownIcon
+                :class="['h-5 w-5 text-gray-400 transition-transform duration-200', expandedGenSlave ? 'rotate-180' : '']"
+              />
+            </div>
+          </button>
+
+          <Transition name="collapse">
+            <div v-if="expandedGenSlave" class="border-t border-[var(--color-border)]">
+              <div class="p-5 space-y-4 bg-gray-50/50 dark:bg-gray-800/30">
+                <!-- Info Banner -->
+                <div class="rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 p-4">
+                  <div class="flex gap-3">
+                    <InformationCircleIcon class="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                    <div class="text-sm">
+                      <p class="font-medium text-blue-700 dark:text-blue-300">GenSlave Notification Forwarding</p>
+                      <p class="mt-1 text-blue-600 dark:text-blue-400">
+                        This feature allows you to forward selected system notifications to the GenSlave controller.
+                        When enabled, GenSlave can display alerts locally, trigger audio alarms, or take other actions
+                        based on notification events.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Feature Details -->
+                <div class="space-y-3">
+                  <div class="flex items-start gap-3 p-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                    <div class="p-1.5 rounded bg-emerald-100 dark:bg-emerald-500/20">
+                      <CheckCircleIcon class="h-4 w-4 text-emerald-500" />
+                    </div>
+                    <div>
+                      <p class="text-sm font-medium text-primary">Per-Event Selection</p>
+                      <p class="text-xs text-secondary">Choose which events are forwarded to GenSlave</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3 p-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                    <div class="p-1.5 rounded bg-amber-100 dark:bg-amber-500/20">
+                      <BellAlertIcon class="h-4 w-4 text-amber-500" />
+                    </div>
+                    <div>
+                      <p class="text-sm font-medium text-primary">Local Alerts</p>
+                      <p class="text-xs text-secondary">Trigger local alarms or displays on GenSlave hardware</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3 p-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                    <div class="p-1.5 rounded bg-purple-100 dark:bg-purple-500/20">
+                      <ArrowPathIcon class="h-4 w-4 text-purple-500" />
+                    </div>
+                    <div>
+                      <p class="text-sm font-medium text-primary">Real-time Sync</p>
+                      <p class="text-xs text-secondary">Notifications are forwarded instantly via the heartbeat protocol</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Status Note -->
+                <div class="rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-3">
+                  <div class="flex gap-2">
+                    <ExclamationTriangleIcon class="h-5 w-5 text-amber-500 flex-shrink-0" />
+                    <p class="text-sm text-amber-700 dark:text-amber-400">
+                      <strong>Note:</strong> This feature requires GenSlave firmware version 2.0+ with notification support enabled.
+                      Configuration will be available once both GenMaster and GenSlave are updated.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1759,17 +1861,17 @@ onMounted(() => {
             <div class="flex items-center gap-3">
               <div :class="[
                 'p-3 rounded-xl',
-                applyToAllCategory === 'backup' ? 'bg-emerald-100 dark:bg-emerald-500/20'
+                applyToAllCategory === 'generator' ? 'bg-emerald-100 dark:bg-emerald-500/20'
                   : applyToAllCategory === 'container' ? 'bg-blue-100 dark:bg-blue-500/20'
-                  : applyToAllCategory === 'security' ? 'bg-red-100 dark:bg-red-500/20'
+                  : applyToAllCategory === 'genslave' ? 'bg-red-100 dark:bg-red-500/20'
                   : applyToAllCategory === 'ssl' ? 'bg-amber-100 dark:bg-amber-500/20'
                   : 'bg-purple-100 dark:bg-purple-500/20'
               ]">
                 <BellAlertIcon :class="[
                   'h-6 w-6',
-                  applyToAllCategory === 'backup' ? 'text-emerald-600'
+                  applyToAllCategory === 'generator' ? 'text-emerald-600'
                     : applyToAllCategory === 'container' ? 'text-blue-600'
-                    : applyToAllCategory === 'security' ? 'text-red-600'
+                    : applyToAllCategory === 'genslave' ? 'text-red-600'
                     : applyToAllCategory === 'ssl' ? 'text-amber-600'
                     : 'text-purple-600'
                 ]" />
@@ -1884,9 +1986,9 @@ onMounted(() => {
                 :disabled="!applyToAllTargetId || applyingToAll"
                 :class="[
                   'btn-primary flex items-center gap-2',
-                  applyToAllCategory === 'backup' ? '!bg-emerald-500 hover:!bg-emerald-600'
+                  applyToAllCategory === 'generator' ? '!bg-emerald-500 hover:!bg-emerald-600'
                     : applyToAllCategory === 'container' ? '!bg-blue-500 hover:!bg-blue-600'
-                    : applyToAllCategory === 'security' ? '!bg-red-500 hover:!bg-red-600'
+                    : applyToAllCategory === 'genslave' ? '!bg-red-500 hover:!bg-red-600'
                     : applyToAllCategory === 'ssl' ? '!bg-amber-500 hover:!bg-amber-600'
                     : '!bg-purple-500 hover:!bg-purple-600'
                 ]"
@@ -1969,7 +2071,7 @@ onMounted(() => {
 
             <div class="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg p-4">
               <p class="text-sm text-amber-800 dark:text-amber-300">
-                <strong>All notifications disabled:</strong> While maintenance mode is active, ALL system notifications are completely stopped. No alerts will be sent, queued, or stored. Use this when performing intentional maintenance that may generate unwanted alerts. This will not affect any n8n webhook generated notifications.
+                <strong>All notifications disabled:</strong> While maintenance mode is active, ALL system notifications are completely stopped. No alerts will be sent, queued, or stored. Use this when performing intentional maintenance that may generate unwanted alerts.
               </p>
             </div>
 

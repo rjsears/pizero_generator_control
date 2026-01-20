@@ -1,12 +1,11 @@
 <!--
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-/management/frontend/src/components/notifications/NotificationServiceDialog.vue
+/genmaster/frontend/src/components/notifications/NotificationServiceDialog.vue
 
-Part of the "n8n_nginx/n8n_management" suite
-Version 3.0.0 - January 1st, 2026
+Part of the "RPi Generator Control" suite
+Version 3.0.0 - January 2026
 
 Richard J. Sears
-richard@n8nmanagement.net
 https://github.com/rjsears
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->

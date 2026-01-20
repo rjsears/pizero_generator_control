@@ -658,6 +658,23 @@ class StateMachine:
             state = await self._get_state(db)
             return state.slave_relay_armed or False
 
+    async def set_armed_state(self, armed: bool) -> None:
+        """
+        Set the relay armed state in the database.
+
+        This is called when the user explicitly arms/disarms via the UI,
+        ensuring GenMaster's database tracks the intended armed state.
+        The heartbeat will then sync this to GenSlave.
+
+        Args:
+            armed: True to arm, False to disarm
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            state.slave_relay_armed = armed
+            await db.commit()
+            logger.info(f"Relay armed state set to {armed} in GenMaster database")
+
     # =========================================================================
     # Heartbeat/Communication Operations
     # =========================================================================
@@ -688,12 +705,31 @@ class StateMachine:
                 previous_missed = state.missed_heartbeat_count
                 state.missed_heartbeat_count = 0
 
-                # Update slave relay state and armed state if provided
+                # Update slave relay state if provided
                 if slave_status:
                     if "relay_state" in slave_status:
                         state.slave_relay_state = slave_status["relay_state"]
+
+                    # Handle armed state carefully - GenMaster is authoritative
                     if "armed" in slave_status:
-                        state.slave_relay_armed = slave_status["armed"]
+                        master_armed = state.slave_relay_armed or False
+                        slave_armed = slave_status["armed"]
+
+                        if master_armed and not slave_armed:
+                            # GenMaster expects armed but GenSlave reports disarmed
+                            # This is a sync issue - keep GenMaster's state, next heartbeat will re-push
+                            logger.warning(
+                                "Armed state mismatch: GenMaster=True, GenSlave=False. "
+                                "Keeping GenMaster state - next heartbeat will re-sync GenSlave."
+                            )
+                            # Don't update - keep master's armed state
+                        elif not master_armed and slave_armed:
+                            # GenSlave armed by external means - adopt that state
+                            logger.info(
+                                "GenSlave armed externally, updating GenMaster to match"
+                            )
+                            state.slave_relay_armed = True
+                        # else: states match, no update needed
 
                 # Check if connection was restored
                 if state.slave_connection_status == "disconnected":
