@@ -378,9 +378,20 @@ class StateMachine:
             )
 
             # Trigger system notification
+            from datetime import datetime
+            reason_map = {
+                "victron": "Victron signal",
+                "manual": "Manual start",
+                "scheduled": "Scheduled run",
+                "exercise": "Exercise run",
+            }
             await self._trigger_system_notification(
                 "generator_started",
-                {"run_id": run.id, "trigger": trigger, "notes": notes},
+                {
+                    "run_id": run.id,
+                    "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "reason": reason_map.get(trigger, trigger),
+                },
             )
 
             return run
@@ -467,13 +478,36 @@ class StateMachine:
             )
 
             # Trigger system notification
-            duration_seconds = run.duration_seconds if run else None
+            from datetime import datetime
+            reason_map = {
+                "victron": "Victron signal off",
+                "manual": "Manual stop",
+                "scheduled_end": "Scheduled run ended",
+                "comm_loss": "Communication loss",
+                "override": "Override activated",
+                "error": "Error occurred",
+                "max_runtime": "Max runtime exceeded",
+            }
+            duration_seconds = run.duration_seconds if run else 0
+            # Format runtime as human-readable
+            hours, remainder = divmod(duration_seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            if hours > 0:
+                runtime = f"{int(hours)}h {int(minutes)}m"
+            elif minutes > 0:
+                runtime = f"{int(minutes)}m {int(seconds)}s"
+            else:
+                runtime = f"{int(seconds)}s"
+            # Estimate fuel consumed (placeholder - would need generator info)
+            fuel_gallons = round(duration_seconds / 3600 * 0.5, 2)  # Rough estimate
             await self._trigger_system_notification(
                 "generator_stopped",
                 {
                     "run_id": run_id,
-                    "reason": reason,
-                    "duration_seconds": duration_seconds,
+                    "reason": reason_map.get(reason, reason),
+                    "runtime": runtime,
+                    "fuel_gallons": fuel_gallons,
+                    "fuel_type": "Propane",  # TODO: Get from generator info
                 },
             )
 
@@ -582,10 +616,6 @@ class StateMachine:
 
             await self.log_event("OVERRIDE_ENABLED", {"type": override_type})
             await self._send_webhook("override.enabled", {"type": override_type})
-            await self._trigger_system_notification(
-                "manual_override_enabled",
-                {"override_type": override_type},
-            )
 
     async def disable_override(self) -> str:
         """
@@ -606,10 +636,6 @@ class StateMachine:
 
             await self.log_event("OVERRIDE_DISABLED", {"previous_type": previous_type})
             await self._send_webhook("override.disabled", {"previous_type": previous_type})
-            await self._trigger_system_notification(
-                "manual_override_disabled",
-                {"previous_type": previous_type},
-            )
 
             return previous_type
 
@@ -675,9 +701,15 @@ class StateMachine:
                     logger.info("GenSlave connection restored")
                     await self.log_event("COMMUNICATION_RESTORED", {"latency_ms": latency_ms})
                     await self._send_webhook("communication.restored", {})
+                    relay_status = "ENABLED" if state.slave_relay_armed else "DISABLED"
+                    relay_warning = "" if state.slave_relay_armed else "WARNING: Generator relay is currently disabled."
                     await self._trigger_system_notification(
-                        "genslave_heartbeat_restored",
-                        {"latency_ms": latency_ms},
+                        "genslave_comm_restored",
+                        {
+                            "latency_ms": latency_ms,
+                            "relay_status": relay_status,
+                            "relay_warning": relay_warning,
+                        },
                     )
                 elif state.slave_connection_status == "unknown":
                     state.slave_connection_status = "connected"
@@ -704,9 +736,13 @@ class StateMachine:
                         "communication.lost",
                         {"missed_count": state.missed_heartbeat_count},
                     )
+                    from datetime import datetime
                     await self._trigger_system_notification(
-                        "genslave_heartbeat_lost",
-                        {"missed_count": state.missed_heartbeat_count},
+                        "genslave_comm_lost",
+                        {
+                            "missed_count": state.missed_heartbeat_count,
+                            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        },
                     )
 
             await db.commit()
