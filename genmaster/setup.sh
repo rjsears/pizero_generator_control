@@ -2866,6 +2866,14 @@ EOF
 generate_nginx_conf() {
     print_info "Generating nginx configuration..."
 
+    # Verify DOMAIN is set
+    if [ -z "${DOMAIN}" ]; then
+        print_error "DOMAIN variable is not set - cannot generate nginx.conf"
+        exit 1
+    fi
+
+    print_info "Configuring nginx for domain: ${DOMAIN}"
+
     mkdir -p "${SCRIPT_DIR}/nginx"
     mkdir -p "${SCRIPT_DIR}/nginx/ssl"
 
@@ -2874,6 +2882,9 @@ generate_nginx_conf() {
     for ip in $DEFAULT_INTERNAL_IP_RANGES; do
         internal_ips="${internal_ips}        $ip internal;\n"
     done
+
+    # Remove any existing nginx.conf to ensure clean generation
+    rm -f "${SCRIPT_DIR}/nginx/nginx.conf"
 
     cat > "${SCRIPT_DIR}/nginx/nginx.conf" << EOF
 # =============================================================================
@@ -3019,7 +3030,28 @@ EOF
 }
 EOF
 
-    print_success "nginx.conf generated"
+    # Verify nginx.conf was generated correctly
+    if [ ! -f "${SCRIPT_DIR}/nginx/nginx.conf" ]; then
+        print_error "Failed to create nginx.conf"
+        exit 1
+    fi
+
+    # Verify domain was substituted (should NOT contain placeholder)
+    if grep -q "YOUR_DOMAIN_HERE" "${SCRIPT_DIR}/nginx/nginx.conf"; then
+        print_error "nginx.conf generation failed - domain not substituted"
+        print_error "Expected domain: ${DOMAIN}"
+        print_error "File still contains YOUR_DOMAIN_HERE placeholder"
+        exit 1
+    fi
+
+    # Verify domain IS in the file
+    if ! grep -q "server_name ${DOMAIN}" "${SCRIPT_DIR}/nginx/nginx.conf"; then
+        print_error "nginx.conf generation failed - domain not found in config"
+        print_error "Expected: server_name ${DOMAIN}"
+        exit 1
+    fi
+
+    print_success "nginx.conf generated for ${DOMAIN}"
 }
 
 # =============================================================================
