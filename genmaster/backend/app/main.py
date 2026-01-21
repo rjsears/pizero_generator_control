@@ -49,6 +49,7 @@ from app.services.heartbeat import HeartbeatService
 from app.services.metrics_service import get_metrics_service
 from app.services.scheduler import SchedulerService
 from app.services.slave_client import SlaveClient
+from app.services.redis_cache import get_redis_cache
 from app.services.slave_status_service import get_slave_status_service
 from app.services.state_machine import StateMachine
 from app.services.webhook import WebhookService
@@ -194,6 +195,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # This ensures .env values (from setup.sh) are reflected in the database
         await sync_env_to_database()
 
+        # Initialize Redis cache (before services that use it)
+        redis_cache = get_redis_cache()
+        await redis_cache.connect()
+        logger.info(f"Redis cache initialized (connected: {redis_cache.is_connected})")
+
         # Initialize webhook service first (used by state machine)
         webhook_service = WebhookService()
         logger.info("Webhook service initialized")
@@ -322,6 +328,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if webhook_service:
             await webhook_service.close()
             logger.info("Webhook service closed")
+
+        # Disconnect Redis cache
+        redis_cache = get_redis_cache()
+        await redis_cache.disconnect()
+        logger.info("Redis cache disconnected")
 
         logger.info("GenMaster shutdown complete")
 

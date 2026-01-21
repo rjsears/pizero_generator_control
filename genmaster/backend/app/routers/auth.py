@@ -25,6 +25,7 @@ from app.schemas import (
     TokenResponse,
     UserResponse,
 )
+from app.services.redis_cache import cache_session, invalidate_user_sessions_cache
 from app.utils.auth import (
     create_access_token,
     generate_session_token,
@@ -71,6 +72,16 @@ async def login(
     )
     db.add(session)
     await db.commit()
+    await db.refresh(session)
+
+    # Cache session in Redis
+    await cache_session(
+        token=session.token,
+        user_id=user.id,
+        expires_at=expires_at.isoformat(),
+        created_at=session.created_at.isoformat(),
+        session_id=session.id,
+    )
 
     return LoginResponse(
         token=TokenResponse(
@@ -96,7 +107,10 @@ async def logout(
     """
     Logout current user by invalidating all their sessions.
     """
-    # Delete all sessions for this user
+    # Invalidate all sessions for this user in Redis cache
+    await invalidate_user_sessions_cache(current_user.id)
+
+    # Delete all sessions for this user from database
     result = await db.execute(
         select(Session).where(Session.user_id == current_user.id)
     )
