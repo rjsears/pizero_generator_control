@@ -232,3 +232,118 @@ class SlaveClient:
             Response indicating success/failure
         """
         return await self._request("POST", "/api/system/rotate-key", json={"new_key": new_key})
+
+    # =========================================================================
+    # Notification Management
+    # =========================================================================
+
+    async def get_notifications(self) -> SlaveResponse:
+        """
+        Get GenSlave notification configuration.
+
+        Returns:
+            Response with notification config (apprise_urls, configured, enabled).
+        """
+        return await self._request("GET", "/api/system/notifications")
+
+    async def set_notifications(self, apprise_urls: list[str]) -> SlaveResponse:
+        """
+        Update GenSlave Apprise notification URLs.
+
+        Args:
+            apprise_urls: List of Apprise URL strings.
+
+        Returns:
+            Response indicating success/failure.
+        """
+        logger.info(f"Updating GenSlave notification URLs: {len(apprise_urls)} URLs")
+        return await self._request(
+            "POST",
+            "/api/system/notifications",
+            json={"apprise_urls": apprise_urls},
+        )
+
+    async def get_notification_settings(self) -> SlaveResponse:
+        """
+        Get GenSlave notification cooldown settings.
+
+        Returns:
+            Response with cooldown settings (failsafe_cooldown_minutes,
+            restored_cooldown_minutes, last notification timestamps).
+        """
+        return await self._request("GET", "/api/system/notifications/settings")
+
+    async def set_notification_settings(
+        self,
+        failsafe_cooldown_minutes: Optional[int] = None,
+        restored_cooldown_minutes: Optional[int] = None,
+    ) -> SlaveResponse:
+        """
+        Update GenSlave notification cooldown settings.
+
+        Args:
+            failsafe_cooldown_minutes: Cooldown for failsafe notifications (1-60 min).
+            restored_cooldown_minutes: Cooldown for restored notifications (1-60 min).
+
+        Returns:
+            Response indicating success/failure.
+        """
+        payload = {}
+        if failsafe_cooldown_minutes is not None:
+            payload["failsafe_cooldown_minutes"] = failsafe_cooldown_minutes
+        if restored_cooldown_minutes is not None:
+            payload["restored_cooldown_minutes"] = restored_cooldown_minutes
+
+        logger.info(f"Updating GenSlave notification settings: {payload}")
+        return await self._request(
+            "POST",
+            "/api/system/notifications/settings",
+            json=payload,
+        )
+
+    async def test_notifications(self) -> SlaveResponse:
+        """
+        Send a test notification from GenSlave.
+
+        Returns:
+            Response indicating success/failure.
+        """
+        logger.info("Sending test notification request to GenSlave")
+        return await self._request("POST", "/api/system/notifications/test")
+
+    async def set_notifications_enabled(self, enabled: bool) -> SlaveResponse:
+        """
+        Enable or disable GenSlave notifications.
+
+        Args:
+            enabled: True to enable, False to disable.
+
+        Returns:
+            Response indicating success/failure.
+        """
+        state = "enabled" if enabled else "disabled"
+        logger.info(f"Setting GenSlave notifications {state}")
+        return await self._request(
+            "POST",
+            "/api/system/notifications/enable",
+            json={"enabled": enabled},
+        )
+
+    async def clear_notification_cooldown(
+        self, event_type: Optional[str] = None
+    ) -> SlaveResponse:
+        """
+        Clear GenSlave notification cooldown state.
+
+        Args:
+            event_type: "failsafe", "restored", or None for both.
+
+        Returns:
+            Response indicating success/failure.
+        """
+        logger.info(f"Clearing GenSlave notification cooldown: {event_type or 'all'}")
+        return await self._request(
+            "POST",
+            "/api/system/notifications/clear-cooldown",
+            json={"event_type": event_type},
+        )

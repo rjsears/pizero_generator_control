@@ -33,6 +33,7 @@ from app.routers import (
     exercise,
     generator,
     generator_info,
+    genslave,
     health,
     metrics,
     notifications,
@@ -379,6 +380,7 @@ app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
 app.include_router(generator_info.router, prefix="/api/generator-info", tags=["Generator Info"])
 app.include_router(exercise.router, prefix="/api/exercise", tags=["Exercise"])
 app.include_router(system_notifications.router, prefix="/api/system-notifications", tags=["System Notifications"])
+app.include_router(genslave.router, prefix="/api/genslave", tags=["GenSlave"])
 
 
 # Root status endpoint

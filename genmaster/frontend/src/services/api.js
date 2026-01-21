@@ -154,6 +154,14 @@ export const genslaveApi = {
   getFailsafeCached: () => api.get('/health/slave/cached/failsafe'),
   getSystemCached: () => api.get('/health/slave/cached/system'),
   refreshCache: () => api.post('/health/slave/cached/refresh'),
+  // Notification management (proxied to GenSlave)
+  getNotifications: () => api.get('/genslave/notifications'),
+  setNotifications: (appriseUrls) => api.post('/genslave/notifications', { apprise_urls: appriseUrls }),
+  getNotificationSettings: () => api.get('/genslave/notifications/settings'),
+  setNotificationSettings: (data) => api.post('/genslave/notifications/settings', data),
+  testNotifications: () => api.post('/genslave/notifications/test'),
+  setNotificationsEnabled: (enabled) => api.post('/genslave/notifications/enable', { enabled }),
+  clearNotificationCooldown: (eventType = null) => api.post('/genslave/notifications/clear-cooldown', { event_type: eventType }),
 }
 
 // GenMaster-specific: Schedule API
