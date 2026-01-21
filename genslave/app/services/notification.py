@@ -13,6 +13,7 @@
 
 import json
 import logging
+import time
 from typing import Optional
 
 import apprise
@@ -33,11 +34,23 @@ class NotificationService:
 
     Configuration is stored in the database and can be updated
     at runtime without container restarts.
+
+    Includes cooldown support to prevent notification flapping.
     """
 
     # Database keys
     DB_KEY = "apprise_urls"
     DB_ENABLED_KEY = "notifications_enabled"
+
+    # Cooldown settings keys
+    DB_FAILSAFE_COOLDOWN_KEY = "failsafe_cooldown_minutes"
+    DB_RESTORED_COOLDOWN_KEY = "restored_cooldown_minutes"
+    DB_LAST_FAILSAFE_SENT_KEY = "last_failsafe_notification_at"
+    DB_LAST_RESTORED_SENT_KEY = "last_restored_notification_at"
+
+    # Default cooldown values (in minutes)
+    DEFAULT_FAILSAFE_COOLDOWN = 5
+    DEFAULT_RESTORED_COOLDOWN = 5
 
     def __init__(self):
         self._apprise: Optional[apprise.Apprise] = None
@@ -150,6 +163,145 @@ class NotificationService:
             logger.error(f"Failed to set notification enabled state: {e}")
             return False
 
+    # =========================================================================
+    # Cooldown Settings
+    # =========================================================================
+
+    def get_cooldown_settings(self) -> dict:
+        """Get cooldown settings for notifications.
+
+        Returns:
+            Dictionary with cooldown settings:
+            - failsafe_cooldown_minutes: Cooldown for failsafe notifications
+            - restored_cooldown_minutes: Cooldown for restored notifications
+            - last_failsafe_notification_at: Unix timestamp of last failsafe notification
+            - last_restored_notification_at: Unix timestamp of last restored notification
+        """
+        failsafe_cooldown = db_service.get_setting(self.DB_FAILSAFE_COOLDOWN_KEY)
+        restored_cooldown = db_service.get_setting(self.DB_RESTORED_COOLDOWN_KEY)
+        last_failsafe = db_service.get_setting(self.DB_LAST_FAILSAFE_SENT_KEY)
+        last_restored = db_service.get_setting(self.DB_LAST_RESTORED_SENT_KEY)
+
+        return {
+            "failsafe_cooldown_minutes": int(failsafe_cooldown) if failsafe_cooldown else self.DEFAULT_FAILSAFE_COOLDOWN,
+            "restored_cooldown_minutes": int(restored_cooldown) if restored_cooldown else self.DEFAULT_RESTORED_COOLDOWN,
+            "last_failsafe_notification_at": int(last_failsafe) if last_failsafe else None,
+            "last_restored_notification_at": int(last_restored) if last_restored else None,
+        }
+
+    def set_cooldown_settings(
+        self,
+        failsafe_cooldown_minutes: Optional[int] = None,
+        restored_cooldown_minutes: Optional[int] = None,
+    ) -> bool:
+        """Update cooldown settings for notifications.
+
+        Args:
+            failsafe_cooldown_minutes: Cooldown period for failsafe notifications (minutes).
+            restored_cooldown_minutes: Cooldown period for restored notifications (minutes).
+
+        Returns:
+            True if successful.
+        """
+        try:
+            if failsafe_cooldown_minutes is not None:
+                # Minimum 1 minute, maximum 60 minutes
+                failsafe_cooldown_minutes = max(1, min(60, failsafe_cooldown_minutes))
+                db_service.set_setting(
+                    self.DB_FAILSAFE_COOLDOWN_KEY, str(failsafe_cooldown_minutes)
+                )
+                logger.info(f"Failsafe cooldown set to {failsafe_cooldown_minutes} minutes")
+
+            if restored_cooldown_minutes is not None:
+                # Minimum 1 minute, maximum 60 minutes
+                restored_cooldown_minutes = max(1, min(60, restored_cooldown_minutes))
+                db_service.set_setting(
+                    self.DB_RESTORED_COOLDOWN_KEY, str(restored_cooldown_minutes)
+                )
+                logger.info(f"Restored cooldown set to {restored_cooldown_minutes} minutes")
+
+            return True
+        except Exception as e:
+            logger.error(f"Failed to set cooldown settings: {e}")
+            return False
+
+    def _check_cooldown(self, event_type: str) -> tuple[bool, Optional[int]]:
+        """Check if a notification is within cooldown period.
+
+        Args:
+            event_type: Either "failsafe" or "restored".
+
+        Returns:
+            Tuple of (can_send, remaining_seconds).
+            - can_send: True if notification can be sent (not in cooldown).
+            - remaining_seconds: Seconds remaining in cooldown, or None if can send.
+        """
+        settings = self.get_cooldown_settings()
+        now = int(time.time())
+
+        if event_type == "failsafe":
+            cooldown_minutes = settings["failsafe_cooldown_minutes"]
+            last_sent = settings["last_failsafe_notification_at"]
+        elif event_type == "restored":
+            cooldown_minutes = settings["restored_cooldown_minutes"]
+            last_sent = settings["last_restored_notification_at"]
+        else:
+            # Unknown event type - allow sending
+            return (True, None)
+
+        if last_sent is None:
+            # Never sent before - allow
+            return (True, None)
+
+        cooldown_seconds = cooldown_minutes * 60
+        elapsed = now - last_sent
+        remaining = cooldown_seconds - elapsed
+
+        if remaining > 0:
+            # Still in cooldown
+            return (False, remaining)
+
+        # Cooldown expired - allow sending
+        return (True, None)
+
+    def _record_notification_sent(self, event_type: str) -> None:
+        """Record that a notification was sent.
+
+        Args:
+            event_type: Either "failsafe" or "restored".
+        """
+        now = str(int(time.time()))
+
+        if event_type == "failsafe":
+            db_service.set_setting(self.DB_LAST_FAILSAFE_SENT_KEY, now)
+        elif event_type == "restored":
+            db_service.set_setting(self.DB_LAST_RESTORED_SENT_KEY, now)
+
+    def clear_cooldown(self, event_type: Optional[str] = None) -> bool:
+        """Clear cooldown state for notifications.
+
+        This allows forcing a notification to be sent immediately.
+
+        Args:
+            event_type: "failsafe", "restored", or None for both.
+
+        Returns:
+            True if successful.
+        """
+        try:
+            if event_type is None or event_type == "failsafe":
+                db_service.set_setting(self.DB_LAST_FAILSAFE_SENT_KEY, "")
+                logger.info("Cleared failsafe notification cooldown")
+
+            if event_type is None or event_type == "restored":
+                db_service.set_setting(self.DB_LAST_RESTORED_SENT_KEY, "")
+                logger.info("Cleared restored notification cooldown")
+
+            return True
+        except Exception as e:
+            logger.error(f"Failed to clear cooldown: {e}")
+            return False
+
     async def send(
         self,
         title: str,
@@ -204,8 +356,17 @@ class NotificationService:
             timeout_seconds: The failsafe timeout that was exceeded.
 
         Returns:
-            True if notification was sent.
+            True if notification was sent, False if skipped (cooldown or disabled).
         """
+        # Check cooldown before sending
+        can_send, remaining = self._check_cooldown("failsafe")
+        if not can_send:
+            logger.info(
+                f"Failsafe notification skipped - cooldown active "
+                f"({remaining}s remaining)"
+            )
+            return False
+
         title = "GenSlave FAILSAFE TRIGGERED"
         body = (
             f"Generator relay has been turned OFF due to lost communication "
@@ -215,11 +376,17 @@ class NotificationService:
             f"when communication is restored."
         )
 
-        return await self.send(
+        result = await self.send(
             title=title,
             body=body,
             notify_type=apprise.NotifyType.FAILURE,
         )
+
+        # Record that we sent (or attempted to send) the notification
+        if result:
+            self._record_notification_sent("failsafe")
+
+        return result
 
     async def send_heartbeat_restored_alert(self) -> bool:
         """Send a notification when heartbeat is restored but relay needs re-arming.
@@ -228,8 +395,17 @@ class NotificationService:
         is restored, but the relay is still disarmed and needs manual re-arming.
 
         Returns:
-            True if notification was sent.
+            True if notification was sent, False if skipped (cooldown or disabled).
         """
+        # Check cooldown before sending
+        can_send, remaining = self._check_cooldown("restored")
+        if not can_send:
+            logger.info(
+                f"Restored notification skipped - cooldown active "
+                f"({remaining}s remaining)"
+            )
+            return False
+
         title = "GenSlave Communication Restored"
         body = (
             "Communication with GenMaster has been restored.\n\n"
@@ -238,11 +414,17 @@ class NotificationService:
             "resume generator control."
         )
 
-        return await self.send(
+        result = await self.send(
             title=title,
             body=body,
             notify_type=apprise.NotifyType.WARNING,
         )
+
+        # Record that we sent (or attempted to send) the notification
+        if result:
+            self._record_notification_sent("restored")
+
+        return result
 
     async def send_test(self) -> bool:
         """Send a test notification.

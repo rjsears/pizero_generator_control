@@ -356,6 +356,189 @@
         </Card>
       </div>
 
+      <!-- Notification Settings Card -->
+      <Card title="Notification Settings" subtitle="Configure GenSlave failsafe notifications (Apprise)">
+        <div class="space-y-6">
+          <!-- Loading state -->
+          <div v-if="loadingNotifications" class="text-center py-4">
+            <ArrowPathIcon class="h-6 w-6 animate-spin mx-auto text-primary" />
+            <p class="text-sm text-muted mt-2">Loading notification settings...</p>
+          </div>
+
+          <template v-else>
+            <!-- Enable/Disable Toggle -->
+            <div class="flex items-center justify-between p-4 rounded-lg bg-surface-hover">
+              <div>
+                <h4 class="text-sm font-medium text-primary">Notifications Enabled</h4>
+                <p class="text-xs text-muted mt-1">
+                  When enabled, GenSlave sends notifications on failsafe events
+                </p>
+              </div>
+              <button
+                @click="toggleNotificationsEnabled"
+                :disabled="savingNotificationEnabled"
+                :class="[
+                  'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+                  notificationConfig.enabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                ]"
+              >
+                <span
+                  :class="[
+                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                    notificationConfig.enabled ? 'translate-x-5' : 'translate-x-0'
+                  ]"
+                />
+              </button>
+            </div>
+
+            <!-- Apprise URLs -->
+            <div class="p-4 rounded-lg bg-surface-hover">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <h4 class="text-sm font-medium text-primary">Notification Services (Apprise URLs)</h4>
+                  <p class="text-xs text-muted mt-1">
+                    Configure notification endpoints -
+                    <a href="https://github.com/caronc/apprise/wiki" target="_blank" class="text-blue-500 hover:underline">
+                      See Apprise docs
+                    </a>
+                  </p>
+                </div>
+                <span :class="['text-xs px-2 py-1 rounded-full', notificationConfig.configured ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500']">
+                  {{ notificationConfig.apprise_urls?.length || 0 }} configured
+                </span>
+              </div>
+
+              <!-- URL List -->
+              <div v-if="editableAppriseUrls.length" class="space-y-2 mb-3">
+                <div
+                  v-for="(url, index) in editableAppriseUrls"
+                  :key="index"
+                  class="flex items-center gap-2"
+                >
+                  <input
+                    v-model="editableAppriseUrls[index]"
+                    type="text"
+                    :placeholder="getUrlPlaceholder(index)"
+                    class="input flex-1 font-mono text-sm"
+                  />
+                  <button
+                    @click="removeAppriseUrl(index)"
+                    class="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 rounded"
+                    title="Remove URL"
+                  >
+                    <TrashIcon class="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Add URL Button -->
+              <button
+                @click="addAppriseUrl"
+                class="btn-secondary text-sm flex items-center gap-1"
+              >
+                <PlusIcon class="h-4 w-4" />
+                Add Notification URL
+              </button>
+
+              <!-- Save URLs Button -->
+              <div v-if="appriseUrlsChanged" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  @click="saveAppriseUrls"
+                  :disabled="savingAppriseUrls"
+                  class="btn-primary flex items-center gap-2"
+                >
+                  <ArrowPathIcon v-if="savingAppriseUrls" class="h-4 w-4 animate-spin" />
+                  <CheckCircleIcon v-else class="h-4 w-4" />
+                  Save Notification URLs
+                </button>
+              </div>
+            </div>
+
+            <!-- Cooldown Settings -->
+            <div class="p-4 rounded-lg bg-surface-hover">
+              <h4 class="text-sm font-medium text-primary mb-3">Cooldown Settings</h4>
+              <p class="text-xs text-muted mb-4">
+                Prevent notification flapping by setting minimum time between repeated notifications
+              </p>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-secondary mb-1">
+                    Failsafe Cooldown (minutes)
+                  </label>
+                  <input
+                    v-model.number="cooldownSettings.failsafe_cooldown_minutes"
+                    type="number"
+                    min="1"
+                    max="60"
+                    class="input w-full"
+                  />
+                  <p class="text-xs text-muted mt-1">
+                    Last sent: {{ formatCooldownTime(cooldownSettings.last_failsafe_notification_at) }}
+                  </p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-secondary mb-1">
+                    Restored Cooldown (minutes)
+                  </label>
+                  <input
+                    v-model.number="cooldownSettings.restored_cooldown_minutes"
+                    type="number"
+                    min="1"
+                    max="60"
+                    class="input w-full"
+                  />
+                  <p class="text-xs text-muted mt-1">
+                    Last sent: {{ formatCooldownTime(cooldownSettings.last_restored_notification_at) }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-3 mt-4">
+                <button
+                  @click="saveCooldownSettings"
+                  :disabled="savingCooldownSettings"
+                  class="btn-primary flex items-center gap-2"
+                >
+                  <ArrowPathIcon v-if="savingCooldownSettings" class="h-4 w-4 animate-spin" />
+                  <CheckCircleIcon v-else class="h-4 w-4" />
+                  Save Cooldown Settings
+                </button>
+                <button
+                  @click="clearAllCooldowns"
+                  :disabled="clearingCooldown"
+                  class="btn-secondary flex items-center gap-2"
+                  title="Clear cooldown timers to allow immediate notifications"
+                >
+                  <ArrowPathIcon v-if="clearingCooldown" class="h-4 w-4 animate-spin" />
+                  <ClockIcon v-else class="h-4 w-4" />
+                  Clear Cooldowns
+                </button>
+              </div>
+            </div>
+
+            <!-- Test Notification -->
+            <div class="flex items-center justify-between p-4 rounded-lg bg-surface-hover">
+              <div>
+                <h4 class="text-sm font-medium text-primary">Test Notification</h4>
+                <p class="text-xs text-muted mt-1">
+                  Send a test message to all configured notification services
+                </p>
+              </div>
+              <button
+                @click="sendTestNotification"
+                :disabled="sendingTestNotification || !notificationConfig.configured"
+                class="btn-secondary flex items-center gap-2"
+              >
+                <ArrowPathIcon v-if="sendingTestNotification" class="h-4 w-4 animate-spin" />
+                <BellIcon v-else class="h-4 w-4" />
+                Send Test
+              </button>
+            </div>
+          </template>
+        </div>
+      </Card>
+
       <!-- Connection Settings Card -->
       <Card title="Connection Settings" subtitle="Configure GenSlave communication and network">
         <div class="space-y-6">
@@ -520,7 +703,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useNotificationStore } from '@/stores/notifications'
 import api, { genslaveApi, configApi } from '@/services/api'
 import Card from '@/components/common/Card.vue'
@@ -537,6 +720,10 @@ import {
   EyeIcon,
   EyeSlashIcon,
   KeyIcon,
+  BellIcon,
+  TrashIcon,
+  PlusIcon,
+  ClockIcon,
 } from '@heroicons/vue/24/outline'
 
 const notificationStore = useNotificationStore()
@@ -578,6 +765,27 @@ const apiSecret = ref('')  // Current API secret from database
 const newApiSecret = ref('')  // New API secret to set
 const showApiSecret = ref(false)  // Toggle visibility
 const savingApiSecret = ref(false)
+
+// Notification management
+const loadingNotifications = ref(false)
+const notificationConfig = ref({
+  apprise_urls: [],
+  configured: false,
+  enabled: false,
+})
+const editableAppriseUrls = ref([])  // Editable copy of URLs
+const originalAppriseUrls = ref([])  // Track original for change detection
+const cooldownSettings = ref({
+  failsafe_cooldown_minutes: 5,
+  restored_cooldown_minutes: 5,
+  last_failsafe_notification_at: null,
+  last_restored_notification_at: null,
+})
+const savingAppriseUrls = ref(false)
+const savingCooldownSettings = ref(false)
+const savingNotificationEnabled = ref(false)
+const sendingTestNotification = ref(false)
+const clearingCooldown = ref(false)
 
 // Polling
 let pollInterval = null
@@ -760,6 +968,160 @@ async function copyApiSecret() {
   }
 }
 
+// =========================================================================
+// Notification Management
+// =========================================================================
+
+// Load notification configuration from GenSlave
+async function loadNotificationConfig() {
+  loadingNotifications.value = true
+  try {
+    const [configRes, settingsRes] = await Promise.all([
+      genslaveApi.getNotifications().catch((e) => {
+        console.warn('Failed to get GenSlave notifications:', e)
+        return { data: null }
+      }),
+      genslaveApi.getNotificationSettings().catch((e) => {
+        console.warn('Failed to get GenSlave notification settings:', e)
+        return { data: null }
+      }),
+    ])
+
+    if (configRes.data) {
+      notificationConfig.value = configRes.data
+      // Initialize editable URLs from masked URLs (user will replace with real ones)
+      editableAppriseUrls.value = [...(configRes.data.apprise_urls || [])]
+      originalAppriseUrls.value = [...(configRes.data.apprise_urls || [])]
+    }
+
+    if (settingsRes.data) {
+      cooldownSettings.value = settingsRes.data
+    }
+  } catch (error) {
+    console.error('Failed to load notification config:', error)
+  } finally {
+    loadingNotifications.value = false
+  }
+}
+
+// Toggle notifications enabled/disabled
+async function toggleNotificationsEnabled() {
+  savingNotificationEnabled.value = true
+  const newState = !notificationConfig.value.enabled
+  try {
+    await genslaveApi.setNotificationsEnabled(newState)
+    notificationConfig.value.enabled = newState
+    notificationStore.success(`GenSlave notifications ${newState ? 'enabled' : 'disabled'}`)
+  } catch (error) {
+    notificationStore.error(`Failed to ${newState ? 'enable' : 'disable'} notifications`)
+  } finally {
+    savingNotificationEnabled.value = false
+  }
+}
+
+// Add a new Apprise URL field
+function addAppriseUrl() {
+  editableAppriseUrls.value.push('')
+}
+
+// Remove an Apprise URL
+function removeAppriseUrl(index) {
+  editableAppriseUrls.value.splice(index, 1)
+}
+
+// Get placeholder text for URL input
+function getUrlPlaceholder(index) {
+  const examples = [
+    'tgram://bottoken/chatid',
+    'slack://token/channel',
+    'discord://webhook_id/token',
+    'mailto://user:pass@gmail.com',
+  ]
+  return examples[index % examples.length]
+}
+
+// Check if Apprise URLs have changed
+const appriseUrlsChanged = computed(() => {
+  const current = editableAppriseUrls.value.filter(u => u.trim())
+  const original = originalAppriseUrls.value
+  if (current.length !== original.length) return true
+  return current.some((url, i) => url !== original[i])
+})
+
+// Save Apprise URLs to GenSlave
+async function saveAppriseUrls() {
+  savingAppriseUrls.value = true
+  try {
+    // Filter out empty URLs
+    const urls = editableAppriseUrls.value.filter(u => u.trim())
+    await genslaveApi.setNotifications(urls)
+    originalAppriseUrls.value = [...urls]
+    editableAppriseUrls.value = [...urls]
+    notificationConfig.value.configured = urls.length > 0
+    notificationStore.success('Notification URLs saved to GenSlave')
+    // Reload to get masked URLs
+    await loadNotificationConfig()
+  } catch (error) {
+    notificationStore.error('Failed to save notification URLs')
+  } finally {
+    savingAppriseUrls.value = false
+  }
+}
+
+// Save cooldown settings
+async function saveCooldownSettings() {
+  savingCooldownSettings.value = true
+  try {
+    await genslaveApi.setNotificationSettings({
+      failsafe_cooldown_minutes: cooldownSettings.value.failsafe_cooldown_minutes,
+      restored_cooldown_minutes: cooldownSettings.value.restored_cooldown_minutes,
+    })
+    notificationStore.success('Cooldown settings saved')
+  } catch (error) {
+    notificationStore.error('Failed to save cooldown settings')
+  } finally {
+    savingCooldownSettings.value = false
+  }
+}
+
+// Clear all cooldowns
+async function clearAllCooldowns() {
+  clearingCooldown.value = true
+  try {
+    await genslaveApi.clearNotificationCooldown(null)  // null = clear both
+    cooldownSettings.value.last_failsafe_notification_at = null
+    cooldownSettings.value.last_restored_notification_at = null
+    notificationStore.success('Notification cooldowns cleared')
+  } catch (error) {
+    notificationStore.error('Failed to clear cooldowns')
+  } finally {
+    clearingCooldown.value = false
+  }
+}
+
+// Send test notification
+async function sendTestNotification() {
+  sendingTestNotification.value = true
+  try {
+    const response = await genslaveApi.testNotifications()
+    if (response.data?.success) {
+      notificationStore.success(`Test notification sent to ${response.data.configured_services || 0} services`)
+    } else {
+      notificationStore.warning(response.data?.message || 'Test notification may have failed')
+    }
+  } catch (error) {
+    notificationStore.error('Failed to send test notification')
+  } finally {
+    sendingTestNotification.value = false
+  }
+}
+
+// Format cooldown timestamp
+function formatCooldownTime(timestamp) {
+  if (!timestamp) return 'Never'
+  return new Date(timestamp * 1000).toLocaleString()
+}
+
 // Format seconds to human readable
 function formatSeconds(seconds) {
   if (!seconds || seconds <= 0) return '0s'
@@ -773,6 +1135,7 @@ function formatSeconds(seconds) {
 // Lifecycle
 onMounted(() => {
   loadSlaveInfo()
+  loadNotificationConfig()
   // Poll every 30 seconds
   pollInterval = setInterval(loadSlaveInfo, 30000)
 })

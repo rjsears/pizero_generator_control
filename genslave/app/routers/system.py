@@ -160,6 +160,55 @@ class NotificationEnableRequest(BaseModel):
     enabled: bool = Field(description="True to enable, False to disable notifications")
 
 
+class NotificationCooldownSettings(BaseModel):
+    """Notification cooldown settings."""
+
+    failsafe_cooldown_minutes: int = Field(
+        default=5,
+        ge=1,
+        le=60,
+        description="Cooldown period for failsafe notifications (1-60 minutes)",
+    )
+    restored_cooldown_minutes: int = Field(
+        default=5,
+        ge=1,
+        le=60,
+        description="Cooldown period for restored notifications (1-60 minutes)",
+    )
+    last_failsafe_notification_at: Optional[int] = Field(
+        None, description="Unix timestamp of last failsafe notification"
+    )
+    last_restored_notification_at: Optional[int] = Field(
+        None, description="Unix timestamp of last restored notification"
+    )
+
+
+class NotificationCooldownUpdateRequest(BaseModel):
+    """Request to update notification cooldown settings."""
+
+    failsafe_cooldown_minutes: Optional[int] = Field(
+        None,
+        ge=1,
+        le=60,
+        description="Cooldown period for failsafe notifications (1-60 minutes)",
+    )
+    restored_cooldown_minutes: Optional[int] = Field(
+        None,
+        ge=1,
+        le=60,
+        description="Cooldown period for restored notifications (1-60 minutes)",
+    )
+
+
+class NotificationClearCooldownRequest(BaseModel):
+    """Request to clear notification cooldown."""
+
+    event_type: Optional[str] = Field(
+        None,
+        description="Event type to clear: 'failsafe', 'restored', or null for both",
+    )
+
+
 # =========================================================================
 # Endpoints
 # =========================================================================
@@ -741,6 +790,105 @@ async def set_notifications_enabled(
 
     except Exception as e:
         logger.error(f"Error setting notification state: {e}")
+        return NotificationResponse(
+            success=False,
+            message=f"Error: {str(e)}",
+        )
+
+
+@router.get("/notifications/settings", response_model=NotificationCooldownSettings)
+async def get_notification_settings() -> NotificationCooldownSettings:
+    """
+    Get notification cooldown settings.
+
+    Returns the current cooldown configuration for failsafe and restored
+    notifications, including timestamps of last notifications sent.
+    """
+    settings = notification_service.get_cooldown_settings()
+    return NotificationCooldownSettings(**settings)
+
+
+@router.post("/notifications/settings", response_model=NotificationResponse)
+async def update_notification_settings(
+    request: NotificationCooldownUpdateRequest,
+) -> NotificationResponse:
+    """
+    Update notification cooldown settings.
+
+    Allows configuring cooldown periods to prevent notification flapping
+    when communication with GenMaster is unstable.
+
+    - failsafe_cooldown_minutes: How long to wait between failsafe notifications
+    - restored_cooldown_minutes: How long to wait between restored notifications
+    """
+    try:
+        success = notification_service.set_cooldown_settings(
+            failsafe_cooldown_minutes=request.failsafe_cooldown_minutes,
+            restored_cooldown_minutes=request.restored_cooldown_minutes,
+        )
+
+        if success:
+            changes = []
+            if request.failsafe_cooldown_minutes is not None:
+                changes.append(f"failsafe={request.failsafe_cooldown_minutes}min")
+            if request.restored_cooldown_minutes is not None:
+                changes.append(f"restored={request.restored_cooldown_minutes}min")
+
+            return NotificationResponse(
+                success=True,
+                message=f"Cooldown settings updated: {', '.join(changes) or 'no changes'}",
+            )
+        else:
+            return NotificationResponse(
+                success=False,
+                message="Failed to update cooldown settings",
+            )
+
+    except Exception as e:
+        logger.error(f"Error updating notification settings: {e}")
+        return NotificationResponse(
+            success=False,
+            message=f"Error: {str(e)}",
+        )
+
+
+@router.post("/notifications/clear-cooldown", response_model=NotificationResponse)
+async def clear_notification_cooldown(
+    request: NotificationClearCooldownRequest,
+) -> NotificationResponse:
+    """
+    Clear notification cooldown state.
+
+    This allows forcing a notification to be sent immediately,
+    bypassing the cooldown period. Useful for testing or when
+    you need to ensure a notification is sent.
+
+    - event_type: "failsafe", "restored", or null/omit for both
+    """
+    try:
+        event_type = request.event_type
+        if event_type and event_type not in ("failsafe", "restored"):
+            return NotificationResponse(
+                success=False,
+                message="Invalid event_type. Use 'failsafe', 'restored', or null for both.",
+            )
+
+        success = notification_service.clear_cooldown(event_type)
+
+        if success:
+            cleared = event_type or "all"
+            return NotificationResponse(
+                success=True,
+                message=f"Cooldown cleared for {cleared} notifications",
+            )
+        else:
+            return NotificationResponse(
+                success=False,
+                message="Failed to clear cooldown",
+            )
+
+    except Exception as e:
+        logger.error(f"Error clearing notification cooldown: {e}")
         return NotificationResponse(
             success=False,
             message=f"Error: {str(e)}",
