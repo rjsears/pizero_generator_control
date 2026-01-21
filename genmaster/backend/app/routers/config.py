@@ -17,6 +17,7 @@ from sqlalchemy.future import select
 from app.dependencies import AdminUser, DbSession
 from app.models import Config, SystemState
 from app.schemas import ConfigResponse, ConfigUpdateRequest
+from app.services.redis_cache import invalidate_config_cache
 
 router = APIRouter()
 
@@ -118,6 +119,9 @@ async def update_config(
 
     await db.commit()
     await db.refresh(config)
+
+    # Invalidate Redis cache so services pick up new config
+    await invalidate_config_cache()
 
     return ConfigResponse(
         heartbeat_interval_seconds=config.heartbeat_interval_seconds,

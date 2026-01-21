@@ -21,6 +21,9 @@ asyncpg==0.29.0
 psycopg2-binary==2.9.9
 alembic==1.13.1
 
+# Redis Cache
+redis[hiredis]==5.0.1
+
 # GPIO (with mock support for non-Pi, lgpio backend for Pi 5)
 gpiozero==2.0.1
 rpi-lgpio==0.6; platform_machine == "aarch64"

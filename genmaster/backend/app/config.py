@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     database_password: str = "change-me"
     database_name: str = "genmaster"
 
+    # Redis Cache
+    redis_url: str = "redis://redis:6379/0"
+    redis_config_ttl: int = 300  # 5 minutes TTL for config cache
+
     @property
     def database_url(self) -> str:
         """Construct async PostgreSQL URL for asyncpg."""

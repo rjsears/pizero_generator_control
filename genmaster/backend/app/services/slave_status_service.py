@@ -18,34 +18,24 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from app.config import settings
+from app.services.redis_cache import get_cached_config
 from app.services.slave_client import SlaveClient
 
 logger = logging.getLogger(__name__)
 
 
-async def _get_config_from_db():
-    """Get config from database."""
-    from app.database import AsyncSessionLocal
-    from app.models import Config
-    from sqlalchemy.future import select
-
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Config).where(Config.id == 1))
-        return result.scalar_one_or_none()
-
-
 async def _create_slave_client() -> SlaveClient:
-    """Create a SlaveClient with config from database."""
-    config = await _get_config_from_db()
+    """Create a SlaveClient with config from Redis cache (or database fallback)."""
+    config = await get_cached_config()
 
     if config:
-        if config.genslave_ip:
-            base_url = f"http://{config.genslave_ip}:8001"
+        if config.get("genslave_ip"):
+            base_url = f"http://{config['genslave_ip']}:8001"
         else:
-            base_url = config.slave_api_url
+            base_url = config.get("slave_api_url", settings.slave_api_url)
         return SlaveClient(
             base_url=base_url,
-            secret=config.slave_api_secret,
+            secret=config.get("slave_api_secret", settings.slave_api_secret),
             timeout=5.0,  # Short timeout for status polling
         )
     else:

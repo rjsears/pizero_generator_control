@@ -16,6 +16,7 @@ from fastapi import APIRouter
 from app.dependencies import AdminUser, DbSession
 from app.models import GeneratorInfo
 from app.schemas import GeneratorInfoResponse, GeneratorInfoUpdate
+from app.services.redis_cache import invalidate_generator_info_cache
 
 router = APIRouter()
 
@@ -69,6 +70,9 @@ async def update_generator_info(
 
     await db.commit()
     await db.refresh(info)
+
+    # Invalidate Redis cache so services pick up new values
+    await invalidate_generator_info_cache()
 
     return GeneratorInfoResponse(
         manufacturer=info.manufacturer,
