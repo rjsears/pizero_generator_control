@@ -1,1226 +1,491 @@
 #!/bin/bash
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# GenSlave Docker Setup Script for Pi Zero
 #
-# GenSlave Setup Script
-# Generator Control System - Slave Controller Installation
+# Part of the "RPi Generator Control" suite
+# Version 1.0.0 - January 17th, 2026
 #
-# This script provides a lightweight native installation for GenSlave on Pi Zero 2W.
-# It installs Python dependencies and configures systemd for auto-start.
+# This script sets up GenSlave using a pre-built Docker image
+# No local compilation required - just pull and run!
 #
-# Key features:
-# - Native Python installation (no Docker to save RAM)
-# - SQLite database (file-based, zero overhead)
-# - Systemd service management
-# - Tailscale VPN configuration
-# - Hardware validation for Automation Hat Mini
+# Self-contained: No GitHub downloads required
 #
-# Usage:
-#   Interactive:  ./setup.sh
-#   Preconfig:    ./setup.sh --preconfig /path/to/preconfig.conf
-#   Set API key:  ./setup.sh --setmasterapi YOUR_API_SECRET
-#
-# Author: rjsears
-# License: MIT
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-set -o pipefail
+set -e
 
-# =============================================================================
-# Script Configuration
-# =============================================================================
-SCRIPT_VERSION="1.0.0"
-SCRIPT_NAME="GenSlave Setup"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Configuration
+IMAGE_NAME="rjsears/pizero_generator_control:genslave"
 INSTALL_DIR="/opt/genslave"
 
-# Service user - detect automatically or use pi as fallback
-# Priority: SUDO_USER (if running via sudo) > pi user (if exists) > root
-if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
-    SERVICE_USER="$SUDO_USER"
-elif id -u pi &>/dev/null; then
-    SERVICE_USER="pi"
-else
-    # Running as root directly or no pi user
-    SERVICE_USER="root"
-fi
-SERVICE_GROUP="$SERVICE_USER"
-CONFIG_FILE="${INSTALL_DIR}/.env"
-STATE_FILE="${INSTALL_DIR}/.setup_state"
-
-# Python version
-PYTHON_VERSION="3.11"
-
-# =============================================================================
-# Color Definitions
-# =============================================================================
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
-WHITE='\033[1;37m'
-GRAY='\033[0;90m'
-DIM='\033[2m'
-BOLD='\033[1m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# =============================================================================
-# Global Variables
-# =============================================================================
-PRECONFIG_FILE=""
-DEBUG_MODE=false
+# Logging functions
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Installation state
-STATE_SYSTEM_PREPARED=false
-STATE_APP_DEPLOYED=false
-STATE_PYTHON_INSTALLED=false
-STATE_HARDWARE_VALIDATED=false
-STATE_TAILSCALE_CONFIGURED=false
-STATE_ENV_CONFIGURED=false
-STATE_SERVICE_INSTALLED=false
-
-# Configuration values
-ENABLE_TAILSCALE=false
-TAILSCALE_AUTHKEY=""
-TAILSCALE_HOSTNAME="genslave"
-API_SECRET=""
-MASTER_API_URL=""
-WEBHOOK_BASE_URL=""
-WEBHOOK_SECRET=""
-
-# =============================================================================
-# Utility Functions
-# =============================================================================
-
-print_header() {
-    clear
+print_banner() {
     echo -e "${CYAN}"
-    echo "╔═════════════════════════════════════════════════════════════════════════════════╗"
-    echo "║                                                                                 ║"
-    echo "║   ██████╗ ███████╗███╗   ██╗███████╗██╗      █████╗ ██╗   ██╗███████╗           ║"
-    echo "║  ██╔════╝ ██╔════╝████╗  ██║██╔════╝██║     ██╔══██╗██║   ██║██╔════╝           ║"
-    echo "║  ██║  ███╗█████╗  ██╔██╗ ██║███████╗██║     ███████║██║   ██║█████╗             ║"
-    echo "║  ██║   ██║██╔══╝  ██║╚██╗██║╚════██║██║     ██╔══██║╚██╗ ██╔╝██╔══╝             ║"
-    echo "║  ╚██████╔╝███████╗██║ ╚████║███████║███████╗██║  ██║ ╚████╔╝ ███████╗           ║"
-    echo "║   ╚═════╝ ╚══════╝╚═╝  ╚═══╝╚══════╝╚══════╝╚═╝  ╚═╝  ╚═══╝  ╚══════╝           ║"
-    echo "║                                                                                 ║"
-    echo "║                   Generator Control System - Slave Setup                        ║"
-    echo "║                              Version ${SCRIPT_VERSION}                                      ║"
-    echo "║                                                                                 ║"
-    echo "╚═════════════════════════════════════════════════════════════════════════════════╝"
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║           GenSlave Docker Setup for Pi Zero               ║"
+    echo "║              Pre-built Image Installation                 ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
-    echo ""
 }
 
-print_section() {
-    local title="$1"
-    echo ""
-    echo -e "${BLUE}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${BLUE}│${NC} ${WHITE}${BOLD}$title${NC}"
-    echo -e "${BLUE}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
-}
-
-print_subsection() {
-    echo ""
-    echo -e "${GRAY}───────────────────────────────────────────────────────────────────────────────${NC}"
-    echo ""
-}
-
-print_step() {
-    local step_num="$1"
-    local step_desc="$2"
-    echo -e "  ${CYAN}[${step_num}]${NC} ${step_desc}"
-}
-
-print_success() { echo -e "  ${GREEN}✓${NC} $1"; }
-print_warning() { echo -e "  ${YELLOW}⚠${NC} $1"; }
-print_error() { echo -e "  ${RED}✗${NC} $1"; }
-print_info() { echo -e "  ${BLUE}ℹ${NC} $1"; }
-
-confirm() {
-    local prompt="$1"
-    local default="${2:-n}"
-    local yn_prompt
-    if [ "$default" = "y" ]; then
-        yn_prompt="[Y/n]"
-    else
-        yn_prompt="[y/N]"
+# Check if running as root
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        log_error "This script must be run as root (use sudo)"
+        exit 1
     fi
+}
+
+# Check if this is a Raspberry Pi
+check_pi() {
+    if [[ ! -f /proc/device-tree/model ]]; then
+        log_warn "Cannot detect Raspberry Pi model"
+        return
+    fi
+
+    PI_MODEL=$(tr -d '\0' < /proc/device-tree/model)
+    log_info "Detected: $PI_MODEL"
+
+    if [[ "$PI_MODEL" != *"Zero"* ]]; then
+        log_warn "This script is optimized for Pi Zero. Detected: $PI_MODEL"
+        read -p "Continue anyway? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+    fi
+}
+
+# Install Docker if not present
+install_docker() {
+    if command -v docker &>/dev/null; then
+        log_info "Docker already installed: $(docker --version)"
+        return
+    fi
+
+    log_info "Installing Docker from Debian repos..."
+
+    # Install Docker from Debian's official repos
+    # (Docker's repos don't support trixie yet)
+    apt-get update
+    apt-get install -y docker.io
+
+    # Add current user to docker group (if not root)
+    if [[ -n "$SUDO_USER" ]]; then
+        usermod -aG docker "$SUDO_USER"
+        log_info "Added $SUDO_USER to docker group"
+    fi
+
+    # Enable and start Docker
+    systemctl enable docker
+    systemctl start docker
+
+    log_success "Docker installed successfully"
+}
+
+# Install Docker Compose
+install_compose() {
+    if docker-compose version &>/dev/null; then
+        log_info "Docker Compose already installed: $(docker-compose version)"
+        return
+    fi
+
+    log_info "Installing Docker Compose..."
+
+    # Install docker-compose from Debian repos
+    apt-get install -y docker-compose
+
+    log_success "Docker Compose installed"
+}
+
+# Create installation directory
+setup_directories() {
+    log_info "Setting up directories..."
+
+    mkdir -p "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
+
+    log_success "Created $INSTALL_DIR"
+}
+
+# Create docker-compose.yaml (embedded - no download needed)
+create_compose_file() {
+    log_info "Creating docker-compose.yaml..."
+
+    cat > "$INSTALL_DIR/docker-compose.yaml" << 'COMPOSE_EOF'
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# GenSlave Docker Compose
+#
+# Part of the "RPi Generator Control" suite
+# Version 1.0.0 - January 17th, 2026
+#
+# Run on Pi Zero: docker-compose up -d
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+services:
+  genslave:
+    image: rjsears/pizero_generator_control:genslave
+    container_name: genslave
+    restart: unless-stopped
+
+    # Privileged mode required for GPIO access
+    # Alternatively, use device mappings below
+    privileged: true
+
+    # Device mappings for GPIO (alternative to privileged)
+    # devices:
+    #   - /dev/gpiomem:/dev/gpiomem
+    #   - /dev/mem:/dev/mem
+    #   - /dev/i2c-1:/dev/i2c-1
+
+    # Use host network for easy access and Tailscale compatibility
+    network_mode: host
+
+    # Environment variables
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8001
+      - LOG_LEVEL=INFO
+      - FAILSAFE_TIMEOUT_SECONDS=30
+      - MOCK_HAT_MODE=false
+      - GENSLAVE_API_SECRET=${GENSLAVE_API_SECRET:-}
+      - APPRISE_URLS=${APPRISE_URLS:-}
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+
+    # Persist data and logs
+    volumes:
+      - genslave_data:/opt/genslave/data
+      - genslave_logs:/opt/genslave/logs
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  genslave_data:
+  genslave_logs:
+COMPOSE_EOF
+
+    log_success "Created docker-compose.yaml"
+}
+
+# Create .env file for configuration
+create_env_file() {
+    if [[ -f "$INSTALL_DIR/.env" ]]; then
+        log_info "Environment file already exists, keeping existing configuration"
+        return
+    fi
+
+    log_info "Creating environment configuration..."
+
+    # Prompt for API secret (required)
+    echo ""
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║              API Secret Configuration                     ║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}The API secret is required for secure communication with GenMaster.${NC}"
+    echo -e "${YELLOW}You must copy this value from your GenMaster configuration.${NC}"
+    echo ""
+    echo -e "In GenMaster, find the value of ${CYAN}SLAVE_API_SECRET${NC} in your .env file"
+    echo -e "or generate a new key in GenMaster's Settings > GenSlave Configuration."
+    echo ""
+
     while true; do
-        echo -en "  ${MAGENTA}?${NC} ${prompt} ${yn_prompt}: "
-        read -r response
-        response=${response:-$default}
-        case "${response,,}" in
-            y|yes) return 0 ;;
-            n|no) return 1 ;;
-            *) echo -e "  ${RED}Please answer yes or no.${NC}" ;;
-        esac
-    done
-}
+        read -p "Enter the API secret from GenMaster: " API_SECRET_INPUT
 
-prompt_input() {
-    local prompt="$1"
-    local default="$2"
-    local var_name="$3"
-    local display_default=""
-    if [ -n "$default" ]; then
-        display_default=" [${default}]"
-    fi
-    echo -en "  ${MAGENTA}?${NC} ${prompt}${display_default}: "
-    read -r input
-    input=${input:-$default}
-    eval "$var_name=\"$input\""
-}
+        # Validate minimum length (16 characters)
+        if [[ ${#API_SECRET_INPUT} -lt 16 ]]; then
+            log_error "API secret must be at least 16 characters long"
+            continue
+        fi
 
-# Read sensitive input with masking (shows first 10 chars, rest as *)
-read_masked_token() {
-    MASKED_INPUT=""
-    local char=""
-    local display=""
+        # Confirm the key
+        echo ""
+        echo -e "API Secret: ${CYAN}${API_SECRET_INPUT}${NC}"
+        read -p "Is this correct? (Y/n) " -n 1 -r
+        echo ""
 
-    # Disable echo and enable raw mode
-    stty -echo
-
-    while IFS= read -r -n1 char; do
-        # Check for Enter (empty char after read -n1)
-        if [[ -z "$char" ]]; then
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             break
         fi
-
-        # Check for backspace (ASCII 127 or 8)
-        if [[ "$char" == $'\x7f' ]] || [[ "$char" == $'\x08' ]]; then
-            if [[ -n "$MASKED_INPUT" ]]; then
-                # Remove last character from input
-                MASKED_INPUT="${MASKED_INPUT%?}"
-                # Clear line and redisplay
-                echo -ne "\r\033[K"
-                local len=${#MASKED_INPUT}
-                if [[ $len -le 10 ]]; then
-                    display="$MASKED_INPUT"
-                else
-                    display="${MASKED_INPUT:0:10}$(printf '%*s' $((len - 10)) '' | tr ' ' '*')"
-                fi
-                echo -ne "$display"
-            fi
-            continue
-        fi
-
-        # Add character to input
-        MASKED_INPUT+="$char"
-
-        # Display: first 10 chars visible, rest as *
-        local len=${#MASKED_INPUT}
-        if [[ $len -le 10 ]]; then
-            echo -ne "$char"
-        else
-            echo -ne "*"
-        fi
     done
 
-    # Re-enable echo
-    stty echo
-    echo ""  # New line after input
-}
+    # Optional: Configure notifications
+    echo ""
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║           Notification Configuration (Optional)           ║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}GenSlave can send notifications when failsafe triggers.${NC}"
+    echo -e "${YELLOW}Supports 80+ services via Apprise (Telegram, Slack, SMS, etc.)${NC}"
+    echo ""
+    echo -e "Common URL formats:"
+    echo -e "  ${CYAN}tgram://bottoken/chatid${NC}          - Telegram"
+    echo -e "  ${CYAN}slack://token/channel${NC}            - Slack"
+    echo -e "  ${CYAN}discord://webhook_id/token${NC}       - Discord"
+    echo -e "  ${CYAN}twilio://sid:token@from/to${NC}       - Twilio SMS"
+    echo -e "  ${CYAN}pover://user@token${NC}               - Pushover"
+    echo ""
+    echo -e "Full list: ${CYAN}https://github.com/caronc/apprise/wiki${NC}"
+    echo ""
 
-prompt_secret() {
-    local prompt="$1"
-    local var_name="$2"
-    local allow_empty="${3:-false}"
-    while true; do
-        echo -en "  ${MAGENTA}?${NC} ${prompt}: "
-        read_masked_token
-        local input="$MASKED_INPUT"
-        if [ -z "$input" ] && [ "$allow_empty" = "false" ]; then
-            print_error "This field cannot be empty"
-            continue
-        fi
-        eval "$var_name=\"$input\""
-        return 0
-    done
-}
+    APPRISE_URLS_INPUT=""
+    read -p "Configure notifications now? (y/N) " -n 1 -r
+    echo ""
 
-generate_secret() {
-    local length="${1:-32}"
-    openssl rand -hex "$length"
-}
-
-command_exists() {
-    command -v "$1" &> /dev/null
-}
-
-check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        print_error "This script must be run as root"
-        echo -e "  ${YELLOW}Please run: sudo $0${NC}"
-        exit 1
-    fi
-}
-
-# =============================================================================
-# State Management
-# =============================================================================
-
-save_state() {
-    cat > "$STATE_FILE" << EOF
-# GenSlave Setup State - DO NOT EDIT MANUALLY
-STATE_SYSTEM_PREPARED=${STATE_SYSTEM_PREPARED}
-STATE_APP_DEPLOYED=${STATE_APP_DEPLOYED}
-STATE_PYTHON_INSTALLED=${STATE_PYTHON_INSTALLED}
-STATE_HARDWARE_VALIDATED=${STATE_HARDWARE_VALIDATED}
-STATE_TAILSCALE_CONFIGURED=${STATE_TAILSCALE_CONFIGURED}
-STATE_ENV_CONFIGURED=${STATE_ENV_CONFIGURED}
-STATE_SERVICE_INSTALLED=${STATE_SERVICE_INSTALLED}
-ENABLE_TAILSCALE=${ENABLE_TAILSCALE}
-TAILSCALE_HOSTNAME="${TAILSCALE_HOSTNAME}"
-MASTER_API_URL="${MASTER_API_URL}"
-EOF
-    chmod 600 "$STATE_FILE"
-}
-
-load_state() {
-    if [ -f "$STATE_FILE" ]; then
-        source "$STATE_FILE"
-        return 0
-    fi
-    return 1
-}
-
-# =============================================================================
-# Hardware Interface Check (I2C/SPI)
-# =============================================================================
-
-check_hardware_interfaces() {
-    local i2c_enabled=false
-    local spi_enabled=false
-    local needs_reboot=false
-
-    # Check if I2C is enabled
-    if grep -q "^dtparam=i2c_arm=on" /boot/config.txt 2>/dev/null || \
-       grep -q "^dtparam=i2c_arm=on" /boot/firmware/config.txt 2>/dev/null; then
-        i2c_enabled=true
-    fi
-
-    # Check if SPI is enabled
-    if grep -q "^dtparam=spi=on" /boot/config.txt 2>/dev/null || \
-       grep -q "^dtparam=spi=on" /boot/firmware/config.txt 2>/dev/null; then
-        spi_enabled=true
-    fi
-
-    # Check if devices exist (indicates reboot has happened after enabling)
-    local i2c_device_exists=false
-    local spi_device_exists=false
-    [ -e /dev/i2c-1 ] && i2c_device_exists=true
-    [ -e /dev/spidev0.0 ] && spi_device_exists=true
-
-    # Determine if there's a problem
-    if [ "$i2c_enabled" = false ] || [ "$spi_enabled" = false ]; then
-        needs_reboot=true
-    elif [ "$i2c_device_exists" = false ] || [ "$spi_device_exists" = false ]; then
-        needs_reboot=true
-    fi
-
-    if [ "$needs_reboot" = true ]; then
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo ""
-        echo -e "${RED}╔═══════════════════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${RED}║${NC}                    ${WHITE}${BOLD}⚠  HARDWARE CONFIGURATION REQUIRED  ⚠${NC}                   ${RED}║${NC}"
-        echo -e "${RED}╠═══════════════════════════════════════════════════════════════════════════════╣${NC}"
-        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
-        echo -e "${RED}║${NC}  ${WHITE}The Automation Hat Mini requires I2C and SPI interfaces to be enabled.${NC}      ${RED}║${NC}"
-        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
-        echo -e "${RED}║${NC}  ${YELLOW}Current Status:${NC}                                                              ${RED}║${NC}"
-        if [ "$i2c_enabled" = true ]; then
-            echo -e "${RED}║${NC}    I2C: ${GREEN}Enabled in config${NC}                                                    ${RED}║${NC}"
-        else
-            echo -e "${RED}║${NC}    I2C: ${RED}NOT ENABLED${NC}                                                          ${RED}║${NC}"
+        echo -e "Enter Apprise URL(s), comma-separated for multiple:"
+        read -p "> " APPRISE_URLS_INPUT
+
+        if [[ -n "$APPRISE_URLS_INPUT" ]]; then
+            log_success "Notification URL(s) configured"
         fi
-        if [ "$spi_enabled" = true ]; then
-            echo -e "${RED}║${NC}    SPI: ${GREEN}Enabled in config${NC}                                                    ${RED}║${NC}"
-        else
-            echo -e "${RED}║${NC}    SPI: ${RED}NOT ENABLED${NC}                                                          ${RED}║${NC}"
-        fi
-        if [ "$i2c_device_exists" = true ]; then
-            echo -e "${RED}║${NC}    I2C Device (/dev/i2c-1): ${GREEN}Available${NC}                                       ${RED}║${NC}"
-        else
-            echo -e "${RED}║${NC}    I2C Device (/dev/i2c-1): ${RED}NOT AVAILABLE${NC}                                    ${RED}║${NC}"
-        fi
-        if [ "$spi_device_exists" = true ]; then
-            echo -e "${RED}║${NC}    SPI Device (/dev/spidev0.0): ${GREEN}Available${NC}                                   ${RED}║${NC}"
-        else
-            echo -e "${RED}║${NC}    SPI Device (/dev/spidev0.0): ${RED}NOT AVAILABLE${NC}                                ${RED}║${NC}"
-        fi
-        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
-        echo -e "${RED}║${NC}  ${WHITE}To enable I2C and SPI:${NC}                                                       ${RED}║${NC}"
-        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
-        echo -e "${RED}║${NC}    1. Run: ${CYAN}sudo raspi-config${NC}                                                   ${RED}║${NC}"
-        echo -e "${RED}║${NC}    2. Go to: ${CYAN}Interface Options${NC}                                                  ${RED}║${NC}"
-        echo -e "${RED}║${NC}    3. Enable ${CYAN}I2C${NC} and ${CYAN}SPI${NC}                                                        ${RED}║${NC}"
-        echo -e "${RED}║${NC}    4. ${YELLOW}Reboot the system${NC}                                                         ${RED}║${NC}"
-        echo -e "${RED}║${NC}    5. Run this setup script again                                             ${RED}║${NC}"
-        echo -e "${RED}║${NC}                                                                               ${RED}║${NC}"
-        echo -e "${RED}╚═══════════════════════════════════════════════════════════════════════════════╝${NC}"
-        echo ""
-
-        if ! confirm "Continue anyway? (Hardware detection will fail)"; then
-            echo ""
-            print_info "Run 'sudo raspi-config' to enable I2C and SPI, then reboot."
-            exit 0
-        fi
-        echo ""
-        print_warning "Continuing without proper hardware interfaces..."
-        print_warning "Automation Hat Mini detection will fail!"
-        echo ""
-    fi
-}
-
-# =============================================================================
-# System Preparation
-# =============================================================================
-
-prepare_system() {
-    print_section "System Preparation"
-
-    # Check OS
-    print_step "1" "Checking operating system..."
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        print_success "Detected: $PRETTY_NAME"
-    fi
-
-    # Check Raspberry Pi
-    print_step "2" "Checking hardware..."
-    if [ -f /proc/device-tree/model ]; then
-        local model=$(cat /proc/device-tree/model | tr -d '\0')
-        print_success "Hardware: $model"
     else
-        print_warning "Could not detect hardware model"
+        log_info "Skipping notification setup - can be configured later via GenMaster UI"
     fi
 
-    # Check memory
-    print_step "3" "Checking available memory..."
-    local total_mem=$(free -m | awk 'NR==2{print $2}')
-    local avail_mem=$(free -m | awk 'NR==2{print $7}')
-    print_success "Total: ${total_mem}MB, Available: ${avail_mem}MB"
-
-    if [ "$total_mem" -lt 400 ]; then
-        print_warning "Low memory detected. GenSlave is optimized for Pi Zero 2W (512MB)"
-    fi
-
-    # Update package lists
-    print_step "4" "Updating package lists..."
-    apt-get update -qq
-    print_success "Package lists updated"
-
-    # Install system dependencies
-    print_step "5" "Installing system dependencies..."
-    apt-get install -y \
-        python3 \
-        python3-pip \
-        python3-venv \
-        python3-dev \
-        python3-smbus \
-        python3-rpi.gpio \
-        build-essential \
-        libffi-dev \
-        libssl-dev \
-        i2c-tools \
-        curl \
-        jq \
-        openssl
-
-    if [ $? -ne 0 ]; then
-        print_error "Failed to install some dependencies"
-        exit 1
-    fi
-    print_success "System dependencies installed"
-
-    # Enable required interfaces
-    print_step "6" "Enabling hardware interfaces..."
-
-    # Enable I2C
-    if ! grep -q "^dtparam=i2c_arm=on" /boot/config.txt 2>/dev/null; then
-        echo "dtparam=i2c_arm=on" >> /boot/config.txt
-        print_info "I2C enabled (reboot required)"
-    fi
-
-    # Enable SPI
-    if ! grep -q "^dtparam=spi=on" /boot/config.txt 2>/dev/null; then
-        echo "dtparam=spi=on" >> /boot/config.txt
-        print_info "SPI enabled (reboot required)"
-    fi
-
-    print_success "Hardware interfaces configured"
-
-    # Create installation directory
-    print_step "7" "Creating installation directories..."
-    mkdir -p "$INSTALL_DIR"/{app,data,logs,backups}
-    chown -R root:root "$INSTALL_DIR"
-    print_success "Created $INSTALL_DIR"
-
-    STATE_SYSTEM_PREPARED=true
-    save_state
-    print_success "System preparation complete"
-}
-
-# =============================================================================
-# Application Deployment
-# =============================================================================
-
-deploy_application() {
-    print_section "Application Deployment"
-
-    # Check if app directory exists in source
-    if [ ! -d "$SCRIPT_DIR/app" ]; then
-        print_error "Application source not found at $SCRIPT_DIR/app"
-        print_info "Please ensure you're running setup.sh from the genslave directory"
-        exit 1
-    fi
-
-    print_step "1" "Copying application files..."
-
-    # Remove old app files if they exist
-    if [ -d "$INSTALL_DIR/app" ] && [ "$(ls -A $INSTALL_DIR/app 2>/dev/null)" ]; then
-        rm -rf "$INSTALL_DIR/app"/*
-    fi
-
-    # Copy app directory
-    cp -r "$SCRIPT_DIR/app/"* "$INSTALL_DIR/app/"
-    print_success "Application files copied"
-
-    print_step "2" "Copying requirements file..."
-    if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
-        cp "$SCRIPT_DIR/requirements.txt" "$INSTALL_DIR/requirements.txt"
-        print_success "Requirements file copied"
-    else
-        print_warning "No requirements.txt found in source directory"
-    fi
-
-    print_step "3" "Setting permissions..."
-    chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR/app"
-    chmod -R 755 "$INSTALL_DIR/app"
-    print_success "Permissions set"
-
-    # Verify deployment
-    print_step "4" "Verifying deployment..."
-    if [ -f "$INSTALL_DIR/app/main.py" ]; then
-        print_success "main.py found"
-    else
-        print_error "main.py not found - deployment may be incomplete"
-        exit 1
-    fi
-
-    if [ -d "$INSTALL_DIR/app/routers" ] && [ -d "$INSTALL_DIR/app/services" ]; then
-        print_success "Application structure verified"
-    else
-        print_error "Application structure incomplete"
-        exit 1
-    fi
-
-    STATE_APP_DEPLOYED=true
-    save_state
-    print_success "Application deployment complete"
-}
-
-# =============================================================================
-# Python Environment Setup
-# =============================================================================
-
-install_python_environment() {
-    print_section "Python Environment Setup"
-
-    print_step "1" "Creating Python virtual environment..."
-    # Use --system-site-packages to access pre-installed RPi.GPIO, smbus, etc.
-    python3 -m venv --system-site-packages "$INSTALL_DIR/venv"
-    print_success "Virtual environment created (with system site-packages)"
-
-    print_step "2" "Upgrading pip..."
-    "$INSTALL_DIR/venv/bin/pip" install --upgrade pip setuptools wheel > /dev/null 2>&1
-    print_success "Pip upgraded"
-
-    print_step "3" "Creating requirements files..."
-
-    # Core requirements (work on any system)
-    cat > "$INSTALL_DIR/requirements-core.txt" << 'EOF'
-# GenSlave Core Requirements
-# Core Framework
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-
-# Database (SQLite - no external server needed)
-sqlalchemy>=2.0.0
-aiosqlite>=0.19.0
-
-# Data Validation
-pydantic>=2.5.0
-pydantic-settings>=2.1.0
-
-# HTTP Client (for webhooks)
-httpx>=0.26.0
-
-# System Monitoring
-psutil>=5.9.0
-
-# Configuration
-python-dotenv>=1.0.0
-
-# LCD Display
-Pillow>=10.0.0
-EOF
-
-    # Hardware requirements (Raspberry Pi only)
-    cat > "$INSTALL_DIR/requirements-hardware.txt" << 'EOF'
-# GenSlave Hardware Requirements (Raspberry Pi only)
-# Automation Hat Mini
-automationhat>=0.4.0
-RPi.GPIO>=0.7.0
-spidev>=3.5
-
-# LCD Display Hardware
-ST7735>=0.0.4
-EOF
-    print_success "Requirements files created"
-
-    print_step "4" "Installing core Python dependencies..."
-    local core_pip_output
-    core_pip_output=$("$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements-core.txt" 2>&1)
-    local core_pip_exit=$?
-
-    if [ $core_pip_exit -eq 0 ]; then
-        print_success "Core dependencies installed"
-    else
-        print_error "Failed to install core dependencies"
-        echo -e "  ${GRAY}Error details:${NC}"
-        echo "$core_pip_output" | grep -iE "error|failed|cannot" | head -5 | while read line; do
-            echo -e "    ${DIM}$line${NC}"
-        done
-        return 1
-    fi
-
-    print_step "5" "Installing hardware dependencies..."
-    local pip_output
-    pip_output=$("$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements-hardware.txt" 2>&1)
-    local pip_exit_code=$?
-
-    if [ $pip_exit_code -eq 0 ]; then
-        print_success "Hardware dependencies installed"
-    else
-        print_warning "Hardware dependencies failed to install"
-        echo -e "  ${GRAY}Error details:${NC}"
-        echo "$pip_output" | grep -i "error" | head -5 | while read line; do
-            echo -e "    ${DIM}$line${NC}"
-        done
-        print_info "If on Raspberry Pi, ensure I2C and SPI are enabled and reboot"
-        print_info "On non-Pi systems, GenSlave will run in mock/development mode"
-    fi
-
-    STATE_PYTHON_INSTALLED=true
-    save_state
-}
-
-# =============================================================================
-# Hardware Validation
-# =============================================================================
-
-validate_hardware() {
-    print_section "Hardware Validation"
-
-    print_step "1" "Checking I2C bus..."
-    if i2cdetect -y 1 &> /dev/null; then
-        print_success "I2C bus is accessible"
-    else
-        print_warning "I2C bus not accessible (may need reboot)"
-    fi
-
-    print_step "2" "Checking SPI..."
-    if [ -e /dev/spidev0.0 ]; then
-        print_success "SPI device found"
-    else
-        print_warning "SPI device not found (may need reboot)"
-    fi
-
-    print_step "3" "Checking GPIO access..."
-    if [ -e /dev/gpiomem ]; then
-        print_success "GPIO memory accessible"
-    else
-        print_warning "GPIO memory not accessible"
-    fi
-
-    print_step "4" "Testing Automation Hat Mini..."
-    local hat_result
-    hat_result=$("$INSTALL_DIR/venv/bin/python3" << 'PYEOF' 2>&1
-try:
-    import automationhat
-    # NOTE: is_automation_hat() does NOT work for Automation Hat Mini!
-    # Instead, we test by actually trying to use the relay - this is reliable
-    try:
-        # Cycle the relay to verify it works
-        automationhat.relay.one.off()
-        import time
-        time.sleep(0.1)
-        automationhat.relay.one.on()
-        time.sleep(0.1)
-        automationhat.relay.one.off()
-        print("SUCCESS:Automation Hat Mini detected (relay test passed)")
-    except Exception as e:
-        print(f"WARNING:automationhat library loaded but relay test failed - {e}")
-except ImportError as e:
-    print(f"ERROR:Module not found - {e}")
-except Exception as e:
-    print(f"ERROR:{e}")
-PYEOF
-)
-
-    if [[ "$hat_result" == SUCCESS:* ]]; then
-        print_success "${hat_result#SUCCESS:}"
-    elif [[ "$hat_result" == WARNING:* ]]; then
-        print_warning "${hat_result#WARNING:}"
-    else
-        print_error "${hat_result#ERROR:}"
-        print_warning "GenSlave may not function correctly without Automation Hat Mini"
-    fi
-
-    STATE_HARDWARE_VALIDATED=true
-    save_state
-}
-
-# =============================================================================
-# Tailscale Configuration
-# =============================================================================
-
-configure_tailscale() {
-    print_section "Tailscale VPN Configuration"
-
-    echo ""
-    echo -e "  ${GRAY}Tailscale provides private access to your GenSlave instance${NC}"
-    echo -e "  ${GRAY}over a secure mesh VPN network for communication with GenMaster.${NC}"
-    echo ""
-
-    if ! confirm "Configure Tailscale for private VPN access?"; then
-        ENABLE_TAILSCALE=false
-        STATE_TAILSCALE_CONFIGURED=true
-        save_state
-        return 0
-    fi
-
-    ENABLE_TAILSCALE=true
-
-    print_subsection
-    echo -e "${WHITE}  Tailscale Configuration${NC}"
-    echo ""
-    echo -e "  ${GRAY}Requirements:${NC}"
-    echo -e "    • Tailscale account"
-    echo -e "    • Auth key from: https://login.tailscale.com/admin/settings/keys${NC}"
-    echo ""
-
-    print_step "1" "Installing Tailscale..."
-    if ! command_exists tailscale; then
-        curl -fsSL https://tailscale.com/install.sh | sh
-    fi
-    print_success "Tailscale installed"
-
-    echo ""
-    echo -ne "${WHITE}  Enter your Tailscale auth key${NC}: "
-    read_masked_token
-    TAILSCALE_AUTHKEY="$MASKED_INPUT"
-
-    if [ -z "$TAILSCALE_AUTHKEY" ]; then
-        print_warning "No auth key provided - Tailscale disabled"
-        ENABLE_TAILSCALE=false
-        STATE_TAILSCALE_CONFIGURED=true
-        save_state
-        return 0
-    fi
-
-    print_success "Auth key accepted"
-
-    echo ""
-    echo -ne "${WHITE}  Tailscale hostname [genslave]${NC}: "
-    read ts_hostname
-    TAILSCALE_HOSTNAME=${ts_hostname:-genslave}
-
-    print_step "2" "Authenticating with Tailscale..."
-    tailscale up --authkey="$TAILSCALE_AUTHKEY" --hostname="$TAILSCALE_HOSTNAME"
-    print_success "Tailscale authenticated"
-
-    print_step "3" "Verifying Tailscale connection..."
-    if tailscale status &> /dev/null; then
-        local ts_ip=$(tailscale ip -4)
-        print_success "Tailscale IP: $ts_ip"
-        echo ""
-        print_info "Your GenSlave instance will be accessible at: ${TAILSCALE_HOSTNAME}.your-tailnet.ts.net"
-    else
-        print_warning "Tailscale may not be fully connected yet"
-    fi
-
-    STATE_TAILSCALE_CONFIGURED=true
-    save_state
-}
-
-# =============================================================================
-# Environment Configuration
-# =============================================================================
-
-configure_environment() {
-    print_section "Environment Configuration"
-
-    print_step "1" "Configuring GenMaster connection..."
-    echo ""
-    echo -e "  ${GRAY}Enter the IP address of your GenMaster server.${NC}"
-    echo -e "  ${GRAY}This can be a local IP (e.g., 192.168.1.50) or Tailscale IP.${NC}"
-    echo ""
-
-    local genmaster_ip=""
-
-    echo -ne "  ${WHITE}GenMaster IP address${NC}: "
-    read genmaster_ip
-
-    if [ -n "$genmaster_ip" ]; then
-        MASTER_API_URL="http://${genmaster_ip}:8000"
-        print_success "GenMaster API URL set to: ${MASTER_API_URL}"
-    else
-        print_warning "No IP provided - you'll need to set MASTER_API_URL in .env manually"
-        MASTER_API_URL=""
-    fi
-
-    echo ""
-    print_step "2" "Confirm GenMaster API URL..."
-
-    if [ -n "$MASTER_API_URL" ]; then
-        prompt_input "GenMaster API URL" "$MASTER_API_URL" MASTER_API_URL
-    else
-        prompt_input "GenMaster API URL" "http://192.168.1.50:8000" MASTER_API_URL
-    fi
-
-    print_step "3" "Configuring API secret..."
-    echo ""
-    echo -e "  ${YELLOW}NOTE: If you haven't installed GenMaster yet, you can skip this step.${NC}"
-    echo -e "  ${GRAY}The API secret is generated during GenMaster setup and shown at the end.${NC}"
-    echo -e "  ${GRAY}You can add it later by editing: ${INSTALL_DIR}/.env${NC}"
-    echo ""
-    echo "  This secret must match the SLAVE_API_SECRET configured on GenMaster."
-    echo ""
-    if confirm "Do you have the API secret from GenMaster?" "n"; then
-        prompt_secret "Enter API Secret (from GenMaster)" API_SECRET
-    else
-        API_SECRET="REPLACE_WITH_GENMASTER_SECRET"
-        print_warning "API secret skipped - you MUST update ${INSTALL_DIR}/.env after GenMaster setup"
-        echo -e "  ${CYAN}After GenMaster setup, edit .env and replace:${NC}"
-        echo -e "  ${WHITE}API_SECRET=REPLACE_WITH_GENMASTER_SECRET${NC}"
-        echo -e "  ${CYAN}with the actual SLAVE_API_SECRET from GenMaster${NC}"
-        echo ""
-    fi
-
-    print_step "4" "Configuring webhooks (optional)..."
-    if confirm "Would you like to configure webhook notifications?"; then
-        prompt_input "Webhook URL" "" WEBHOOK_BASE_URL
-        prompt_secret "Webhook Secret" WEBHOOK_SECRET true
-    fi
-
-    print_step "5" "Creating environment configuration..."
-
-    cat > "$CONFIG_FILE" << EOF
+    cat > "$INSTALL_DIR/.env" << EOF
 # GenSlave Environment Configuration
-# Generated by setup.sh on $(date)
+# Created during setup - $(date)
 
-APP_ENV=production
-APP_DEBUG=false
-APP_SECRET_KEY=$(generate_secret 32)
+# API Secret (shared with GenMaster for authentication)
+# This key must match the SLAVE_API_SECRET in GenMaster
+GENSLAVE_API_SECRET=${API_SECRET_INPUT}
 
-# Database (SQLite)
-DATABASE_PATH=${INSTALL_DIR}/data/genslave.db
+# Failsafe timeout in seconds (relay turns off if no heartbeat received)
+FAILSAFE_TIMEOUT_SECONDS=30
 
-# API Authentication (must match GenMaster)
-API_SECRET=${API_SECRET}
+# Apprise notification URLs (comma-separated)
+# Supports 80+ services: https://github.com/caronc/apprise/wiki
+# Can also be configured via GenMaster UI
+APPRISE_URLS=${APPRISE_URLS_INPUT}
 
-# Heartbeat settings
-HEARTBEAT_INTERVAL_SECONDS=60
-HEARTBEAT_FAILURE_THRESHOLD=3
+# Legacy webhook (replaced by Apprise)
+WEBHOOK_URL=
+WEBHOOK_SECRET=
 
-# Webhooks
-WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL}
-WEBHOOK_SECRET=${WEBHOOK_SECRET}
-
-# GenMaster reference
-MASTER_API_URL=${MASTER_API_URL}
-
-# LCD Display
-LCD_ENABLED=true
-LCD_BRIGHTNESS=100
-
-# Logging
-LOG_PATH=${INSTALL_DIR}/logs/genslave.log
+# Log level: DEBUG, INFO, WARNING, ERROR
 LOG_LEVEL=INFO
 EOF
 
-    chmod 600 "$CONFIG_FILE"
-    chown "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_FILE"
-    print_success "Environment configuration created"
-
-    STATE_ENV_CONFIGURED=true
-    save_state
+    log_success "Created .env file at $INSTALL_DIR/.env"
+    log_success "API secret configured successfully"
 }
 
-# =============================================================================
-# Service Installation
-# =============================================================================
+# Pull the Docker image
+pull_image() {
+    log_info "Pulling GenSlave Docker image..."
+    log_info "Image: $IMAGE_NAME"
 
-install_service() {
-    print_section "Systemd Service Installation"
+    docker pull "$IMAGE_NAME"
 
-    print_step "1" "Creating systemd service file..."
+    log_success "Image pulled successfully"
+}
+
+# Start the container
+start_container() {
+    log_info "Starting GenSlave container..."
+
+    cd "$INSTALL_DIR"
+    docker-compose up -d
+
+    # Wait for container to start
+    sleep 5
+
+    # Check if running (works with various docker-compose versions)
+    if docker ps --filter "name=genslave" --format "{{.Status}}" | grep -qi "up"; then
+        log_success "GenSlave container started successfully"
+    else
+        log_warn "Container may still be starting. Check status with: docker ps"
+        log_info "View logs with: docker-compose logs -f"
+    fi
+}
+
+# Setup systemd service for auto-start
+setup_systemd() {
+    log_info "Setting up systemd service for auto-start..."
+
+    # Find docker-compose path
+    COMPOSE_PATH=$(which docker-compose)
 
     cat > /etc/systemd/system/genslave.service << EOF
 [Unit]
-Description=GenSlave Generator Controller
-After=network.target
-Wants=network-online.target
+Description=GenSlave Generator Control
+After=docker.service
+Requires=docker.service
 
 [Service]
-Type=simple
-User=root
-Group=root
-WorkingDirectory=${INSTALL_DIR}
-Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONPATH=${INSTALL_DIR}"
-EnvironmentFile=-${INSTALL_DIR}/.env
-ExecStart=${INSTALL_DIR}/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
-Restart=always
-RestartSec=5
-
-# Resource limits for Pi Zero 2W
-MemoryMax=200M
-MemoryHigh=150M
-
-# GPIO/I2C/SPI require root access - minimal hardening
-NoNewPrivileges=false
-ProtectSystem=false
-ProtectHome=false
-
-# Logging
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=genslave
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$COMPOSE_PATH up -d
+ExecStop=$COMPOSE_PATH down
+TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    print_success "Service file created"
-
-    print_step "2" "Deploying application code..."
-
-    # Get the directory where setup.sh is located (the genslave repo directory)
-    local SCRIPT_DIR
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-    # Check if app directory exists in the repo
-    if [ -d "$SCRIPT_DIR/app" ]; then
-        # Copy app files to install directory
-        cp -r "$SCRIPT_DIR/app/"* "$INSTALL_DIR/app/"
-        print_success "Application code deployed from $SCRIPT_DIR/app/"
-    else
-        print_warning "App directory not found at $SCRIPT_DIR/app/"
-        print_warning "You will need to manually deploy the app code to $INSTALL_DIR/app/"
-    fi
-
-    # Copy requirements if they exist
-    if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
-        cp "$SCRIPT_DIR/requirements.txt" "$INSTALL_DIR/"
-        print_success "Requirements file copied"
-    fi
-
-    print_step "3" "Creating log rotation configuration..."
-
-    cat > /etc/logrotate.d/genslave << EOF
-${INSTALL_DIR}/logs/*.log {
-    daily
-    missingok
-    rotate 7
-    compress
-    delaycompress
-    notifempty
-    create 0640 root root
-    postrotate
-        systemctl restart genslave > /dev/null 2>&1 || true
-    endscript
-}
-EOF
-
-    print_success "Log rotation configured"
-
-    print_step "4" "Reloading systemd..."
     systemctl daemon-reload
-    print_success "Systemd reloaded"
+    systemctl enable genslave.service
 
-    print_step "5" "Enabling service..."
-    systemctl enable genslave
-    print_success "Service enabled"
+    log_success "Systemd service created and enabled"
+}
 
-    print_step "6" "Starting service..."
-    if systemctl start genslave; then
-        print_success "Service started"
-        sleep 2
-        if systemctl is-active --quiet genslave; then
-            print_success "GenSlave service is running"
+# Install and configure Tailscale (optional)
+install_tailscale() {
+    echo ""
+
+    # Check if already installed and connected
+    if command -v tailscale &>/dev/null; then
+        # Ensure tailscaled service is enabled and running
+        systemctl enable tailscaled 2>/dev/null || true
+        systemctl start tailscaled 2>/dev/null || true
+
+        if tailscale status &>/dev/null; then
+            log_info "Tailscale already installed and connected"
+            TS_IP=$(tailscale ip -4 2>/dev/null || echo "unknown")
+            log_info "Tailscale IP: $TS_IP"
+            return
         else
-            print_warning "Service started but may not be fully ready yet"
+            log_info "Tailscale installed but not connected"
         fi
     else
-        print_warning "Failed to start service - check logs with: journalctl -u genslave"
+        # Not installed - ask if they want it
+        read -p "Install Tailscale for remote access? (Y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Nn]$ ]]; then
+            log_info "Skipping Tailscale installation"
+            return
+        fi
+
+        log_info "Installing Tailscale..."
+        curl -fsSL https://tailscale.com/install.sh | sh
+
+        # Enable and start the tailscaled service
+        systemctl enable tailscaled
+        systemctl start tailscaled
+
+        log_success "Tailscale installed and service enabled"
     fi
 
-    STATE_SERVICE_INSTALLED=true
-    save_state
-}
-
-# =============================================================================
-# Helper Scripts
-# =============================================================================
-
-create_helper_scripts() {
-    print_section "Creating Helper Scripts"
-
-    print_step "1" "Creating health check script..."
-
-    cat > "$INSTALL_DIR/health-check.sh" << 'EOF'
-#!/bin/bash
-# GenSlave Health Check
-
-echo "=== GenSlave Health Check ==="
-
-# Check service status
-if systemctl is-active --quiet genslave; then
-    echo "✓ Service: running"
-else
-    echo "✗ Service: not running"
-    exit 1
-fi
-
-# Check API health
-if curl -s http://localhost:8000/api/health | grep -q "healthy"; then
-    echo "✓ API: healthy"
-else
-    echo "✗ API: not responding"
-fi
-
-# Check database
-if [ -f /opt/genslave/data/genslave.db ]; then
-    DB_SIZE=$(du -h /opt/genslave/data/genslave.db | cut -f1)
-    echo "✓ Database: $DB_SIZE"
-else
-    echo "✗ Database: missing"
-fi
-
-# Check memory
-MEM_USED=$(free -m | awk 'NR==2{printf "%.0f%%", $3*100/$2}')
-echo "• Memory: $MEM_USED"
-
-# Check Tailscale
-if tailscale status &>/dev/null; then
-    echo "✓ Tailscale: connected"
-else
-    echo "• Tailscale: not connected"
-fi
-
-echo "=== Health Check Complete ==="
-EOF
-
-    chmod +x "$INSTALL_DIR/health-check.sh"
-    print_success "Health check script created"
-
-    print_step "2" "Creating backup script..."
-
-    cat > "$INSTALL_DIR/backup.sh" << 'EOF'
-#!/bin/bash
-# GenSlave Backup Script
-
-BACKUP_DIR="/opt/genslave/backups"
-mkdir -p "$BACKUP_DIR"
-
-# Backup database
-cp /opt/genslave/data/genslave.db "$BACKUP_DIR/genslave-$(date +%Y%m%d-%H%M%S).db"
-
-# Keep only last 7 backups
-ls -t "$BACKUP_DIR"/genslave-*.db | tail -n +8 | xargs -r rm
-
-echo "Backup complete"
-EOF
-
-    chmod +x "$INSTALL_DIR/backup.sh"
-    print_success "Backup script created"
-
-    # Add backup to crontab
-    (crontab -l 2>/dev/null | grep -v "$INSTALL_DIR/backup.sh"; echo "0 2 * * * $INSTALL_DIR/backup.sh") | crontab -
-    print_success "Daily backup scheduled"
-}
-
-# =============================================================================
-# Final Summary
-# =============================================================================
-
-print_summary() {
-    print_section "Installation Complete!"
-
-    echo "  GenSlave has been successfully installed and started."
+    # Ask for auth key to configure
     echo ""
-    echo -e "  ${BOLD}Installation Location:${NC}"
-    echo "  Application:      $INSTALL_DIR/app/"
-    echo "  Configuration:    $CONFIG_FILE"
-    echo "  Database:         $INSTALL_DIR/data/genslave.db"
-    echo "  Logs:             journalctl -u genslave"
+    log_info "To connect Tailscale, you need an auth key from:"
+    log_info "  https://login.tailscale.com/admin/settings/keys"
     echo ""
+    read -p "Enter Tailscale auth key (or press Enter to skip): " TS_AUTHKEY
 
-    echo -e "  ${BOLD}Service Status:${NC}"
-    if systemctl is-active --quiet genslave; then
-        echo -e "  Status:           ${GREEN}Running${NC}"
+    if [[ -n "$TS_AUTHKEY" ]]; then
+        log_info "Connecting to Tailscale..."
+        tailscale up --authkey="$TS_AUTHKEY"
+
+        # Wait a moment for connection
+        sleep 3
+
+        if tailscale status &>/dev/null; then
+            TS_IP=$(tailscale ip -4 2>/dev/null || echo "unknown")
+            log_success "Tailscale connected! IP: $TS_IP"
+        else
+            log_warn "Tailscale may still be connecting. Check with: tailscale status"
+        fi
     else
-        echo -e "  Status:           ${RED}Not Running${NC}"
-    fi
-    echo ""
-
-    echo -e "  ${BOLD}API Endpoints (port 8001):${NC}"
-    echo "  Health Check:     GET  http://localhost:8001/api/health"
-    echo "  Relay State:      GET  http://localhost:8001/api/relay/state"
-    echo "  Relay ON:         POST http://localhost:8001/api/relay/on"
-    echo "  Relay OFF:        POST http://localhost:8001/api/relay/off"
-    echo ""
-
-    echo -e "  ${BOLD}Service Management:${NC}"
-    echo "  Start:            sudo systemctl start genslave"
-    echo "  Stop:             sudo systemctl stop genslave"
-    echo "  Restart:          sudo systemctl restart genslave"
-    echo "  Status:           sudo systemctl status genslave"
-    echo "  Logs:             sudo journalctl -u genslave -f"
-    echo ""
-
-    if [ "$ENABLE_TAILSCALE" = true ]; then
-        local ts_ip=$(tailscale ip -4 2>/dev/null)
-        echo -e "  ${BOLD}Tailscale:${NC}"
-        echo "  IP Address:       $ts_ip"
-        echo "  Hostname:         $TAILSCALE_HOSTNAME"
-        echo "  API URL:          http://${TAILSCALE_HOSTNAME}:8001"
-        echo ""
-    fi
-
-    echo -e "  ${BOLD}${YELLOW}Next Steps:${NC}"
-    echo "  1. Test the API: curl http://localhost:8001/api/health"
-    echo "  2. Configure GenMaster to connect to this GenSlave"
-    echo "  3. Arm automation from GenMaster when ready"
-    echo ""
-
-    if grep -q "reboot" /var/run/reboot-required 2>/dev/null || [ -f /var/run/reboot-required ]; then
-        echo -e "  ${BOLD}${RED}REBOOT REQUIRED:${NC}"
-        echo "  Please reboot to enable hardware interfaces:"
-        echo "  sudo reboot"
-        echo ""
+        log_info "Skipping Tailscale configuration"
+        log_info "Run 'sudo tailscale up' later to connect"
     fi
 }
 
-# =============================================================================
-# Main Function
-# =============================================================================
+# Print final instructions
+print_success() {
+    echo ""
+    echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║              GenSlave Installation Complete!              ║${NC}"
+    echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${CYAN}Installation Directory:${NC} $INSTALL_DIR"
+    echo ""
+    echo -e "${CYAN}Useful Commands:${NC}"
+    echo "  cd $INSTALL_DIR"
+    echo "  docker-compose logs -f        # View logs"
+    echo "  docker-compose restart        # Restart container"
+    echo "  docker-compose pull && docker-compose up -d  # Update to latest"
+    echo ""
+    echo -e "${CYAN}API Endpoint:${NC}"
+    echo "  http://$(hostname -I | awk '{print $1}'):8001"
+    echo "  http://$(hostname).local:8001"
+    echo ""
+    echo -e "${CYAN}Health Check:${NC}"
+    echo "  curl http://localhost:8001/health"
+    echo ""
 
+    if command -v tailscale &>/dev/null; then
+        TS_IP=$(tailscale ip -4 2>/dev/null || echo "not connected")
+        echo -e "${CYAN}Tailscale IP:${NC} $TS_IP"
+        echo ""
+    fi
+
+    echo -e "${YELLOW}Next Steps:${NC}"
+    echo "  1. Edit $INSTALL_DIR/.env to set GENSLAVE_API_SECRET"
+    echo "  2. Restart: docker-compose restart"
+    echo "  3. Configure GenMaster to connect to this GenSlave"
+    echo ""
+}
+
+# Main installation flow
 main() {
-    # Parse arguments
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --preconfig)
-                PRECONFIG_FILE="$2"
-                source "$PRECONFIG_FILE"
-                shift 2
-                ;;
-            --debug)
-                DEBUG_MODE=true
-                shift
-                ;;
-            --setmasterapi)
-                if [ -z "$2" ]; then
-                    echo -e "${RED}Error: --setmasterapi requires an API secret${NC}"
-                    echo "Usage: $0 --setmasterapi YOUR_API_SECRET"
-                    exit 1
-                fi
-                local new_secret="$2"
-                local env_file="${INSTALL_DIR}/.env"
-
-                if [ ! -f "$env_file" ]; then
-                    echo -e "${RED}Error: ${env_file} not found. Run setup first.${NC}"
-                    exit 1
-                fi
-
-                echo -e "${CYAN}Updating API secret in ${env_file}...${NC}"
-
-                if grep -q "^API_SECRET=" "$env_file"; then
-                    sed -i "s|^API_SECRET=.*|API_SECRET=${new_secret}|" "$env_file"
-                else
-                    echo "API_SECRET=${new_secret}" >> "$env_file"
-                fi
-
-                echo -e "${GREEN}✓${NC} API secret updated"
-
-                # Restart service if running
-                if systemctl is-active --quiet genslave 2>/dev/null; then
-                    echo -e "${CYAN}Restarting genslave service...${NC}"
-                    systemctl restart genslave
-                    echo -e "${GREEN}✓${NC} Service restarted"
-                else
-                    echo -e "${YELLOW}Note: genslave service is not running${NC}"
-                fi
-
-                exit 0
-                ;;
-            --help|-h)
-                echo "GenSlave Setup Script"
-                echo ""
-                echo "Usage: $0 [OPTIONS]"
-                echo ""
-                echo "Options:"
-                echo "  --preconfig FILE       Use preconfig file"
-                echo "  --setmasterapi SECRET  Set/update the API secret from GenMaster"
-                echo "  --debug                Enable debug mode"
-                echo "  --help                 Show this help message"
-                echo ""
-                echo "Examples:"
-                echo "  $0                              # Interactive setup"
-                echo "  $0 --setmasterapi abc123xyz     # Update API secret"
-                exit 0
-                ;;
-            *)
-                echo "Unknown option: $1"
-                exit 1
-                ;;
-        esac
-    done
-
+    print_banner
     check_root
-    print_header
+    check_pi
 
-    # Check hardware interfaces before proceeding
-    check_hardware_interfaces
+    log_info "Starting GenSlave Docker installation..."
+    echo ""
 
-    # Load previous state if exists
-    if load_state; then
-        print_info "Found previous installation state"
-        if ! confirm "Would you like to resume the previous installation?"; then
-            rm -f "$STATE_FILE"
-            STATE_SYSTEM_PREPARED=false
-            STATE_APP_DEPLOYED=false
-            STATE_PYTHON_INSTALLED=false
-            STATE_HARDWARE_VALIDATED=false
-            STATE_TAILSCALE_CONFIGURED=false
-            STATE_ENV_CONFIGURED=false
-            STATE_SERVICE_INSTALLED=false
-        fi
-    fi
+    install_docker
+    install_compose
+    setup_directories
+    create_compose_file
+    create_env_file
+    pull_image
+    start_container
+    setup_systemd
+    install_tailscale
 
-    # Run installation steps
-    [ "$STATE_SYSTEM_PREPARED" != true ] && prepare_system || print_info "System already prepared"
-    [ "$STATE_APP_DEPLOYED" != true ] && deploy_application || print_info "Application already deployed"
-    [ "$STATE_PYTHON_INSTALLED" != true ] && install_python_environment || print_info "Python already installed"
-    [ "$STATE_HARDWARE_VALIDATED" != true ] && validate_hardware || print_info "Hardware already validated"
-    [ "$STATE_TAILSCALE_CONFIGURED" != true ] && configure_tailscale || print_info "Tailscale already configured"
-    [ "$STATE_ENV_CONFIGURED" != true ] && configure_environment || print_info "Environment already configured"
-    [ "$STATE_SERVICE_INSTALLED" != true ] && install_service || print_info "Service already installed"
-
-    create_helper_scripts
-    print_summary
+    print_success
 }
 
+# Run main
 main "$@"
