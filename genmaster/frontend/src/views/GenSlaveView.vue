@@ -49,7 +49,7 @@
 
           <div class="flex items-center gap-3">
             <button
-              @click="loadSlaveInfo"
+              @click="loadSlaveInfo(true)"
               :disabled="slaveLoading"
               class="btn-secondary flex items-center gap-2"
             >
@@ -790,8 +790,9 @@ const clearingCooldown = ref(false)
 // Polling
 let pollInterval = null
 
-// Load GenSlave info (comprehensive)
-async function loadSlaveInfo() {
+// Load GenSlave info using cached data from unified SlaveStatusService
+// This ensures consistent status with the Generator Tab
+async function loadSlaveInfo(forceRefresh = false) {
   slaveLoading.value = true
   slaveLoadingMessageIndex.value = 0
 
@@ -816,58 +817,55 @@ async function loadSlaveInfo() {
       }
     }
 
-    // Load all GenSlave data in parallel with better error tracking
-    let systemError = null
-    let healthStatusError = null
-
-    const [healthRes, systemRes, healthStatusRes, failsafeRes, relayRes] = await Promise.all([
-      api.get('/health/slave').catch((e) => {
-        console.warn('Failed to get /health/slave:', e.response?.data || e.message)
-        return { data: { connection_status: 'disconnected' } }
-      }),
-      genslaveApi.getSystemInfo().catch((e) => {
-        systemError = e.response?.data?.detail || e.message
-        console.warn('Failed to get GenSlave system info:', systemError)
-        return { data: null }
-      }),
-      genslaveApi.getHealthStatus().catch((e) => {
-        healthStatusError = e.response?.data?.detail || e.message
-        console.warn('Failed to get GenSlave health status:', healthStatusError)
-        return { data: null }
-      }),
-      genslaveApi.getFailsafeStatus().catch((e) => {
-        console.warn('Failed to get GenSlave failsafe status:', e.response?.data?.detail || e.message)
-        return { data: null }
-      }),
-      genslaveApi.getRelayState().catch((e) => {
-        console.warn('Failed to get GenSlave relay state:', e.response?.data?.detail || e.message)
-        return { data: null }
-      }),
-    ])
-
-    // Check if we got system data - if not, GenSlave is likely unreachable
-    const isOnline = systemRes.data !== null
-
-    // Basic connection info
-    slaveInfo.value = {
-      online: isOnline,
-      last_heartbeat: healthRes.data?.last_heartbeat_received,
-      details: systemRes.data,
-      error: systemError,
+    // If force refresh requested (manual button), refresh the cache first
+    if (forceRefresh) {
+      try {
+        await genslaveApi.refreshCache()
+      } catch (e) {
+        console.warn('Failed to refresh cache:', e)
+      }
     }
 
-    // Comprehensive data
-    slaveSystemInfo.value = systemRes.data
-    slaveHealthStatus.value = healthStatusRes.data
-    slaveFailsafeStatus.value = failsafeRes.data
-    slaveRelayState.value = relayRes.data
+    // Use cached data from the unified SlaveStatusService
+    // This provides instant response and consistent status with Generator Tab
+    const cachedRes = await genslaveApi.getStatusCached().catch((e) => {
+      console.warn('Failed to get cached status:', e)
+      return { data: null }
+    })
 
-    // Update armed state from relay state or health status
-    relayArmed.value = relayRes.data?.armed || healthStatusRes.data?.armed || false
+    if (cachedRes.data) {
+      const cached = cachedRes.data
 
-    // Show error notification if we couldn't reach GenSlave (only on manual refresh)
-    if (!isOnline && systemError && !pollInterval) {
-      notificationStore.error(`GenSlave unreachable: ${systemError}`)
+      // Update connection status from cache
+      slaveInfo.value = {
+        online: cached.is_online,
+        last_heartbeat: cached.heartbeat?.last_success,
+        details: cached.data?.system_info,
+        error: cached.last_error,
+        is_stale: cached.is_stale,
+        cache_age: cached.cache_age_seconds,
+      }
+
+      // Extract data from cache
+      slaveSystemInfo.value = cached.data?.system_info || null
+      slaveHealthStatus.value = cached.data?.health || null
+      slaveFailsafeStatus.value = cached.data?.failsafe || null
+      slaveRelayState.value = cached.data?.relay_state || null
+
+      // Update armed state from cached relay state or health
+      relayArmed.value = cached.data?.relay_state?.armed || cached.data?.health?.armed || false
+
+      // Show warning if data is stale
+      if (cached.is_stale && !pollInterval) {
+        console.warn('GenSlave data is stale - cache age:', cached.cache_age_seconds, 'seconds')
+      }
+    } else {
+      // Fallback: no cached data available
+      slaveInfo.value = { online: false, last_heartbeat: null, details: null, error: 'No cached data available' }
+      slaveSystemInfo.value = null
+      slaveHealthStatus.value = null
+      slaveFailsafeStatus.value = null
+      slaveRelayState.value = null
     }
   } catch (error) {
     console.error('GenSlave info load failed:', error)

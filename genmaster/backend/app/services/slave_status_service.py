@@ -2,29 +2,38 @@
 # /genmaster/backend/app/services/slave_status_service.py
 #
 # Part of the "RPi Generator Control" suite
-# Version 1.0.0 - January 20th, 2026
+# Version 2.0.0 - January 22nd, 2026
+#
+# UNIFIED GenSlave Communication Service
+# Single gatekeeper for ALL GenSlave communication:
+# - Background polling (health, relay, failsafe, system)
+# - Heartbeat sending (keeps GenSlave aware of GenMaster)
+# - Cached status (single source of truth for online/offline)
 #
 # Richard J. Sears
 # richardjsears@protonmail.com
 # https://github.com/rjsears
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-"""Background polling service for GenSlave status caching."""
+"""Unified GenSlave communication service - single source of truth."""
 
 import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from app.config import settings
 from app.services.redis_cache import get_cached_config
 from app.services.slave_client import SlaveClient
 
+if TYPE_CHECKING:
+    from app.services.state_machine import StateMachine
+
 logger = logging.getLogger(__name__)
 
 
-async def _create_slave_client() -> SlaveClient:
+async def _create_slave_client(timeout: float = 5.0) -> SlaveClient:
     """Create a SlaveClient with config from Redis cache (or database fallback)."""
     config = await get_cached_config()
 
@@ -36,14 +45,22 @@ async def _create_slave_client() -> SlaveClient:
         return SlaveClient(
             base_url=base_url,
             secret=config.get("slave_api_secret", settings.slave_api_secret),
-            timeout=5.0,  # Short timeout for status polling
+            timeout=timeout,
         )
     else:
         return SlaveClient(
             base_url=settings.slave_api_url,
             secret=settings.slave_api_secret,
-            timeout=5.0,
+            timeout=timeout,
         )
+
+
+async def _get_heartbeat_interval() -> int:
+    """Get heartbeat interval from Redis cache (or database fallback)."""
+    config = await get_cached_config()
+    if config and config.get("heartbeat_interval_seconds"):
+        return config["heartbeat_interval_seconds"]
+    return settings.heartbeat_interval_seconds
 
 
 @dataclass
@@ -72,17 +89,39 @@ class SlaveStatusCache:
     failsafe_updated: int = 0
     system_info_updated: int = 0
 
+    # Heartbeat tracking
+    last_heartbeat_sent: int = 0
+    last_heartbeat_success: int = 0
+    heartbeat_sequence: int = 0
+    heartbeat_failures: int = 0
+
+
+@dataclass
+class HeartbeatResult:
+    """Result of a heartbeat attempt."""
+
+    success: bool
+    latency_ms: Optional[float] = None
+    slave_status: Optional[dict] = None
+    error: Optional[str] = None
+
 
 class SlaveStatusService:
     """
-    Background service that polls GenSlave and caches results.
+    UNIFIED GenSlave Communication Service.
 
-    This provides instant responses to the frontend by reading from cache,
-    while keeping the cache fresh via background polling.
+    This is the SINGLE GATEKEEPER for all GenSlave communication:
+    - Background polling: fetches health, relay state, failsafe, system info
+    - Heartbeat sending: keeps GenSlave aware of GenMaster status
+    - Cached status: provides instant responses to frontend
+    - Online/Offline: single source of truth for connection status
+
+    All other services should use this service's cached data rather than
+    creating their own SlaveClient connections.
     """
 
     # Polling intervals
-    FAST_POLL_INTERVAL = 1.0  # Health, relay state, failsafe
+    FAST_POLL_INTERVAL = 1.0  # Health, relay state, failsafe (also sends heartbeat)
     SLOW_POLL_INTERVAL = 30.0  # System info (CPU, RAM, disk, etc.)
 
     # Offline detection
@@ -96,6 +135,19 @@ class SlaveStatusService:
         self._slow_task: Optional[asyncio.Task] = None
         self._cache = SlaveStatusCache()
         self._lock = asyncio.Lock()
+        self._state_machine: Optional["StateMachine"] = None
+        self._heartbeat_interval: int = settings.heartbeat_interval_seconds
+        self._last_heartbeat_time: int = 0
+
+    def set_state_machine(self, state_machine: "StateMachine") -> None:
+        """
+        Set the state machine reference for heartbeat status updates.
+
+        Args:
+            state_machine: StateMachine instance to update with heartbeat status
+        """
+        self._state_machine = state_machine
+        logger.info("SlaveStatusService: StateMachine reference set")
 
     @property
     def cache(self) -> SlaveStatusCache:
@@ -103,17 +155,22 @@ class SlaveStatusService:
         return self._cache
 
     async def start(self) -> None:
-        """Start the background polling loops."""
+        """Start the background polling and heartbeat loops."""
         if self._running:
             logger.warning("SlaveStatusService already running")
             return
+
+        # Get initial heartbeat interval
+        self._heartbeat_interval = await _get_heartbeat_interval()
 
         self._running = True
         self._fast_task = asyncio.create_task(self._fast_poll_loop())
         self._slow_task = asyncio.create_task(self._slow_poll_loop())
         logger.info(
             f"SlaveStatusService started "
-            f"(fast: {self.FAST_POLL_INTERVAL}s, slow: {self.SLOW_POLL_INTERVAL}s)"
+            f"(fast poll: {self.FAST_POLL_INTERVAL}s, "
+            f"slow poll: {self.SLOW_POLL_INTERVAL}s, "
+            f"heartbeat: {self._heartbeat_interval}s)"
         )
 
     async def stop(self) -> None:
@@ -136,10 +193,26 @@ class SlaveStatusService:
         logger.info("SlaveStatusService stopped")
 
     async def _fast_poll_loop(self) -> None:
-        """Poll health, relay state, and failsafe every 1 second."""
+        """
+        Fast polling loop - runs every 1 second.
+
+        Polls: health, relay state, failsafe
+        Also sends heartbeat based on configured interval.
+        """
         while self._running:
             try:
+                # Update heartbeat interval from config (allows dynamic changes)
+                self._heartbeat_interval = await _get_heartbeat_interval()
+
+                # Poll fast endpoints
                 await self._poll_fast_endpoints()
+
+                # Check if it's time to send heartbeat
+                now = int(time.time())
+                if now - self._last_heartbeat_time >= self._heartbeat_interval:
+                    await self._send_heartbeat()
+                    self._last_heartbeat_time = now
+
             except Exception as e:
                 logger.error(f"Error in fast poll loop: {e}")
 
@@ -172,7 +245,7 @@ class SlaveStatusService:
             async with self._lock:
                 self._cache.last_update = now
 
-                # Process health response
+                # Process health response (primary indicator of online status)
                 if isinstance(health_resp, Exception):
                     self._handle_failure(str(health_resp))
                 elif health_resp.success:
@@ -222,6 +295,78 @@ class SlaveStatusService:
         finally:
             await client.close()
 
+    async def _send_heartbeat(self) -> HeartbeatResult:
+        """
+        Send a heartbeat to GenSlave.
+
+        Heartbeats tell GenSlave:
+        - GenMaster is alive and connected
+        - Current generator running state
+        - Current armed state
+        - Expected heartbeat interval
+        """
+        if not self._state_machine:
+            logger.warning("Cannot send heartbeat: StateMachine not set")
+            return HeartbeatResult(success=False, error="StateMachine not configured")
+
+        self._cache.heartbeat_sequence += 1
+        timestamp = int(time.time())
+
+        client = await _create_slave_client(timeout=10.0)  # Longer timeout for heartbeat
+
+        try:
+            # Get current master state to send
+            generator_status = await self._state_machine.get_generator_status()
+            is_armed = await self._state_machine.is_armed()
+
+            # Send heartbeat
+            response = await client.heartbeat(
+                timestamp=timestamp,
+                generator_running=generator_status.running,
+                armed=is_armed,
+                heartbeat_interval=self._heartbeat_interval,
+                command="none",  # Commands are sent separately, not via heartbeat
+            )
+
+            # Build result
+            result = HeartbeatResult(
+                success=response.success,
+                latency_ms=response.latency_ms,
+                slave_status=response.data,
+                error=response.error,
+            )
+
+            # Update cache
+            async with self._lock:
+                self._cache.last_heartbeat_sent = timestamp
+                if result.success:
+                    self._cache.last_heartbeat_success = timestamp
+                    self._cache.heartbeat_failures = 0
+                else:
+                    self._cache.heartbeat_failures += 1
+
+            # Update state machine with heartbeat result
+            await self._state_machine.update_heartbeat_status(
+                success=result.success,
+                slave_status=result.slave_status,
+                latency_ms=result.latency_ms,
+            )
+
+            if result.success:
+                logger.debug(
+                    f"Heartbeat #{self._cache.heartbeat_sequence} successful "
+                    f"(latency: {result.latency_ms:.1f}ms)"
+                )
+            else:
+                logger.warning(
+                    f"Heartbeat #{self._cache.heartbeat_sequence} failed: {result.error}"
+                )
+
+            return result
+
+        finally:
+            await client.close()
+
     def _mark_success(self, timestamp: int) -> None:
         """Mark a successful fetch (must be called with lock held)."""
         self._cache.last_successful_fetch = timestamp
@@ -237,7 +382,7 @@ class SlaveStatusService:
         if self._cache.consecutive_failures >= self.OFFLINE_THRESHOLD:
             if self._cache.is_online:
                 logger.warning(
-                    f"GenSlave marked offline after {self._cache.consecutive_failures} "
+                    f"GenSlave marked OFFLINE after {self._cache.consecutive_failures} "
                     f"consecutive failures: {error}"
                 )
             self._cache.is_online = False
@@ -274,6 +419,13 @@ class SlaveStatusService:
             "last_error": self._cache.last_error,
             "last_latency_ms": self._cache.last_latency_ms,
             "consecutive_failures": self._cache.consecutive_failures,
+            "heartbeat": {
+                "last_sent": self._cache.last_heartbeat_sent,
+                "last_success": self._cache.last_heartbeat_success,
+                "sequence": self._cache.heartbeat_sequence,
+                "failures": self._cache.heartbeat_failures,
+                "interval_seconds": self._heartbeat_interval,
+            },
             "data": {
                 "health": self._cache.health,
                 "relay_state": self._cache.relay_state,
@@ -334,6 +486,14 @@ class SlaveStatusService:
             self._poll_slow_endpoints(),
         )
         return self.get_combined_status()
+
+    async def send_test_heartbeat(self) -> HeartbeatResult:
+        """
+        Send a single test heartbeat (for testing connectivity).
+
+        This doesn't affect the regular heartbeat sequence.
+        """
+        return await self._send_heartbeat()
 
 
 # =========================================================================
