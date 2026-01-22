@@ -14,9 +14,13 @@
 import logging
 import platform
 import socket
+import time
 from typing import Literal, Optional
 
 import psutil
+
+# Module-level cache for host uptime (avoids spawning Docker container on every call)
+_uptime_cache: dict = {"host_uptime": None, "cached_at": None}
 
 from app.database import AsyncSessionLocal
 from app.models import Config
@@ -178,14 +182,22 @@ def get_uptime() -> int:
     """
     Get Docker host uptime in seconds.
 
-    Reads the host's /proc/uptime by running a quick Docker command with
-    --pid=host to access the host's process namespace.
+    Uses cached value to avoid spawning a Docker container on every call.
+    The host uptime is fetched once and then calculated based on elapsed time.
 
     Returns:
         Uptime in seconds
     """
-    import time
+    global _uptime_cache
 
+    current_time = time.time()
+
+    # If we have a cached value, calculate current uptime from it
+    if _uptime_cache["host_uptime"] is not None and _uptime_cache["cached_at"] is not None:
+        elapsed = current_time - _uptime_cache["cached_at"]
+        return int(_uptime_cache["host_uptime"] + elapsed)
+
+    # First call - need to fetch the actual host uptime (slow, but only once)
     uptime_seconds = 0
 
     try:
@@ -206,6 +218,7 @@ def get_uptime() -> int:
             # /proc/uptime format: "seconds_up seconds_idle"
             uptime_str = result.decode("utf-8").strip().split()[0]
             uptime_seconds = int(float(uptime_str))
+            logger.info(f"Cached host uptime: {uptime_seconds} seconds")
         except Exception as e:
             logger.debug(f"Could not get host uptime via Docker: {e}")
 
@@ -222,7 +235,11 @@ def get_uptime() -> int:
 
     # Final fallback: use psutil
     if uptime_seconds <= 0:
-        uptime_seconds = int(time.time() - psutil.boot_time())
+        uptime_seconds = int(current_time - psutil.boot_time())
+
+    # Cache the result
+    _uptime_cache["host_uptime"] = uptime_seconds
+    _uptime_cache["cached_at"] = current_time
 
     return uptime_seconds
 
