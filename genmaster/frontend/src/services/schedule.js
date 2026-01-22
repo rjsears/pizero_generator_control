@@ -16,8 +16,9 @@ export default {
    * Get all scheduled runs
    * @returns {Promise<Array>}
    */
-  getAll() {
-    return api.get('/schedule')
+  async getAll() {
+    const response = await api.get('/schedule')
+    return response.data
   },
 
   /**
