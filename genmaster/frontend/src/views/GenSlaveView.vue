@@ -166,10 +166,28 @@
         </Card>
       </div>
 
-      <!-- Detail Cards Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- System Info Card -->
-        <Card title="System Information">
+      <!-- System Information Collapsible Section -->
+      <Card :padding="false">
+        <button
+          @click="systemInfoSectionExpanded = !systemInfoSectionExpanded"
+          class="w-full p-4 flex items-center gap-4 hover:bg-surface-hover transition-colors rounded-lg"
+        >
+          <div class="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-teal-500 shadow-lg">
+            <CpuChipIcon class="h-6 w-6 text-white" />
+          </div>
+          <div class="flex-1 text-left">
+            <h3 class="text-lg font-semibold text-primary">System Information</h3>
+            <p class="text-sm text-secondary">GenSlave system details, relay status, failsafe, and network</p>
+          </div>
+          <div :class="['p-2 rounded-lg transition-colors', systemInfoSectionExpanded ? 'bg-blue-100 dark:bg-blue-500/20' : 'bg-gray-100 dark:bg-gray-700']">
+            <ChevronDownIcon :class="['h-5 w-5 transition-transform duration-200', systemInfoSectionExpanded ? 'rotate-180 text-blue-600 dark:text-blue-400' : 'text-gray-500']" />
+          </div>
+        </button>
+        <div v-show="systemInfoSectionExpanded" class="p-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+          <!-- Detail Cards Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- System Info Card -->
+            <Card title="System Information">
           <div v-if="slaveSystemInfo" class="space-y-3">
             <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
               <span class="text-secondary">Hostname</span>
@@ -354,7 +372,9 @@
             Network information not available
           </div>
         </Card>
-      </div>
+          </div>
+        </div>
+      </Card>
 
       <!-- Notification Settings Card (Collapsible) -->
       <Card :padding="false">
@@ -745,6 +765,7 @@ import {
   CheckCircleIcon,
   ChevronDownIcon,
   Cog6ToothIcon,
+  CpuChipIcon,
   GlobeAltIcon,
   WifiIcon,
   BoltIcon,
@@ -801,6 +822,7 @@ const showApiSecret = ref(false)  // Toggle visibility
 const savingApiSecret = ref(false)
 
 // Collapsible sections
+const systemInfoSectionExpanded = ref(true)  // Default expanded to show system info
 const notificationSectionExpanded = ref(false)
 const connectionSectionExpanded = ref(false)
 
