@@ -360,17 +360,25 @@
       <Card :padding="false">
         <button
           @click="notificationSectionExpanded = !notificationSectionExpanded"
-          class="w-full p-4 flex items-center justify-between hover:bg-surface-hover transition-colors rounded-t-lg"
+          class="w-full p-4 flex items-center gap-4 hover:bg-surface-hover transition-colors rounded-lg"
         >
-          <div class="text-left">
+          <!-- Icon -->
+          <div class="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg">
+            <BellIcon class="h-6 w-6 text-white" />
+          </div>
+          <!-- Title -->
+          <div class="flex-1 text-left">
             <h3 class="text-lg font-semibold text-primary">Notification Settings</h3>
             <p class="text-sm text-secondary">Configure GenSlave failsafe notifications (Apprise)</p>
           </div>
-          <ChevronDownIcon
-            :class="['h-5 w-5 text-secondary transition-transform', notificationSectionExpanded ? 'rotate-180' : '']"
-          />
+          <!-- Expand/Collapse Indicator -->
+          <div :class="['p-2 rounded-lg transition-colors', notificationSectionExpanded ? 'bg-purple-100 dark:bg-purple-500/20' : 'bg-gray-100 dark:bg-gray-700']">
+            <ChevronDownIcon
+              :class="['h-5 w-5 transition-transform duration-200', notificationSectionExpanded ? 'rotate-180 text-purple-600 dark:text-purple-400' : 'text-gray-500']"
+            />
+          </div>
         </button>
-        <div v-show="notificationSectionExpanded" class="p-4 pt-0 space-y-6 border-t border-gray-200 dark:border-gray-700">
+        <div v-show="notificationSectionExpanded" class="p-4 pt-2 space-y-6 border-t border-gray-200 dark:border-gray-700">
           <!-- Loading state -->
           <div v-if="loadingNotifications" class="text-center py-4">
             <ArrowPathIcon class="h-6 w-6 animate-spin mx-auto text-primary" />
@@ -555,17 +563,25 @@
       <Card :padding="false">
         <button
           @click="connectionSectionExpanded = !connectionSectionExpanded"
-          class="w-full p-4 flex items-center justify-between hover:bg-surface-hover transition-colors rounded-t-lg"
+          class="w-full p-4 flex items-center gap-4 hover:bg-surface-hover transition-colors rounded-lg"
         >
-          <div class="text-left">
+          <!-- Icon -->
+          <div class="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
+            <Cog6ToothIcon class="h-6 w-6 text-white" />
+          </div>
+          <!-- Title -->
+          <div class="flex-1 text-left">
             <h3 class="text-lg font-semibold text-primary">Connection Settings</h3>
             <p class="text-sm text-secondary">Configure GenSlave communication and network</p>
           </div>
-          <ChevronDownIcon
-            :class="['h-5 w-5 text-secondary transition-transform', connectionSectionExpanded ? 'rotate-180' : '']"
-          />
+          <!-- Expand/Collapse Indicator -->
+          <div :class="['p-2 rounded-lg transition-colors', connectionSectionExpanded ? 'bg-blue-100 dark:bg-blue-500/20' : 'bg-gray-100 dark:bg-gray-700']">
+            <ChevronDownIcon
+              :class="['h-5 w-5 transition-transform duration-200', connectionSectionExpanded ? 'rotate-180 text-blue-600 dark:text-blue-400' : 'text-gray-500']"
+            />
+          </div>
         </button>
-        <div v-show="connectionSectionExpanded" class="p-4 pt-0 space-y-6 border-t border-gray-200 dark:border-gray-700">
+        <div v-show="connectionSectionExpanded" class="p-4 pt-2 space-y-6 border-t border-gray-200 dark:border-gray-700">
           <!-- GenSlave Connection Section -->
           <div class="p-4 rounded-lg bg-surface-hover">
             <h4 class="text-sm font-medium text-primary mb-3">GenSlave Connection</h4>
@@ -679,13 +695,15 @@
               </p>
             </div>
           </div>
-        </div>
-        <div class="flex justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-          <button @click="saveSlaveConfig" :disabled="savingSlaveConfig" class="btn-primary flex items-center gap-2">
-            <ArrowPathIcon v-if="savingSlaveConfig" class="h-4 w-4 animate-spin" />
-            <CheckCircleIcon v-else class="h-4 w-4" />
-            Save Settings
-          </button>
+
+          <!-- Save Settings Button (inside collapsible) -->
+          <div class="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+            <button @click="saveSlaveConfig" :disabled="savingSlaveConfig" class="btn-primary flex items-center gap-2">
+              <ArrowPathIcon v-if="savingSlaveConfig" class="h-4 w-4 animate-spin" />
+              <CheckCircleIcon v-else class="h-4 w-4" />
+              Save Settings
+            </button>
+          </div>
         </div>
       </Card>
 
@@ -736,6 +754,7 @@ import {
   ArrowPathIcon,
   CheckCircleIcon,
   ChevronDownIcon,
+  Cog6ToothIcon,
   GlobeAltIcon,
   WifiIcon,
   BoltIcon,
