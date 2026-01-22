@@ -73,6 +73,10 @@ GENSLAVE_HOSTNAME="genslave"
 # Mock GPIO mode (auto-detected based on hardware)
 MOCK_GPIO_MODE=false
 
+# Docker image source: true = pull from Docker Hub (faster), false = build locally
+USE_DOCKER_HUB_IMAGE=true
+DOCKER_HUB_IMAGE="rjsears/genmaster:latest"
+
 # Docker socket group ID (auto-detected for container management)
 DOCKER_GID="999"
 
@@ -1480,6 +1484,45 @@ configure_containers() {
     print_info "Using default container names"
 }
 
+configure_build_method() {
+    print_section "GenMaster Image Source"
+
+    echo -e "  ${WHITE}Choose how to deploy the GenMaster application:${NC}"
+    echo ""
+    echo -e "    ${GREEN}1.${NC} Docker Hub image ${CYAN}(Recommended)${NC}"
+    echo -e "       ${DIM}Pull pre-built image from rjsears/genmaster:latest${NC}"
+    echo -e "       ${DIM}Faster deployment (~30 seconds), no build tools needed${NC}"
+    echo ""
+    echo -e "    ${WHITE}2.${NC} Build locally"
+    echo -e "       ${DIM}Build from source code in this directory${NC}"
+    echo -e "       ${DIM}Slower (~5-7 minutes), requires more resources${NC}"
+    echo ""
+
+    if [ "$PRECONFIG_MODE" = "true" ] && [ -n "$USE_DOCKER_HUB_IMAGE" ]; then
+        if [ "$USE_DOCKER_HUB_IMAGE" = true ]; then
+            print_info "Using pre-configured setting: Docker Hub image"
+        else
+            print_info "Using pre-configured setting: Build locally"
+        fi
+        return
+    fi
+
+    local choice
+    echo -ne "  ${WHITE}Select option [1]: ${NC}"
+    read choice
+
+    case "$choice" in
+        2)
+            USE_DOCKER_HUB_IMAGE=false
+            print_success "Will build GenMaster locally from source"
+            ;;
+        *)
+            USE_DOCKER_HUB_IMAGE=true
+            print_success "Will pull GenMaster from Docker Hub (${DOCKER_HUB_IMAGE})"
+            ;;
+    esac
+}
+
 configure_timezone() {
     print_section "Timezone Configuration"
 
@@ -2679,9 +2722,23 @@ services:
   # Uses Docker bridge networking for container-to-container communication.
   # Connects to database and Redis via service names (db, redis).
   genmaster:
+EOF
+
+    # Add either image: or build: based on configuration
+    if [ "$USE_DOCKER_HUB_IMAGE" = true ]; then
+        cat >> "${SCRIPT_DIR}/docker-compose.yaml" << EOF
+    image: ${DOCKER_HUB_IMAGE}
+EOF
+    else
+        cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
     build:
       context: .
       dockerfile: Dockerfile
+EOF
+    fi
+
+    # Continue with the rest of the genmaster service configuration
+    cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
     container_name: ${GENMASTER_CONTAINER:-genmaster}
     restart: unless-stopped
     networks:
@@ -3192,8 +3249,15 @@ deploy_stack() {
         print_info "Using existing SSL certificates"
     fi
 
-    print_info "Building and starting containers..."
-    $docker_compose_cmd up -d --build
+    if [ "$USE_DOCKER_HUB_IMAGE" = true ]; then
+        print_info "Pulling GenMaster image from Docker Hub..."
+        $DOCKER_SUDO docker pull "${DOCKER_HUB_IMAGE}"
+        print_info "Starting containers..."
+        $docker_compose_cmd up -d
+    else
+        print_info "Building and starting containers..."
+        $docker_compose_cmd up -d --build
+    fi
 
     print_info "Waiting for services..."
     sleep 10
@@ -3664,12 +3728,13 @@ main() {
         [ "$CURRENT_STEP" -lt 3 ] && { configure_email; save_state "Email" 3; }
         [ "$CURRENT_STEP" -lt 4 ] && { configure_database; save_state "Database" 4; }
         [ "$CURRENT_STEP" -lt 5 ] && { configure_containers; save_state "Containers" 5; }
-        [ "$CURRENT_STEP" -lt 6 ] && { configure_timezone; save_state "Timezone" 6; }
-        [ "$CURRENT_STEP" -lt 7 ] && { generate_secret_key; save_state "Secret Key" 7; }
-        [ "$CURRENT_STEP" -lt 8 ] && { configure_genslave; save_state "GenSlave" 8; }
-        [ "$CURRENT_STEP" -lt 9 ] && { configure_webhooks; save_state "Webhooks" 9; }
-        [ "$CURRENT_STEP" -lt 10 ] && { configure_generator_info; save_state "Generator Info" 10; }
-        [ "$CURRENT_STEP" -lt 11 ] && { configure_optional_services; save_state "Services" 11; }
+        [ "$CURRENT_STEP" -lt 6 ] && { configure_build_method; save_state "Build Method" 6; }
+        [ "$CURRENT_STEP" -lt 7 ] && { configure_timezone; save_state "Timezone" 7; }
+        [ "$CURRENT_STEP" -lt 8 ] && { generate_secret_key; save_state "Secret Key" 8; }
+        [ "$CURRENT_STEP" -lt 9 ] && { configure_genslave; save_state "GenSlave" 9; }
+        [ "$CURRENT_STEP" -lt 10 ] && { configure_webhooks; save_state "Webhooks" 10; }
+        [ "$CURRENT_STEP" -lt 11 ] && { configure_generator_info; save_state "Generator Info" 11; }
+        [ "$CURRENT_STEP" -lt 12 ] && { configure_optional_services; save_state "Services" 12; }
 
         if ! show_configuration_summary; then
             print_error "Cancelled"
@@ -3692,6 +3757,7 @@ MOCK_GPIO_MODE=${MOCK_GPIO_MODE}
 PORTAINER_ENABLED=${INSTALL_PORTAINER}
 CLOUDFLARE_ENABLED=${INSTALL_CLOUDFLARE_TUNNEL}
 TAILSCALE_ENABLED=${INSTALL_TAILSCALE}
+USE_DOCKER_HUB_IMAGE=${USE_DOCKER_HUB_IMAGE}
 EOF
         chmod 600 "${CONFIG_FILE}"
 
