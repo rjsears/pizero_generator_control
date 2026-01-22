@@ -11,6 +11,7 @@
 
 """State machine service for generator state management."""
 
+import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any, Optional
@@ -66,6 +67,7 @@ class StateMachine:
         """Initialize state machine."""
         self._webhook_service: Optional["WebhookService"] = None
         self._initialized = False
+        self._operation_lock = asyncio.Lock()
 
     def set_webhook_service(self, webhook_service: "WebhookService") -> None:
         """Set the webhook service for notifications."""
@@ -289,117 +291,118 @@ class StateMachine:
         Raises:
             ValueError: If generator cannot be started
         """
-        async with AsyncSessionLocal() as db:
-            state = await self._get_state(db)
+        async with self._operation_lock:
+            async with AsyncSessionLocal() as db:
+                state = await self._get_state(db)
 
-            # For manual starts, check and clear cooldown (but not lockout)
-            if trigger == "manual":
-                if state.runtime_lockout_active:
-                    raise ValueError(
-                        "Cannot start - runtime lockout is active. "
-                        "Clear the lockout first by acknowledging the max runtime event."
-                    )
-                # Clear cooldown on manual start
-                if state.cooldown_active:
-                    state.cooldown_active = False
-                    state.cooldown_end_time = None
-                    logger.info("Cooldown cleared due to manual start")
-                    await db.commit()
-                    await self.log_event("COOLDOWN_CLEARED_MANUAL_START", {})
+                # For manual starts, check and clear cooldown (but not lockout)
+                if trigger == "manual":
+                    if state.runtime_lockout_active:
+                        raise ValueError(
+                            "Cannot start - runtime lockout is active. "
+                            "Clear the lockout first by acknowledging the max runtime event."
+                        )
+                    # Clear cooldown on manual start
+                    if state.cooldown_active:
+                        state.cooldown_active = False
+                        state.cooldown_end_time = None
+                        logger.info("Cooldown cleared due to manual start")
+                        await db.commit()
+                        await self.log_event("COOLDOWN_CLEARED_MANUAL_START", {})
 
-            # Validate state transition
-            if not state.can_start_generator():
-                if state.generator_running:
-                    raise ValueError("Generator is already running")
-                if state.override_enabled and state.override_type == "force_stop":
-                    raise ValueError("Cannot start - force_stop override is active")
-                if state.slave_connection_status == "disconnected":
-                    raise ValueError("Cannot start - GenSlave is disconnected")
-                if state.runtime_lockout_active:
-                    raise ValueError(
-                        "Cannot start - runtime lockout is active. "
-                        "Clear the lockout first."
-                    )
-                raise ValueError("Generator cannot be started in current state")
+                # Validate state transition
+                if not state.can_start_generator():
+                    if state.generator_running:
+                        raise ValueError("Generator is already running")
+                    if state.override_enabled and state.override_type == "force_stop":
+                        raise ValueError("Cannot start - force_stop override is active")
+                    if state.slave_connection_status == "disconnected":
+                        raise ValueError("Cannot start - GenSlave is disconnected")
+                    if state.runtime_lockout_active:
+                        raise ValueError(
+                            "Cannot start - runtime lockout is active. "
+                            "Clear the lockout first."
+                        )
+                    raise ValueError("Generator cannot be started in current state")
 
-            # Turn on the relay via GenSlave
-            # GenSlave will reject if relay is not armed
-            slave_client = await self._get_slave_client()
-            relay_response = await slave_client.relay_on()
-            if not relay_response.success:
-                error_msg = relay_response.error or "Unknown error"
-                # Provide helpful message if GenSlave rejected due to not being armed
-                if "not armed" in error_msg.lower():
-                    raise ValueError("Cannot start - GenSlave relay is not armed. Arm the relay first.")
-                raise ValueError(f"Failed to turn on relay: {error_msg}")
+                # Turn on the relay via GenSlave
+                # GenSlave will reject if relay is not armed
+                slave_client = await self._get_slave_client()
+                relay_response = await slave_client.relay_on()
+                if not relay_response.success:
+                    error_msg = relay_response.error or "Unknown error"
+                    # Provide helpful message if GenSlave rejected due to not being armed
+                    if "not armed" in error_msg.lower():
+                        raise ValueError("Cannot start - GenSlave relay is not armed. Arm the relay first.")
+                    raise ValueError(f"Failed to turn on relay: {error_msg}")
 
-            logger.info("GenSlave relay turned ON")
+                logger.info("GenSlave relay turned ON")
 
-            # Update the slave status cache immediately
-            slave_status_service = get_slave_status_service()
-            await slave_status_service.update_relay_state(relay_on=True)
+                # Update the slave status cache immediately
+                slave_status_service = get_slave_status_service()
+                await slave_status_service.update_relay_state(relay_on=True)
 
-            # Fetch generator info for fuel tracking
-            gen_info = await GeneratorInfo.get_instance(db)
-            fuel_type = gen_info.fuel_type
-            load_expected = gen_info.load_expected
-            consumption_rate = gen_info.get_consumption_rate()
+                # Fetch generator info for fuel tracking
+                gen_info = await GeneratorInfo.get_instance(db)
+                fuel_type = gen_info.fuel_type
+                load_expected = gen_info.load_expected
+                consumption_rate = gen_info.get_consumption_rate()
 
-            # Create run record with fuel tracking data
-            start_time = int(time.time())
-            run = GeneratorRun(
-                start_time=start_time,
-                trigger_type=trigger,
-                scheduled_run_id=scheduled_run_id,
-                notes=notes,
-                fuel_type_at_run=fuel_type,
-                load_at_run=load_expected,
-                fuel_consumption_rate=consumption_rate,
-            )
-            db.add(run)
-            await db.flush()
+                # Create run record with fuel tracking data
+                start_time = int(time.time())
+                run = GeneratorRun(
+                    start_time=start_time,
+                    trigger_type=trigger,
+                    scheduled_run_id=scheduled_run_id,
+                    notes=notes,
+                    fuel_type_at_run=fuel_type,
+                    load_at_run=load_expected,
+                    fuel_consumption_rate=consumption_rate,
+                )
+                db.add(run)
+                await db.flush()
 
-            # Update system state
-            state.generator_running = True
-            state.generator_start_time = start_time
-            state.current_run_id = run.id
-            state.run_trigger = trigger
+                # Update system state
+                state.generator_running = True
+                state.generator_start_time = start_time
+                state.current_run_id = run.id
+                state.run_trigger = trigger
 
-            await db.commit()
-            await db.refresh(run)
+                await db.commit()
+                await db.refresh(run)
 
-            logger.info(f"Generator started - trigger: {trigger}, run_id: {run.id}")
+                logger.info(f"Generator started - trigger: {trigger}, run_id: {run.id}")
 
-            # Log event
-            await self.log_event(
-                f"GENERATOR_STARTED_{trigger.upper()}",
-                {"run_id": run.id, "trigger": trigger, "notes": notes},
-            )
+                # Log event
+                await self.log_event(
+                    f"GENERATOR_STARTED_{trigger.upper()}",
+                    {"run_id": run.id, "trigger": trigger, "notes": notes},
+                )
 
-            # Send webhook
-            await self._send_webhook(
-                f"generator.started.{trigger}",
-                {"run_id": run.id, "trigger": trigger},
-            )
+                # Send webhook
+                await self._send_webhook(
+                    f"generator.started.{trigger}",
+                    {"run_id": run.id, "trigger": trigger},
+                )
 
-            # Trigger system notification
-            from datetime import datetime
-            reason_map = {
-                "victron": "Victron signal",
-                "manual": "Manual start",
-                "scheduled": "Scheduled run",
-                "exercise": "Exercise run",
-            }
-            await self._trigger_system_notification(
-                "generator_started",
-                {
-                    "run_id": run.id,
-                    "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "reason": reason_map.get(trigger, trigger),
-                },
-            )
+                # Trigger system notification
+                from datetime import datetime
+                reason_map = {
+                    "victron": "Victron signal",
+                    "manual": "Manual start",
+                    "scheduled": "Scheduled run",
+                    "exercise": "Exercise run",
+                }
+                await self._trigger_system_notification(
+                    "generator_started",
+                    {
+                        "run_id": run.id,
+                        "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "reason": reason_map.get(trigger, trigger),
+                    },
+                )
 
-            return run
+                return run
 
     async def stop_generator(
         self,
@@ -416,111 +419,112 @@ class StateMachine:
         Returns:
             The completed GeneratorRun record, or None if not running
         """
-        async with AsyncSessionLocal() as db:
-            state = await self._get_state(db)
+        async with self._operation_lock:
+            async with AsyncSessionLocal() as db:
+                state = await self._get_state(db)
 
-            if not state.generator_running:
-                logger.warning("Attempted to stop generator that isn't running")
-                return None
+                if not state.generator_running:
+                    logger.warning("Attempted to stop generator that isn't running")
+                    return None
 
-            # Turn off the relay via GenSlave
-            slave_client = await self._get_slave_client()
-            relay_response = await slave_client.relay_off()
-            if not relay_response.success:
-                logger.error(f"Failed to turn off relay: {relay_response.error}")
-                # Continue anyway to update state - relay may already be off
+                # Turn off the relay via GenSlave
+                slave_client = await self._get_slave_client()
+                relay_response = await slave_client.relay_off()
+                if not relay_response.success:
+                    logger.error(f"Failed to turn off relay: {relay_response.error}")
+                    # Continue anyway to update state - relay may already be off
 
-            logger.info("GenSlave relay turned OFF")
+                logger.info("GenSlave relay turned OFF")
 
-            # Update the slave status cache immediately
-            slave_status_service = get_slave_status_service()
-            await slave_status_service.update_relay_state(relay_on=False)
+                # Update the slave status cache immediately
+                slave_status_service = get_slave_status_service()
+                await slave_status_service.update_relay_state(relay_on=False)
 
-            stop_time = int(time.time())
-            run_id = state.current_run_id
+                stop_time = int(time.time())
+                run_id = state.current_run_id
 
-            # Update run record if exists
-            run = None
-            if run_id:
-                result = await db.execute(
-                    select(GeneratorRun).where(GeneratorRun.id == run_id)
-                )
-                run = result.scalar_one_or_none()
+                # Update run record if exists
+                run = None
+                if run_id:
+                    result = await db.execute(
+                        select(GeneratorRun).where(GeneratorRun.id == run_id)
+                    )
+                    run = result.scalar_one_or_none()
+                    if run:
+                        run.complete(stop_time, reason)
+                        # Calculate estimated fuel used if we have consumption rate
+                        if run.fuel_consumption_rate and run.duration_seconds:
+                            # Formula: (runtime_seconds / 3600) * fuel_consumption_rate
+                            run.estimated_fuel_used = round(
+                                (run.duration_seconds / 3600) * run.fuel_consumption_rate,
+                                3
+                            )
+
+                # Update system state
+                state.generator_running = False
+                state.generator_start_time = None
+                state.current_run_id = None
+                state.run_trigger = "idle"
+
+                await db.commit()
+
                 if run:
-                    run.complete(stop_time, reason)
-                    # Calculate estimated fuel used if we have consumption rate
-                    if run.fuel_consumption_rate and run.duration_seconds:
-                        # Formula: (runtime_seconds / 3600) * fuel_consumption_rate
-                        run.estimated_fuel_used = round(
-                            (run.duration_seconds / 3600) * run.fuel_consumption_rate,
-                            3
-                        )
+                    await db.refresh(run)
+                    duration = run.duration_seconds or 0
+                    logger.info(
+                        f"Generator stopped - reason: {reason}, "
+                        f"duration: {duration}s, run_id: {run_id}"
+                    )
+                else:
+                    logger.info(f"Generator stopped - reason: {reason}")
 
-            # Update system state
-            state.generator_running = False
-            state.generator_start_time = None
-            state.current_run_id = None
-            state.run_trigger = "idle"
-
-            await db.commit()
-
-            if run:
-                await db.refresh(run)
-                duration = run.duration_seconds or 0
-                logger.info(
-                    f"Generator stopped - reason: {reason}, "
-                    f"duration: {duration}s, run_id: {run_id}"
+                # Log event
+                await self.log_event(
+                    f"GENERATOR_STOPPED_{reason.upper()}",
+                    {"run_id": run_id, "reason": reason, "notes": notes},
                 )
-            else:
-                logger.info(f"Generator stopped - reason: {reason}")
 
-            # Log event
-            await self.log_event(
-                f"GENERATOR_STOPPED_{reason.upper()}",
-                {"run_id": run_id, "reason": reason, "notes": notes},
-            )
+                # Send webhook
+                await self._send_webhook(
+                    f"generator.stopped.{reason}",
+                    {"run_id": run_id, "reason": reason},
+                )
 
-            # Send webhook
-            await self._send_webhook(
-                f"generator.stopped.{reason}",
-                {"run_id": run_id, "reason": reason},
-            )
+                # Trigger system notification
+                from datetime import datetime
+                reason_map = {
+                    "victron": "Victron signal off",
+                    "manual": "Manual stop",
+                    "scheduled_end": "Scheduled run ended",
+                    "comm_loss": "Communication loss",
+                    "override": "Override activated",
+                    "error": "Error occurred",
+                    "max_runtime": "Max runtime exceeded",
+                }
+                duration_seconds = run.duration_seconds if run else 0
+                # Format runtime as human-readable
+                hours, remainder = divmod(duration_seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                if hours > 0:
+                    runtime = f"{int(hours)}h {int(minutes)}m"
+                elif minutes > 0:
+                    runtime = f"{int(minutes)}m {int(seconds)}s"
+                else:
+                    runtime = f"{int(seconds)}s"
+                # Estimate fuel consumed (placeholder - would need generator info)
+                fuel_gallons = round(duration_seconds / 3600 * 0.5, 2)  # Rough estimate
+                await self._trigger_system_notification(
+                    "generator_stopped",
+                    {
+                        "run_id": run_id,
+                        "reason": reason_map.get(reason, reason),
+                        "runtime": runtime,
+                        "fuel_gallons": fuel_gallons,
+                        "fuel_type": "Propane",  # TODO: Get from generator info
+                    },
+                )
 
-            # Trigger system notification
-            from datetime import datetime
-            reason_map = {
-                "victron": "Victron signal off",
-                "manual": "Manual stop",
-                "scheduled_end": "Scheduled run ended",
-                "comm_loss": "Communication loss",
-                "override": "Override activated",
-                "error": "Error occurred",
-                "max_runtime": "Max runtime exceeded",
-            }
-            duration_seconds = run.duration_seconds if run else 0
-            # Format runtime as human-readable
-            hours, remainder = divmod(duration_seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
-            if hours > 0:
-                runtime = f"{int(hours)}h {int(minutes)}m"
-            elif minutes > 0:
-                runtime = f"{int(minutes)}m {int(seconds)}s"
-            else:
-                runtime = f"{int(seconds)}s"
-            # Estimate fuel consumed (placeholder - would need generator info)
-            fuel_gallons = round(duration_seconds / 3600 * 0.5, 2)  # Rough estimate
-            await self._trigger_system_notification(
-                "generator_stopped",
-                {
-                    "run_id": run_id,
-                    "reason": reason_map.get(reason, reason),
-                    "runtime": runtime,
-                    "fuel_gallons": fuel_gallons,
-                    "fuel_type": "Propane",  # TODO: Get from generator info
-                },
-            )
-
-            return run
+                return run
 
     async def handle_victron_signal_change(self, signal_active: bool) -> None:
         """

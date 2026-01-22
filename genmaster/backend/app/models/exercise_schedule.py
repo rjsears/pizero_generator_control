@@ -82,9 +82,9 @@ class ExerciseSchedule(Base):
         if self.last_exercise_date:
             return self.last_exercise_date + timedelta(days=self.frequency_days)
         else:
-            # If never run, schedule for today or tomorrow
-            today = date.today()
-            return today
+            # If never run, schedule for tomorrow (not today) to prevent immediate start
+            from datetime import timedelta
+            return date.today() + timedelta(days=1)
 
     def update_after_exercise(self) -> None:
         """Update tracking fields after an exercise run completes."""
