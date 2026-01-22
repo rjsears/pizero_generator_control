@@ -14,12 +14,16 @@
 import asyncio
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Thread pool for blocking socket operations
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="terminal_")
 
 
 class TerminalSession:
@@ -147,20 +151,44 @@ class TerminalSession:
 
     async def _read_output(self):
         """Read output from exec socket and send to websocket."""
+        import base64
+
+        loop = asyncio.get_event_loop()
+
+        def blocking_recv():
+            """Blocking socket receive - runs in thread pool."""
+            try:
+                # Set socket timeout to avoid indefinite blocking
+                self.socket._sock.settimeout(1.0)
+                return self.socket._sock.recv(4096)
+            except Exception:
+                return None
+
         try:
             while self._running:
                 try:
-                    # Read from the socket
-                    data = self.socket._sock.recv(4096)
+                    # Run blocking recv in thread pool to not block event loop
+                    data = await asyncio.wait_for(
+                        loop.run_in_executor(_executor, blocking_recv),
+                        timeout=5.0
+                    )
+
                     if not data:
+                        # Timeout or empty - check if still running and continue
+                        if self._running:
+                            continue
                         break
 
                     # Send to websocket as base64 to handle binary data
-                    import base64
                     encoded = base64.b64encode(data).decode("utf-8")
                     await self.websocket.send_text(
                         json.dumps({"type": "output", "data": encoded})
                     )
+                except asyncio.TimeoutError:
+                    # Read timeout - check if still running and continue
+                    if self._running:
+                        continue
+                    break
                 except Exception as e:
                     if self._running:
                         logger.debug(f"Read error: {e}")
@@ -174,8 +202,24 @@ class TerminalSession:
     async def write_input(self, data: bytes):
         """Write input to the exec socket."""
         if self.socket and self._running:
+            loop = asyncio.get_event_loop()
+
+            def blocking_send():
+                """Blocking socket send - runs in thread pool."""
+                try:
+                    self.socket._sock.send(data)
+                    return True
+                except Exception as e:
+                    logger.error(f"Write error: {e}")
+                    return False
+
             try:
-                self.socket._sock.send(data)
+                await asyncio.wait_for(
+                    loop.run_in_executor(_executor, blocking_send),
+                    timeout=5.0
+                )
+            except asyncio.TimeoutError:
+                logger.error("Write timeout")
             except Exception as e:
                 logger.error(f"Write error: {e}")
 
