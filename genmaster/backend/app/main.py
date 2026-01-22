@@ -46,7 +46,6 @@ from app.routers import (
 )
 from app.services.exercise_scheduler import ExerciseSchedulerService
 from app.services.gpio_monitor import GPIOMonitor
-from app.services.heartbeat import HeartbeatService
 from app.services.metrics_service import get_metrics_service
 from app.services.scheduler import SchedulerService
 from app.services.slave_client import SlaveClient
@@ -65,7 +64,6 @@ logger = logging.getLogger(__name__)
 # Global service instances (accessed by routers via dependency injection)
 state_machine: Optional[StateMachine] = None
 gpio_monitor: Optional[GPIOMonitor] = None
-heartbeat_service: Optional[HeartbeatService] = None
 scheduler_service: Optional[SchedulerService] = None
 exercise_scheduler_service: Optional[ExerciseSchedulerService] = None
 webhook_service: Optional[WebhookService] = None
@@ -179,7 +177,7 @@ async def sync_generator_info_to_database() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup/shutdown."""
-    global state_machine, gpio_monitor, heartbeat_service, scheduler_service, exercise_scheduler_service, webhook_service
+    global state_machine, gpio_monitor, scheduler_service, exercise_scheduler_service, webhook_service
 
     # =========================================================================
     # Startup
@@ -218,15 +216,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             f"GPIO monitor started (mock mode: {gpio_monitor.mock_mode})"
         )
 
-        # Initialize heartbeat service
-        heartbeat_service = HeartbeatService(state_machine)
-        await heartbeat_service.start()
-        logger.info("Heartbeat service started")
-
-        # Initialize slave status service (background polling for UI performance)
+        # Initialize unified slave status service (background polling + heartbeat)
+        # This is the SINGLE GATEKEEPER for all GenSlave communication
         slave_status_service = get_slave_status_service()
+        slave_status_service.set_state_machine(state_machine)
         await slave_status_service.start()
-        logger.info("Slave status service started")
+        logger.info("Slave status service started (unified: polling + heartbeat)")
 
         # Initialize scheduler service
         scheduler_service = SchedulerService(state_machine)
@@ -306,15 +301,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             scheduler_service.stop()
             logger.info("Scheduler service stopped")
 
-        # Stop slave status service
+        # Stop unified slave status service (includes heartbeat)
         slave_status_svc = get_slave_status_service()
         await slave_status_svc.stop()
-        logger.info("Slave status service stopped")
-
-        # Stop heartbeat service
-        if heartbeat_service:
-            await heartbeat_service.stop()
-            logger.info("Heartbeat service stopped")
+        logger.info("Slave status service stopped (unified: polling + heartbeat)")
 
         # Stop GPIO monitor
         if gpio_monitor:
