@@ -290,9 +290,28 @@ async function loadNetworkInfo() {
       systemApi.getTailscale().catch(() => ({ data: {} })),
       systemApi.getExternalServices().catch(() => ({ data: [] })),
     ])
-    networkInfo.value = networkRes.data
-    cloudflareInfo.value = cloudflareRes.data
-    tailscaleInfo.value = tailscaleRes.data
+    networkInfo.value = networkRes.data || { hostname: '', interfaces: [], gateway: null, dns_servers: [] }
+    // Merge with defaults to ensure all properties exist
+    cloudflareInfo.value = {
+      installed: false,
+      running: false,
+      connected: false,
+      version: null,
+      tunnel_id: null,
+      connector_id: null,
+      edge_locations: [],
+      connections_per_location: {},
+      metrics: {},
+      last_error: null,
+      ...(cloudflareRes.data || {})
+    }
+    tailscaleInfo.value = {
+      installed: false,
+      running: false,
+      logged_in: false,
+      tailscale_ip: null,
+      ...(tailscaleRes.data || {})
+    }
     // Filter out services without valid URLs to prevent href errors
     externalServices.value = (servicesRes.data || []).filter(s => s && s.url)
   } catch (error) {
