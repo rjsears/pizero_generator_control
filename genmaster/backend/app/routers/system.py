@@ -481,10 +481,11 @@ async def get_cloudflare_status() -> dict:
     Get Cloudflare Tunnel status.
 
     Returns tunnel connection status, connector info, metrics, and health.
-    Fetches real-time metrics from cloudflared's metrics endpoint.
+    Parses container logs for connection status and uses HTTP to fetch metrics.
     """
     import logging
     import re
+    import urllib.request
 
     logger = logging.getLogger(__name__)
     result = {
@@ -544,43 +545,89 @@ async def get_cloudflare_status() -> dict:
                     if cf_container.image.tags:
                         result["version"] = cf_container.image.tags[0].split(":")[-1]
 
-                # Get tunnel/connector IDs from logs
+                # Parse logs for connection status, tunnel ID, connector ID, and edge locations
                 try:
-                    logs = cf_container.logs(tail=200).decode("utf-8")
+                    logs = cf_container.logs(tail=500).decode("utf-8", errors="ignore")
+                    edge_locs = set()
+
                     for line in logs.split("\n"):
-                        if "tunnelID" in line or "Tunnel ID" in line:
+                        line_lower = line.lower()
+
+                        # Look for tunnel ID
+                        if "tunnelid" in line_lower or "tunnel id" in line_lower:
                             match = re.search(r'[a-f0-9-]{36}', line)
                             if match:
                                 result["tunnel_id"] = match.group()
-                        if "connectorID" in line or "connector" in line.lower():
+
+                        # Look for connector ID
+                        if "connectorid" in line_lower:
                             match = re.search(r'[a-f0-9-]{36}', line)
                             if match and match.group() != result.get("tunnel_id"):
                                 result["connector_id"] = match.group()
-                        if "ERR" in line and "error" not in result.get("last_error", ""):
+
+                        # Check for connection registered (primary indicator of connected status)
+                        if "registered" in line_lower and ("connector" in line_lower or "connection" in line_lower):
+                            result["connected"] = True
+                            # Extract edge location
+                            loc_match = re.search(r'location=(\w+)', line)
+                            if loc_match:
+                                edge_locs.add(loc_match.group(1))
+
+                        # Check for tunnel connected message
+                        if "tunnel" in line_lower and "connected" in line_lower:
+                            result["connected"] = True
+
+                        # Look for errors (but keep the last one)
+                        if "err" in line_lower and "error" in line_lower:
                             result["last_error"] = line.strip()[-200:]
-                except Exception:
-                    pass
 
-                # Check if cloudflared is ready
-                try:
-                    exit_code, output = cf_container.exec_run(
-                        "wget -q -O- http://localhost:2000/ready 2>/dev/null || echo 'not_ready'",
-                        demux=True
-                    )
-                    if exit_code == 0 and output[0]:
-                        ready_output = output[0].decode("utf-8").strip()
-                        result["connected"] = ready_output == "OK"
-                except Exception:
-                    pass
+                    if edge_locs:
+                        result["edge_locations"] = list(edge_locs)
 
-                # Get metrics from cloudflared metrics endpoint
+                except Exception as e:
+                    logger.debug(f"Could not parse cloudflared logs: {e}")
+
+                # Try to get metrics via HTTP from container's network
+                metrics_text = None
                 try:
-                    exit_code, output = cf_container.exec_run(
-                        "wget -q -O- http://localhost:2000/metrics 2>/dev/null",
-                        demux=True
-                    )
-                    if exit_code == 0 and output[0]:
-                        metrics_text = output[0].decode("utf-8")
+                    # Get container's internal IP
+                    networks = cf_container.attrs.get("NetworkSettings", {}).get("Networks", {})
+                    for network_name, network_config in networks.items():
+                        container_ip = network_config.get("IPAddress")
+                        if container_ip:
+                            try:
+                                req = urllib.request.Request(
+                                    f"http://{container_ip}:2000/metrics",
+                                    headers={"User-Agent": "GenMaster/1.0"}
+                                )
+                                with urllib.request.urlopen(req, timeout=2) as resp:
+                                    metrics_text = resp.read().decode("utf-8")
+                                break
+                            except Exception:
+                                continue
+
+                    # Also try localhost with mapped port
+                    if not metrics_text:
+                        ports = cf_container.attrs.get("NetworkSettings", {}).get("Ports", {})
+                        for port_key, port_bindings in (ports or {}).items():
+                            if "2000" in port_key and port_bindings:
+                                host_port = port_bindings[0].get("HostPort", "2000")
+                                try:
+                                    req = urllib.request.Request(
+                                        f"http://localhost:{host_port}/metrics",
+                                        headers={"User-Agent": "GenMaster/1.0"}
+                                    )
+                                    with urllib.request.urlopen(req, timeout=2) as resp:
+                                        metrics_text = resp.read().decode("utf-8")
+                                    break
+                                except Exception:
+                                    continue
+                except Exception as e:
+                    logger.debug(f"Could not connect to cloudflared metrics endpoint: {e}")
+
+                # Parse metrics if we got them
+                if metrics_text:
+                    try:
                         metrics = result["metrics"]
 
                         # Active streams
@@ -598,12 +645,13 @@ async def get_cloudflare_status() -> dict:
                         if match:
                             metrics["request_errors"] = int(match.group(1))
 
-                        # HA connections
+                        # HA connections (key indicator of connection)
                         match = re.search(r'cloudflared_tunnel_ha_connections\s+(\d+)', metrics_text)
                         if match:
-                            metrics["ha_connections"] = int(match.group(1))
-                            # If we have HA connections, we're connected
-                            if metrics["ha_connections"] > 0:
+                            ha_connections = int(match.group(1))
+                            metrics["ha_connections"] = ha_connections
+                            # If we have HA connections, we're definitely connected
+                            if ha_connections > 0:
                                 result["connected"] = True
 
                         # Response codes
@@ -636,26 +684,11 @@ async def get_cloudflare_status() -> dict:
                             result["edge_locations"] = locations
                             result["connections_per_location"] = connections_per_loc
 
-                except Exception as e:
-                    logger.debug(f"Could not fetch cloudflared metrics: {e}")
-
-                # Fallback: get edge locations from logs if not from metrics
-                if not result["edge_locations"]:
-                    try:
-                        logs = cf_container.logs(tail=100).decode("utf-8")
-                        edge_locs = set()
-                        for line in logs.split("\n"):
-                            if "Connection" in line and "registered" in line:
-                                result["connected"] = True
-                                loc_match = re.search(r'location=(\w+)', line)
-                                if loc_match:
-                                    edge_locs.add(loc_match.group(1))
-                        if edge_locs:
-                            result["edge_locations"] = list(edge_locs)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Could not parse cloudflared metrics: {e}")
         else:
             result["installed"] = False
+            result["error"] = "Cloudflare tunnel container not found"
 
     except ImportError:
         result["error"] = "Docker SDK not installed"
