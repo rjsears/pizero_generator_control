@@ -356,9 +356,21 @@
         </Card>
       </div>
 
-      <!-- Notification Settings Card -->
-      <Card title="Notification Settings" subtitle="Configure GenSlave failsafe notifications (Apprise)">
-        <div class="space-y-6">
+      <!-- Notification Settings Card (Collapsible) -->
+      <Card :padding="false">
+        <button
+          @click="notificationSectionExpanded = !notificationSectionExpanded"
+          class="w-full p-4 flex items-center justify-between hover:bg-surface-hover transition-colors rounded-t-lg"
+        >
+          <div class="text-left">
+            <h3 class="text-lg font-semibold text-primary">Notification Settings</h3>
+            <p class="text-sm text-secondary">Configure GenSlave failsafe notifications (Apprise)</p>
+          </div>
+          <ChevronDownIcon
+            :class="['h-5 w-5 text-secondary transition-transform', notificationSectionExpanded ? 'rotate-180' : '']"
+          />
+        </button>
+        <div v-show="notificationSectionExpanded" class="p-4 pt-0 space-y-6 border-t border-gray-200 dark:border-gray-700">
           <!-- Loading state -->
           <div v-if="loadingNotifications" class="text-center py-4">
             <ArrowPathIcon class="h-6 w-6 animate-spin mx-auto text-primary" />
@@ -539,9 +551,21 @@
         </div>
       </Card>
 
-      <!-- Connection Settings Card -->
-      <Card title="Connection Settings" subtitle="Configure GenSlave communication and network">
-        <div class="space-y-6">
+      <!-- Connection Settings Card (Collapsible) -->
+      <Card :padding="false">
+        <button
+          @click="connectionSectionExpanded = !connectionSectionExpanded"
+          class="w-full p-4 flex items-center justify-between hover:bg-surface-hover transition-colors rounded-t-lg"
+        >
+          <div class="text-left">
+            <h3 class="text-lg font-semibold text-primary">Connection Settings</h3>
+            <p class="text-sm text-secondary">Configure GenSlave communication and network</p>
+          </div>
+          <ChevronDownIcon
+            :class="['h-5 w-5 text-secondary transition-transform', connectionSectionExpanded ? 'rotate-180' : '']"
+          />
+        </button>
+        <div v-show="connectionSectionExpanded" class="p-4 pt-0 space-y-6 border-t border-gray-200 dark:border-gray-700">
           <!-- GenSlave Connection Section -->
           <div class="p-4 rounded-lg bg-surface-hover">
             <h4 class="text-sm font-medium text-primary mb-3">GenSlave Connection</h4>
@@ -711,6 +735,7 @@ import HeartbeatLoader from '@/components/common/HeartbeatLoader.vue'
 import {
   ArrowPathIcon,
   CheckCircleIcon,
+  ChevronDownIcon,
   GlobeAltIcon,
   WifiIcon,
   BoltIcon,
@@ -765,6 +790,10 @@ const apiSecret = ref('')  // Current API secret from database
 const newApiSecret = ref('')  // New API secret to set
 const showApiSecret = ref(false)  // Toggle visibility
 const savingApiSecret = ref(false)
+
+// Collapsible sections
+const notificationSectionExpanded = ref(false)
+const connectionSectionExpanded = ref(false)
 
 // Notification management
 const loadingNotifications = ref(false)
