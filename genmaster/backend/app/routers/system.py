@@ -14,8 +14,27 @@
 import asyncio
 import platform
 import time
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+
+# Simple TTL cache for slow operations
+_cache: dict[str, dict[str, Any]] = {}
+CACHE_TTL_SECONDS = 30  # Cache external service status for 30 seconds
+
+
+def _get_cached(key: str) -> Any | None:
+    """Get cached value if not expired."""
+    if key in _cache:
+        entry = _cache[key]
+        if time.time() - entry["time"] < CACHE_TTL_SECONDS:
+            return entry["data"]
+    return None
+
+
+def _set_cached(key: str, data: Any) -> None:
+    """Set cached value with current timestamp."""
+    _cache[key] = {"data": data, "time": time.time()}
 
 from app.config import settings
 from app.schemas import (
@@ -222,7 +241,13 @@ async def get_ssl_info() -> dict:
     Get SSL certificate information.
 
     Returns certificate details including domain, expiry date, and issuer.
+    Results are cached for 30 seconds to avoid slow Docker operations on every call.
     """
+    # Check cache first
+    cached = _get_cached("ssl_info")
+    if cached is not None:
+        return cached
+
     import logging
     from datetime import datetime
 
@@ -337,6 +362,8 @@ async def get_ssl_info() -> dict:
     except Exception as e:
         ssl_info["error"] = str(e)
 
+    # Cache the result
+    _set_cached("ssl_info", ssl_info)
     return ssl_info
 
 
@@ -482,7 +509,13 @@ async def get_cloudflare_status() -> dict:
 
     Returns tunnel connection status, connector info, metrics, and health.
     Parses container logs for connection status and uses HTTP to fetch metrics.
+    Results are cached for 30 seconds to avoid slow Docker operations on every call.
     """
+    # Check cache first
+    cached = _get_cached("cloudflare")
+    if cached is not None:
+        return cached
+
     import logging
     import re
     import urllib.request
@@ -696,6 +729,8 @@ async def get_cloudflare_status() -> dict:
         logger.warning(f"Failed to get Cloudflare status: {e}")
         result["error"] = str(e)
 
+    # Cache the result
+    _set_cached("cloudflare", result)
     return result
 
 
@@ -705,7 +740,13 @@ async def get_tailscale_status() -> dict:
     Get Tailscale VPN status.
 
     Returns connection status, IP addresses, hostname, and peer information.
+    Results are cached for 30 seconds to avoid slow Docker operations on every call.
     """
+    # Check cache first
+    cached = _get_cached("tailscale")
+    if cached is not None:
+        return cached
+
     import logging
 
     logger = logging.getLogger(__name__)
@@ -817,6 +858,8 @@ async def get_tailscale_status() -> dict:
         logger.warning(f"Failed to get Tailscale status: {e}")
         result["error"] = str(e)
 
+    # Cache the result
+    _set_cached("tailscale", result)
     return result
 
 
@@ -826,7 +869,13 @@ async def get_docker_info() -> dict:
     Get Docker daemon information.
 
     Returns version, containers count, images count, and resource usage.
+    Results are cached for 30 seconds to avoid slow Docker operations on every call.
     """
+    # Check cache first
+    cached = _get_cached("docker_info")
+    if cached is not None:
+        return cached
+
     import logging
 
     logger = logging.getLogger(__name__)
@@ -862,7 +911,7 @@ async def get_docker_info() -> dict:
         except Exception as df_err:
             logger.debug(f"Could not get Docker disk usage: {df_err}")
 
-        return {
+        result = {
             "version": version.get("Version"),
             "api_version": version.get("ApiVersion"),
             "os": info.get("OperatingSystem"),
@@ -878,6 +927,9 @@ async def get_docker_info() -> dict:
             "storage_driver": info.get("Driver"),
             "disk_usage_gb": round(disk_usage_gb, 2),
         }
+        # Cache the result
+        _set_cached("docker_info", result)
+        return result
 
     except ImportError:
         return {"error": "Docker SDK not installed"}
