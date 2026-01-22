@@ -282,7 +282,8 @@ async function loadNetworkInfo() {
     networkInfo.value = networkRes.data
     cloudflareInfo.value = cloudflareRes.data
     tailscaleInfo.value = tailscaleRes.data
-    externalServices.value = servicesRes.data || []
+    // Filter out services without a valid URL to prevent template errors
+    externalServices.value = (servicesRes.data || []).filter(s => s && s.url)
   } catch (error) {
     console.error('Network info load failed:', error)
     notificationStore.error('Failed to load network information')
