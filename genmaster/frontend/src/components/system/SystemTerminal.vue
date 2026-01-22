@@ -290,9 +290,12 @@ watch(selectedType, () => {
   }
 })
 
-onMounted(() => {
-  loadTargets()
+onMounted(async () => {
+  await loadTargets()
   window.addEventListener('resize', handleResize)
+  // Initialize terminal on mount so it's ready when user connects
+  await nextTick()
+  initTerminal()
 })
 
 onUnmounted(() => {
@@ -426,7 +429,7 @@ onUnmounted(() => {
     <Card :padding="false">
       <div
         :class="[
-          'rounded-lg overflow-hidden',
+          'rounded-lg overflow-hidden relative',
           themeStore.colorMode === 'dark' ? 'bg-[#1a1b26]' : 'bg-[#f8fafc]'
         ]"
       >
@@ -434,16 +437,16 @@ onUnmounted(() => {
         <div
           ref="terminalRef"
           class="h-[500px] p-2"
-          :class="{ 'opacity-30': !connected && !connecting }"
+          :class="{ 'opacity-20': !connected && !connecting }"
         />
 
         <!-- Placeholder when not connected -->
         <div
-          v-if="!connected && !connecting && !terminal"
-          class="absolute inset-0 flex flex-col items-center justify-center"
+          v-if="!connected && !connecting"
+          class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
         >
-          <CommandLineIcon class="h-16 w-16 text-gray-400 mb-4" />
-          <p class="text-gray-500 dark:text-gray-400">Select a target and connect to start a terminal session</p>
+          <CommandLineIcon class="h-16 w-16 text-gray-400 dark:text-gray-600 mb-4" />
+          <p class="text-gray-500 dark:text-gray-400 text-center px-4">Select a target and connect to start a terminal session</p>
         </div>
       </div>
 
