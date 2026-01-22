@@ -480,7 +480,8 @@ async def get_cloudflare_status() -> dict:
     """
     Get Cloudflare Tunnel status.
 
-    Returns tunnel connection status, connector info, and health.
+    Returns tunnel connection status, connector info, metrics, and health.
+    Fetches real-time metrics from cloudflared's metrics endpoint.
     """
     import logging
     import re
@@ -492,7 +493,9 @@ async def get_cloudflare_status() -> dict:
         "connected": False,
         "version": None,
         "tunnel_id": None,
+        "connector_id": None,
         "edge_locations": [],
+        "connections_per_location": {},
         "metrics": {},
         "last_error": None,
         "error": None,
@@ -502,42 +505,156 @@ async def get_cloudflare_status() -> dict:
         import docker
         client = docker.from_env()
 
-        # Find cloudflared container
-        try:
-            container = client.containers.get("genmaster_cloudflared")
+        # Find cloudflared container (try multiple possible names)
+        cf_container = None
+        container_names = ["genmaster_cloudflared", "cloudflared", "cloudflare-tunnel"]
+        for name in container_names:
+            try:
+                cf_container = client.containers.get(name)
+                break
+            except docker.errors.NotFound:
+                continue
+
+        # Also search by partial name
+        if not cf_container:
+            for container in client.containers.list(all=True):
+                name = container.name.lower()
+                if "cloudflare" in name or "cloudflared" in name:
+                    cf_container = container
+                    break
+
+        if cf_container:
             result["installed"] = True
-            result["running"] = container.status == "running"
+            result["running"] = cf_container.status == "running"
 
             if result["running"]:
-                # Try to get tunnel info from logs
+                # Get cloudflared version
                 try:
-                    logs = container.logs(tail=100).decode("utf-8")
-                    edge_locs = set()
+                    exit_code, output = cf_container.exec_run(
+                        "cloudflared version",
+                        demux=True
+                    )
+                    if exit_code == 0 and output[0]:
+                        version_output = output[0].decode("utf-8").strip()
+                        match = re.search(r'version\s+([\d.]+)', version_output)
+                        if match:
+                            result["version"] = match.group(1)
+                except Exception:
+                    # Fallback to image tag
+                    if cf_container.image.tags:
+                        result["version"] = cf_container.image.tags[0].split(":")[-1]
+
+                # Get tunnel/connector IDs from logs
+                try:
+                    logs = cf_container.logs(tail=200).decode("utf-8")
                     for line in logs.split("\n"):
-                        # Check for connection registration
-                        if "Connection" in line and "registered" in line:
-                            result["connected"] = True
-                            # Extract edge location (e.g., "DFW" from logs)
-                            loc_match = re.search(r'connIndex=\d+ ip=[\d.]+.*?location=(\w+)', line)
-                            if loc_match:
-                                edge_locs.add(loc_match.group(1))
-                        # Extract tunnel/connector ID
                         if "tunnelID" in line or "Tunnel ID" in line:
                             match = re.search(r'[a-f0-9-]{36}', line)
                             if match:
                                 result["tunnel_id"] = match.group()
-                        # Extract errors
-                        if "ERR" in line or "error" in line.lower():
+                        if "connectorID" in line or "connector" in line.lower():
+                            match = re.search(r'[a-f0-9-]{36}', line)
+                            if match and match.group() != result.get("tunnel_id"):
+                                result["connector_id"] = match.group()
+                        if "ERR" in line and "error" not in result.get("last_error", ""):
                             result["last_error"] = line.strip()[-200:]
-                    result["edge_locations"] = list(edge_locs)
                 except Exception:
                     pass
 
-                # Get image version
-                if container.image.tags:
-                    result["version"] = container.image.tags[0].split(":")[-1]
+                # Check if cloudflared is ready
+                try:
+                    exit_code, output = cf_container.exec_run(
+                        "wget -q -O- http://localhost:2000/ready 2>/dev/null || echo 'not_ready'",
+                        demux=True
+                    )
+                    if exit_code == 0 and output[0]:
+                        ready_output = output[0].decode("utf-8").strip()
+                        result["connected"] = ready_output == "OK"
+                except Exception:
+                    pass
 
-        except docker.errors.NotFound:
+                # Get metrics from cloudflared metrics endpoint
+                try:
+                    exit_code, output = cf_container.exec_run(
+                        "wget -q -O- http://localhost:2000/metrics 2>/dev/null",
+                        demux=True
+                    )
+                    if exit_code == 0 and output[0]:
+                        metrics_text = output[0].decode("utf-8")
+                        metrics = result["metrics"]
+
+                        # Active streams
+                        match = re.search(r'cloudflared_tunnel_active_streams\s+(\d+)', metrics_text)
+                        if match:
+                            metrics["active_streams"] = int(match.group(1))
+
+                        # Total requests
+                        match = re.search(r'cloudflared_tunnel_total_requests\s+(\d+)', metrics_text)
+                        if match:
+                            metrics["total_requests"] = int(match.group(1))
+
+                        # Request errors
+                        match = re.search(r'cloudflared_tunnel_request_errors\s+(\d+)', metrics_text)
+                        if match:
+                            metrics["request_errors"] = int(match.group(1))
+
+                        # HA connections
+                        match = re.search(r'cloudflared_tunnel_ha_connections\s+(\d+)', metrics_text)
+                        if match:
+                            metrics["ha_connections"] = int(match.group(1))
+                            # If we have HA connections, we're connected
+                            if metrics["ha_connections"] > 0:
+                                result["connected"] = True
+
+                        # Response codes
+                        response_codes = {}
+                        for match in re.finditer(
+                            r'cloudflared_tunnel_response_by_code\{.*?status="(\d+)".*?\}\s+(\d+)',
+                            metrics_text
+                        ):
+                            code = match.group(1)
+                            count = int(match.group(2))
+                            if count > 0:
+                                response_codes[code] = count
+                        if response_codes:
+                            metrics["response_codes"] = response_codes
+
+                        # Edge locations from metrics
+                        locations = []
+                        connections_per_loc = {}
+                        for match in re.finditer(
+                            r'cloudflared_tunnel_server_locations\{.*?location="([^"]+)".*?\}\s+(\d+)',
+                            metrics_text
+                        ):
+                            loc = match.group(1)
+                            count = int(match.group(2))
+                            if count > 0:
+                                if loc not in locations:
+                                    locations.append(loc)
+                                connections_per_loc[loc] = count
+                        if locations:
+                            result["edge_locations"] = locations
+                            result["connections_per_location"] = connections_per_loc
+
+                except Exception as e:
+                    logger.debug(f"Could not fetch cloudflared metrics: {e}")
+
+                # Fallback: get edge locations from logs if not from metrics
+                if not result["edge_locations"]:
+                    try:
+                        logs = cf_container.logs(tail=100).decode("utf-8")
+                        edge_locs = set()
+                        for line in logs.split("\n"):
+                            if "Connection" in line and "registered" in line:
+                                result["connected"] = True
+                                loc_match = re.search(r'location=(\w+)', line)
+                                if loc_match:
+                                    edge_locs.add(loc_match.group(1))
+                        if edge_locs:
+                            result["edge_locations"] = list(edge_locs)
+                    except Exception:
+                        pass
+        else:
             result["installed"] = False
 
     except ImportError:

@@ -108,7 +108,18 @@ let networkLoadingInterval = null
 
 // External services state
 const externalServices = ref([])
-const cloudflareInfo = ref({ installed: false, running: false, connected: false })
+const cloudflareInfo = ref({
+  installed: false,
+  running: false,
+  connected: false,
+  version: null,
+  tunnel_id: null,
+  connector_id: null,
+  edge_locations: [],
+  connections_per_location: {},
+  metrics: {},
+  last_error: null,
+})
 const tailscaleInfo = ref({ installed: false, running: false, logged_in: false, tailscale_ip: null })
 const peersExpanded = ref(false)
 
@@ -1041,6 +1052,24 @@ onMounted(async () => {
                     {{ cloudflareInfo.tunnel_id.slice(0, 8) }}...
                   </span>
                 </div>
+                <div v-if="cloudflareInfo.connector_id" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Connector ID</span>
+                  <span class="font-mono text-xs text-primary truncate max-w-[180px]" :title="cloudflareInfo.connector_id">
+                    {{ cloudflareInfo.connector_id.slice(0, 8) }}...
+                  </span>
+                </div>
+                <div v-if="cloudflareInfo.connections_per_location && Object.keys(cloudflareInfo.connections_per_location).length" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Connections</span>
+                  <div class="flex flex-wrap gap-1 justify-end">
+                    <span
+                      v-for="(count, loc) in cloudflareInfo.connections_per_location"
+                      :key="loc"
+                      class="px-2 py-0.5 text-xs rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 uppercase"
+                    >
+                      {{ loc }}: {{ count }}
+                    </span>
+                  </div>
+                </div>
 
                 <!-- Metrics Section -->
                 <div v-if="cloudflareInfo.metrics && Object.keys(cloudflareInfo.metrics).length" class="pt-2">
@@ -1053,6 +1082,36 @@ onMounted(async () => {
                     <div v-if="cloudflareInfo.metrics.ha_connections !== undefined" class="bg-surface-hover rounded-lg p-3">
                       <p class="text-xs text-muted">HA Connections</p>
                       <p class="text-lg font-semibold text-primary">{{ cloudflareInfo.metrics.ha_connections }}</p>
+                    </div>
+                    <div v-if="cloudflareInfo.metrics.active_streams !== undefined" class="bg-surface-hover rounded-lg p-3">
+                      <p class="text-xs text-muted">Active Streams</p>
+                      <p class="text-lg font-semibold text-primary">{{ cloudflareInfo.metrics.active_streams }}</p>
+                    </div>
+                    <div v-if="cloudflareInfo.metrics.request_errors !== undefined" class="bg-surface-hover rounded-lg p-3">
+                      <p class="text-xs text-muted">Errors</p>
+                      <p :class="['text-lg font-semibold', cloudflareInfo.metrics.request_errors > 0 ? 'text-red-500' : 'text-primary']">
+                        {{ cloudflareInfo.metrics.request_errors }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Response Codes -->
+                  <div v-if="cloudflareInfo.metrics.response_codes" class="mt-3">
+                    <p class="text-xs text-muted mb-2">Response Codes</p>
+                    <div class="flex flex-wrap gap-2">
+                      <span
+                        v-for="(count, code) in cloudflareInfo.metrics.response_codes"
+                        :key="code"
+                        :class="[
+                          'px-2 py-1 text-xs rounded font-mono',
+                          code.startsWith('2') ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300' :
+                          code.startsWith('3') ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300' :
+                          code.startsWith('4') ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300' :
+                          'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300'
+                        ]"
+                      >
+                        {{ code }}: {{ count }}
+                      </span>
                     </div>
                   </div>
                 </div>
