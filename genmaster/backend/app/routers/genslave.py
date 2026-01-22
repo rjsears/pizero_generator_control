@@ -20,12 +20,12 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.routers.auth import require_auth
+from app.dependencies import get_current_user
 from app.services.slave_client import SlaveClient
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(dependencies=[Depends(require_auth)])
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 # =========================================================================

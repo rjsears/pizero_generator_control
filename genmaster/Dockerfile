@@ -63,11 +63,14 @@ RUN groupadd --gid 1000 genmaster \
 # Install system dependencies
 # Note: GPIO packages (gpiozero, rpi-lgpio) are installed via pip in requirements.txt
 # docker.io provides the Docker CLI for container management (nginx reload, etc.)
+# gcc and python3-dev are needed to compile psutil from source
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     curl \
     iputils-ping \
     docker.io \
+    gcc \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
