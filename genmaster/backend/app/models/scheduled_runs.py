@@ -11,6 +11,7 @@
 
 """Scheduled runs model - scheduled generator run configurations."""
 
+import json
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
@@ -24,7 +25,10 @@ if TYPE_CHECKING:
 
 
 class ScheduledRun(Base):
-    """Stores scheduled generator run configurations."""
+    """Stores scheduled generator run configurations.
+
+    Uses weekly schedule format with days_of_week and start_time.
+    """
 
     __tablename__ = "scheduled_runs"
     __table_args__ = (
@@ -36,19 +40,29 @@ class ScheduledRun(Base):
 
     # Schedule Configuration
     name: Mapped[Optional[str]] = mapped_column(nullable=True)
-    scheduled_start: Mapped[int] = mapped_column(nullable=False)
+    start_time: Mapped[str] = mapped_column(nullable=False, default="09:00")
     duration_minutes: Mapped[int] = mapped_column(nullable=False)
-
-    # Recurrence
-    recurring: Mapped[bool] = mapped_column(default=False)
-    recurrence_pattern: Mapped[Optional[str]] = mapped_column(nullable=True)
-    recurrence_end_date: Mapped[Optional[int]] = mapped_column(nullable=True)
+    # Days stored as JSON string: "[0,1,2,3,4,5,6]"
+    _days_of_week: Mapped[str] = mapped_column("days_of_week", nullable=False, default="[]")
 
     # State
     enabled: Mapped[bool] = mapped_column(default=True)
     last_executed: Mapped[Optional[int]] = mapped_column(nullable=True)
     next_execution: Mapped[Optional[int]] = mapped_column(nullable=True)
     execution_count: Mapped[int] = mapped_column(default=0)
+
+    @property
+    def days_of_week(self) -> List[int]:
+        """Get days_of_week as a list."""
+        try:
+            return json.loads(self._days_of_week)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    @days_of_week.setter
+    def days_of_week(self, value: List[int]) -> None:
+        """Set days_of_week from a list."""
+        self._days_of_week = json.dumps(sorted(set(value)))
 
     # Metadata
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
