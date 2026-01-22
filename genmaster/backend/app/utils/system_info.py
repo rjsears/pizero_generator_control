@@ -42,9 +42,68 @@ def get_memory_info() -> dict:
     """
     Get memory information.
 
+    In Docker containers, psutil may not correctly report memory with cgroup limits.
+    This function tries to read cgroup memory info first for accurate container metrics,
+    then falls back to psutil for non-containerized environments.
+
     Returns:
         Dict with total_mb, used_mb, available_mb, percent
     """
+    # Try cgroups v2 first (modern Docker/systemd)
+    try:
+        cgroup_max = "/sys/fs/cgroup/memory.max"
+        cgroup_current = "/sys/fs/cgroup/memory.current"
+
+        with open(cgroup_max, "r") as f:
+            max_val = f.read().strip()
+
+        with open(cgroup_current, "r") as f:
+            current = int(f.read().strip())
+
+        # If max is "max", there's no limit - use host memory
+        if max_val != "max":
+            total = int(max_val)
+            used = current
+            available = total - used
+            percent = (used / total) * 100 if total > 0 else 0
+
+            return {
+                "total_mb": total // (1024 * 1024),
+                "used_mb": used // (1024 * 1024),
+                "available_mb": available // (1024 * 1024),
+                "percent": round(percent, 1),
+            }
+    except (FileNotFoundError, PermissionError, ValueError):
+        pass
+
+    # Try cgroups v1 (older Docker)
+    try:
+        cgroup_limit = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+        cgroup_usage = "/sys/fs/cgroup/memory/memory.usage_in_bytes"
+
+        with open(cgroup_limit, "r") as f:
+            limit = int(f.read().strip())
+
+        with open(cgroup_usage, "r") as f:
+            usage = int(f.read().strip())
+
+        # Very large limit means no effective limit - use host memory
+        # (cgroups v1 uses a large number like 9223372036854771712 for "unlimited")
+        host_mem = psutil.virtual_memory().total
+        if limit < host_mem * 2:  # Has an actual limit
+            available = limit - usage
+            percent = (usage / limit) * 100 if limit > 0 else 0
+
+            return {
+                "total_mb": limit // (1024 * 1024),
+                "used_mb": usage // (1024 * 1024),
+                "available_mb": available // (1024 * 1024),
+                "percent": round(percent, 1),
+            }
+    except (FileNotFoundError, PermissionError, ValueError):
+        pass
+
+    # Fallback to psutil (non-containerized or no cgroup limits)
     mem = psutil.virtual_memory()
     return {
         "total_mb": mem.total // (1024 * 1024),
