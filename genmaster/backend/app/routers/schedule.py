@@ -39,11 +39,9 @@ def _schedule_to_response(schedule: ScheduledRun) -> ScheduleResponse:
     return ScheduleResponse(
         id=schedule.id,
         name=schedule.name,
-        scheduled_start=schedule.scheduled_start,
+        start_time=schedule.start_time,
         duration_minutes=schedule.duration_minutes,
-        recurring=schedule.recurring,
-        recurrence_pattern=schedule.recurrence_pattern,
-        recurrence_end_date=schedule.recurrence_end_date,
+        days_of_week=schedule.days_of_week,
         enabled=schedule.enabled,
         last_executed=schedule.last_executed,
         next_execution=schedule.next_execution,
@@ -64,7 +62,7 @@ async def list_schedules(
 
     Use enabled_only=true to filter to only enabled schedules.
     """
-    query = select(ScheduledRun).order_by(ScheduledRun.scheduled_start)
+    query = select(ScheduledRun).order_by(ScheduledRun.start_time)
 
     if enabled_only:
         query = query.where(ScheduledRun.enabled == True)
@@ -87,14 +85,12 @@ async def create_schedule(
     """
     schedule = ScheduledRun(
         name=request.name,
-        scheduled_start=request.scheduled_start,
+        start_time=request.start_time,
         duration_minutes=request.duration_minutes,
-        recurring=request.recurring,
-        recurrence_pattern=request.recurrence_pattern,
-        recurrence_end_date=request.recurrence_end_date,
         enabled=request.enabled,
-        next_execution=request.scheduled_start if request.enabled else None,
     )
+    # Set days_of_week via property (handles JSON serialization)
+    schedule.days_of_week = request.days_of_week
 
     db.add(schedule)
     await db.commit()
@@ -147,13 +143,11 @@ async def update_schedule(
     # Update fields
     update_data = request.model_dump(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(schedule, field, value)
-
-    # Update next_execution if schedule changed
-    if "scheduled_start" in update_data or "enabled" in update_data:
-        schedule.next_execution = (
-            schedule.scheduled_start if schedule.enabled else None
-        )
+        # Handle days_of_week specially (uses property setter for JSON serialization)
+        if field == "days_of_week":
+            schedule.days_of_week = value
+        else:
+            setattr(schedule, field, value)
 
     await db.commit()
     await db.refresh(schedule)

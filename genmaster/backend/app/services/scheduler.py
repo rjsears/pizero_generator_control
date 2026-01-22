@@ -107,23 +107,13 @@ class SchedulerService:
             logger.debug(f"Schedule {schedule.id} is disabled, not scheduling")
             return
 
-        # Determine trigger
-        if schedule.recurring and schedule.recurrence_pattern:
-            trigger = self._create_recurring_trigger(schedule)
-        else:
-            # One-time schedule
-            run_time = datetime.fromtimestamp(
-                schedule.scheduled_start, tz=timezone.utc
-            )
+        # Check if schedule has days configured
+        if not schedule.days_of_week:
+            logger.debug(f"Schedule {schedule.id} has no days, not scheduling")
+            return
 
-            # Skip if in the past
-            if run_time <= datetime.now(timezone.utc):
-                logger.debug(
-                    f"Schedule {schedule.id} is in the past, not scheduling"
-                )
-                return
-
-            trigger = DateTrigger(run_date=run_time)
+        # Create weekly trigger from start_time and days_of_week
+        trigger = self._create_weekly_trigger(schedule)
 
         # Add job
         self._scheduler.add_job(
@@ -137,31 +127,38 @@ class SchedulerService:
 
         logger.info(f"Added schedule {schedule.id} to scheduler")
 
-    def _create_recurring_trigger(self, schedule: ScheduledRun) -> CronTrigger:
-        """Create APScheduler trigger for recurring schedule."""
-        pattern = schedule.recurrence_pattern.lower()
+    def _create_weekly_trigger(self, schedule: ScheduledRun) -> CronTrigger:
+        """
+        Create APScheduler cron trigger for weekly schedule.
 
-        # Get the time from scheduled_start
-        dt = datetime.fromtimestamp(schedule.scheduled_start, tz=timezone.utc)
-        hour = dt.hour
-        minute = dt.minute
+        Args:
+            schedule: ScheduledRun with start_time and days_of_week
 
-        if pattern == "daily":
-            return CronTrigger(hour=hour, minute=minute)
-        elif pattern == "weekly":
-            # Run on same day of week as scheduled_start
-            day_of_week = dt.strftime("%a").lower()[:3]
-            return CronTrigger(day_of_week=day_of_week, hour=hour, minute=minute)
-        else:
-            # Assume it's a cron expression
-            try:
-                return CronTrigger.from_crontab(pattern)
-            except Exception as e:
-                logger.error(
-                    f"Invalid cron pattern '{pattern}' for schedule {schedule.id}: {e}"
-                )
-                # Fall back to daily
-                return CronTrigger(hour=hour, minute=minute)
+        Returns:
+            CronTrigger for the schedule
+        """
+        # Parse start_time (HH:MM format)
+        try:
+            hour, minute = map(int, schedule.start_time.split(":"))
+        except (ValueError, AttributeError):
+            logger.error(f"Invalid start_time '{schedule.start_time}' for schedule {schedule.id}, using 09:00")
+            hour, minute = 9, 0
+
+        # Convert days_of_week from our format (0=Sunday) to APScheduler format
+        # APScheduler uses: 0=Monday, 6=Sunday
+        # Our format: 0=Sunday, 1=Monday, ..., 6=Saturday
+        # Conversion: our_day -> (our_day + 6) % 7 for APScheduler
+        ap_days = []
+        for day in schedule.days_of_week:
+            if day == 0:  # Sunday -> 6 in APScheduler
+                ap_days.append(6)
+            else:  # Mon-Sat: subtract 1
+                ap_days.append(day - 1)
+
+        # Create cron day_of_week string (e.g., "0,2,4" for Mon, Wed, Fri)
+        day_of_week = ",".join(str(d) for d in sorted(ap_days))
+
+        return CronTrigger(day_of_week=day_of_week, hour=hour, minute=minute)
 
     async def _execute_scheduled_run(self, schedule_id: int) -> None:
         """
