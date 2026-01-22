@@ -177,6 +177,7 @@ export const useGeneratorStore = defineStore('generator', () => {
 
     // Actions
     fetchState,
+    fetchStatus: fetchState,  // Alias for compatibility
     fetchHistory,
     fetchStats,
     start,
