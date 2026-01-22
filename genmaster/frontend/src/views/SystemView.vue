@@ -20,6 +20,7 @@ import { formatBytes, formatUptime } from '../utils/formatters'
 import Card from '../components/common/Card.vue'
 import LoadingSpinner from '../components/common/LoadingSpinner.vue'
 import HeartbeatLoader from '../components/common/HeartbeatLoader.vue'
+import DnaHelixLoader from '../components/common/DnaHelixLoader.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import SystemTerminal from '../components/system/SystemTerminal.vue'
 import {
@@ -885,7 +886,7 @@ onMounted(async () => {
 
     <!-- Network Tab -->
     <template v-if="activeTab === 'network'">
-      <HeartbeatLoader v-if="networkLoading" :text="networkLoadingMessages[networkLoadingMessageIndex] || 'Scanning network interfaces...'" color="purple" class="py-16 mt-8" />
+      <DnaHelixLoader v-if="networkLoading" :text="networkLoadingMessages[networkLoadingMessageIndex] || 'Scanning network interfaces...'" class="py-16 mt-8" />
 
       <template v-else>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
