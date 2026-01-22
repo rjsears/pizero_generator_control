@@ -729,8 +729,9 @@ async def get_cloudflare_status() -> dict:
         logger.warning(f"Failed to get Cloudflare status: {e}")
         result["error"] = str(e)
 
-    # Cache the result
-    _set_cached("cloudflare", result)
+    # Only cache if cloudflare is connected (don't cache "not connected" state)
+    if result.get("connected"):
+        _set_cached("cloudflare", result)
     return result
 
 
@@ -858,8 +859,9 @@ async def get_tailscale_status() -> dict:
         logger.warning(f"Failed to get Tailscale status: {e}")
         result["error"] = str(e)
 
-    # Cache the result
-    _set_cached("tailscale", result)
+    # Only cache if tailscale is logged in (don't cache disconnected state)
+    if result.get("logged_in"):
+        _set_cached("tailscale", result)
     return result
 
 
