@@ -91,6 +91,8 @@ export const systemApi = {
   cloudflare: () => api.get('/system/cloudflare'),
   tailscale: () => api.get('/system/tailscale'),
   hostWifi: () => api.get('/system/host/wifi'),
+  scanWifiNetworks: () => api.get('/system/host/wifi/networks'),
+  connectWifi: (data) => api.post('/system/host/wifi/connect', data),
   terminalTargets: () => api.get('/system/terminal/targets'),
   externalServices: () => api.get('/system/external-services'),
   debug: () => api.get('/system/debug'),
@@ -166,6 +168,9 @@ export const genslaveApi = {
   testNotifications: () => api.post('/genslave/notifications/test'),
   setNotificationsEnabled: (enabled) => api.post('/genslave/notifications/enable', { enabled }),
   clearNotificationCooldown: (eventType = null) => api.post('/genslave/notifications/clear-cooldown', { event_type: eventType }),
+  // WiFi configuration (proxied to GenSlave)
+  scanWifiNetworks: () => api.get('/genslave/wifi/networks'),
+  connectWifi: (data) => api.post('/genslave/wifi/connect', data),
   // System power control (proxied to GenSlave)
   shutdown: () => api.post('/genslave/shutdown'),
   reboot: () => api.post('/genslave/reboot'),
