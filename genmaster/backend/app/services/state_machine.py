@@ -511,8 +511,17 @@ class StateMachine:
                     runtime = f"{int(minutes)}m {int(seconds)}s"
                 else:
                     runtime = f"{int(seconds)}s"
-                # Estimate fuel consumed (placeholder - would need generator info)
-                fuel_gallons = round(duration_seconds / 3600 * 0.5, 2)  # Rough estimate
+                # Use actual fuel consumed from run record (calculated from consumption rate)
+                fuel_gallons = run.estimated_fuel_used if run and run.estimated_fuel_used else 0
+                # Use fuel type stored when run started
+                fuel_type = run.fuel_type_at_run if run and run.fuel_type_at_run else "Unknown"
+                # Format fuel type for display (lpg -> Propane, natural_gas -> Natural Gas, diesel -> Diesel)
+                fuel_type_display = {
+                    "lpg": "Propane",
+                    "natural_gas": "Natural Gas",
+                    "diesel": "Diesel",
+                }.get(fuel_type, fuel_type.title() if fuel_type else "Unknown")
+
                 await self._trigger_system_notification(
                     "generator_stopped",
                     {
@@ -520,7 +529,7 @@ class StateMachine:
                         "reason": reason_map.get(reason, reason),
                         "runtime": runtime,
                         "fuel_gallons": fuel_gallons,
-                        "fuel_type": "Propane",  # TODO: Get from generator info
+                        "fuel_type": fuel_type_display,
                     },
                 )
 
