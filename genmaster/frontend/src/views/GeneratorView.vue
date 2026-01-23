@@ -69,6 +69,26 @@
       </div>
     </div>
 
+    <!-- GenSlave WiFi Signal (right-justified above control row) -->
+    <div v-if="genslaveWifi" class="flex justify-end">
+      <div class="w-48">
+        <div class="flex items-center justify-between text-sm mb-1">
+          <span class="text-secondary">WiFi Signal</span>
+          <span class="font-medium text-primary">{{ genslaveWifi.signal_percent }}%</span>
+        </div>
+        <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div
+            :class="[
+              'h-full rounded-full transition-all',
+              genslaveWifi.signal_percent >= 75 ? 'bg-emerald-500' :
+              genslaveWifi.signal_percent >= 50 ? 'bg-amber-500' : 'bg-red-500'
+            ]"
+            :style="{ width: `${genslaveWifi.signal_percent}%` }"
+          ></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Control Row: GenSlave | Generator Run Relay | Emergency Stop -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <!-- GenSlave Online Status -->
@@ -1172,6 +1192,9 @@ const estimatedCurrentFuel = computed(() => {
   return (localRunTimeMinutes.value / 60) * rate
 })
 
+// GenSlave WiFi signal state
+const genslaveWifi = ref(null)
+
 // Computed properties
 const canStart = computed(() => generatorStore.canStart && relayArmed.value)
 const canStop = computed(() => generatorStore.canStop)
@@ -1298,6 +1321,30 @@ function updateRuntimeTimer() {
     runtimeInterval = setInterval(() => {
       localRunTimeSeconds.value++
     }, 1000)
+  }
+}
+
+// Fetch GenSlave WiFi info from cached system info
+async function fetchGenslaveWifi() {
+  try {
+    const response = await genslaveApi.getSystemCached()
+    const data = response.data?.data || response.data
+    if (data?.network_interfaces) {
+      // Find WiFi interface
+      const wifiInterface = data.network_interfaces.find(iface => iface.is_wifi && iface.wifi_ssid)
+      if (wifiInterface) {
+        genslaveWifi.value = {
+          ssid: wifiInterface.wifi_ssid,
+          signal_dbm: wifiInterface.wifi_signal_dbm,
+          signal_percent: wifiInterface.wifi_signal_percent || 0,
+        }
+      } else {
+        genslaveWifi.value = null
+      }
+    }
+  } catch (err) {
+    console.debug('Failed to fetch GenSlave WiFi info:', err)
+    genslaveWifi.value = null
   }
 }
 
@@ -1658,6 +1705,7 @@ onMounted(async () => {
   fetchRelayState()
   generatorStore.fetchState()
   systemStore.fetchSlaveStatusCached()  // Start with cached status
+  fetchGenslaveWifi()  // Get initial WiFi signal
 
   try {
     await Promise.all([
@@ -1723,6 +1771,7 @@ onMounted(async () => {
       systemStore.fetchVictronStatus(),
       fetchFuelUsage(),
       fetchRuntimeLimitsStatus(),
+      fetchGenslaveWifi(),
     ])
   }, 30000)
 })

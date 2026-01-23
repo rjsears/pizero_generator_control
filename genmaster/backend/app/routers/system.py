@@ -896,20 +896,32 @@ async def get_docker_info() -> dict:
         disk_usage_gb = 0.0
         try:
             df = client.df()
-            # Sum up all types of disk usage
-            for layer in df.get("LayersSize", 0) or []:
-                disk_usage_gb += layer if isinstance(layer, (int, float)) else 0
-            # LayersSize is usually a single int
-            if isinstance(df.get("LayersSize"), (int, float)):
-                disk_usage_gb = df.get("LayersSize", 0) / (1024 * 1024 * 1024)
-            # Add volumes
-            for vol in df.get("Volumes", []) or []:
-                if vol.get("UsageData", {}).get("Size"):
-                    disk_usage_gb += vol["UsageData"]["Size"] / (1024 * 1024 * 1024)
-            # Add images
+            total_bytes = 0
+
+            # Images - sum SharedSize and unique Size
             for img in df.get("Images", []) or []:
-                if img.get("Size"):
-                    disk_usage_gb += img["Size"] / (1024 * 1024 * 1024)
+                size = img.get("Size", 0) or 0
+                total_bytes += size
+
+            # Containers - sum SizeRw (writable layer size)
+            for container in df.get("Containers", []) or []:
+                size_rw = container.get("SizeRw", 0) or 0
+                total_bytes += size_rw
+
+            # Volumes - sum UsageData.Size
+            for vol in df.get("Volumes", []) or []:
+                usage_data = vol.get("UsageData", {}) or {}
+                size = usage_data.get("Size", 0) or 0
+                if size > 0:
+                    total_bytes += size
+
+            # Build cache
+            build_cache = df.get("BuildCache", []) or []
+            for cache in build_cache:
+                size = cache.get("Size", 0) or 0
+                total_bytes += size
+
+            disk_usage_gb = total_bytes / (1024 * 1024 * 1024)
         except Exception as df_err:
             logger.debug(f"Could not get Docker disk usage: {df_err}")
 
@@ -1042,6 +1054,116 @@ async def get_network_info() -> dict:
     return result
 
 
+@router.get("/host/wifi")
+async def get_host_wifi_info() -> dict:
+    """
+    Get WiFi information for the Docker host.
+
+    Runs commands through a privileged container to access host WiFi info.
+    Results are cached for 30 seconds.
+    """
+    # Check cache first
+    cached = _get_cached("host_wifi")
+    if cached is not None:
+        return cached
+
+    import logging
+    import re
+
+    logger = logging.getLogger(__name__)
+
+    result = {
+        "available": False,
+        "connected": False,
+        "interface": None,
+        "ssid": None,
+        "signal_dbm": None,
+        "signal_percent": None,
+        "ip_address": None,
+    }
+
+    try:
+        import docker
+        client = docker.from_env()
+
+        # Run a container with host network to get WiFi info
+        # First check if wlan0 exists and get its info
+        script = """
+            #!/bin/sh
+            # Check for wlan interface
+            WLAN=$(ls /sys/class/net/ 2>/dev/null | grep -E "^wlan|^wlp" | head -1)
+            if [ -z "$WLAN" ]; then
+                echo "NO_WIFI"
+                exit 0
+            fi
+            echo "IFACE:$WLAN"
+
+            # Get IP address
+            IP=$(ip addr show "$WLAN" 2>/dev/null | grep "inet " | awk '{print $2}' | cut -d/ -f1)
+            [ -n "$IP" ] && echo "IP:$IP"
+
+            # Get SSID using iwgetid
+            SSID=$(iwgetid "$WLAN" -r 2>/dev/null)
+            [ -n "$SSID" ] && echo "SSID:$SSID"
+
+            # Get signal from /proc/net/wireless
+            if [ -f /proc/net/wireless ]; then
+                SIGNAL=$(grep "$WLAN" /proc/net/wireless 2>/dev/null | awk '{print $4}' | tr -d '.')
+                [ -n "$SIGNAL" ] && echo "SIGNAL:$SIGNAL"
+            fi
+        """
+
+        try:
+            output = client.containers.run(
+                "alpine:latest",
+                command=["sh", "-c", "apk add --no-cache wireless-tools iproute2 >/dev/null 2>&1; " + script],
+                network_mode="host",
+                privileged=True,
+                remove=True,
+            )
+            output_str = output.decode("utf-8").strip()
+
+            if "NO_WIFI" not in output_str:
+                result["available"] = True
+
+                for line in output_str.split("\n"):
+                    if line.startswith("IFACE:"):
+                        result["interface"] = line.split(":", 1)[1].strip()
+                    elif line.startswith("IP:"):
+                        result["ip_address"] = line.split(":", 1)[1].strip()
+                        result["connected"] = True
+                    elif line.startswith("SSID:"):
+                        result["ssid"] = line.split(":", 1)[1].strip()
+                        result["connected"] = True
+                    elif line.startswith("SIGNAL:"):
+                        try:
+                            signal_val = int(line.split(":", 1)[1].strip())
+                            # Convert to dBm if needed
+                            if signal_val > 0:
+                                signal_dbm = signal_val - 256 if signal_val > 63 else signal_val - 100
+                            else:
+                                signal_dbm = signal_val
+                            result["signal_dbm"] = signal_dbm
+                            result["signal_percent"] = max(0, min(100, int((signal_dbm + 90) * 100 / 60)))
+                        except ValueError:
+                            pass
+
+        except Exception as e:
+            logger.debug(f"Failed to get host WiFi info: {e}")
+
+    except ImportError:
+        result["error"] = "Docker SDK not installed"
+    except Exception as e:
+        logger.warning(f"Failed to get host WiFi info: {e}")
+        result["error"] = str(e)
+
+    # Only cache if we got valid data
+    if result.get("connected"):
+        _set_cached("host_wifi", result)
+
+    return result
+
+
 @router.get("/timezone")
 async def get_timezone_info() -> dict:
     """
@@ -1148,3 +1270,110 @@ async def get_external_services_status() -> list:
                 pass
 
     return services
+
+
+# =========================================================================
+# System Power Control Endpoints
+# =========================================================================
+
+from pydantic import BaseModel, Field
+
+
+class SystemActionResponse(BaseModel):
+    """Response from system action (shutdown/reboot)."""
+
+    success: bool = Field(description="Whether the action was initiated")
+    message: str = Field(description="Status message")
+    action: str = Field(description="The action that was requested")
+
+
+@router.post("/host/shutdown", response_model=SystemActionResponse)
+async def shutdown_host():
+    """
+    Shutdown the Docker host (Raspberry Pi running GenMaster).
+
+    This runs a privileged container to execute shutdown on the host system.
+    The GenMaster containers will stop gracefully before the host powers off.
+
+    WARNING: This will make GenMaster unreachable until manually powered on.
+    """
+    import logging
+    import docker
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        client = docker.from_env()
+
+        logger.warning("Host SHUTDOWN requested via API")
+
+        # Run a privileged container to execute shutdown command on host
+        # Using alpine:latest as a minimal image
+        client.containers.run(
+            "alpine:latest",
+            command=["sh", "-c", "echo 'Shutting down host...' && sleep 2 && nsenter -t 1 -m -u -n -i -- shutdown -h now"],
+            privileged=True,
+            pid_mode="host",
+            remove=True,
+            detach=True,
+        )
+
+        return SystemActionResponse(
+            success=True,
+            message="Host shutdown initiated. System will power off shortly.",
+            action="shutdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error initiating host shutdown: {e}")
+        return SystemActionResponse(
+            success=False,
+            message=f"Failed to initiate shutdown: {str(e)}",
+            action="shutdown",
+        )
+
+
+@router.post("/host/reboot", response_model=SystemActionResponse)
+async def reboot_host():
+    """
+    Reboot the Docker host (Raspberry Pi running GenMaster).
+
+    This runs a privileged container to execute reboot on the host system.
+    The GenMaster containers will stop gracefully and restart after the host reboots.
+
+    After reboot, GenMaster will start automatically and become available
+    again (typically within 60-90 seconds).
+    """
+    import logging
+    import docker
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        client = docker.from_env()
+
+        logger.warning("Host REBOOT requested via API")
+
+        # Run a privileged container to execute reboot command on host
+        client.containers.run(
+            "alpine:latest",
+            command=["sh", "-c", "echo 'Rebooting host...' && sleep 2 && nsenter -t 1 -m -u -n -i -- reboot"],
+            privileged=True,
+            pid_mode="host",
+            remove=True,
+            detach=True,
+        )
+
+        return SystemActionResponse(
+            success=True,
+            message="Host reboot initiated. System will restart shortly.",
+            action="reboot",
+        )
+
+    except Exception as e:
+        logger.error(f"Error initiating host reboot: {e}")
+        return SystemActionResponse(
+            success=False,
+            message=f"Failed to initiate reboot: {str(e)}",
+            action="reboot",
+        )

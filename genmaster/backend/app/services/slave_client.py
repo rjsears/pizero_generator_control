@@ -347,3 +347,33 @@ class SlaveClient:
             "/api/system/notifications/clear-cooldown",
             json={"event_type": event_type},
         )
+
+    # =========================================================================
+    # System Power Control
+    # =========================================================================
+
+    async def shutdown(self) -> SlaveResponse:
+        """
+        Shutdown GenSlave (Raspberry Pi).
+
+        This will shut down the Raspberry Pi running GenSlave.
+        The relay will be turned off for safety before shutdown.
+
+        Returns:
+            Response indicating success/failure.
+        """
+        logger.warning("Sending SHUTDOWN command to GenSlave")
+        return await self._request("POST", "/api/system/shutdown")
+
+    async def reboot(self) -> SlaveResponse:
+        """
+        Reboot GenSlave (Raspberry Pi).
+
+        This will reboot the Raspberry Pi running GenSlave.
+        The relay will be turned off for safety during the reboot.
+
+        Returns:
+            Response indicating success/failure.
+        """
+        logger.warning("Sending REBOOT command to GenSlave")
+        return await self._request("POST", "/api/system/reboot")

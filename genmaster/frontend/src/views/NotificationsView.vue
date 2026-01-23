@@ -88,10 +88,10 @@ const channels = ref([])
 const groups = ref([])
 const history = ref([])
 
-// Collapsible sections
-const channelsExpanded = ref(true)
-const groupsExpanded = ref(true)
-const historyExpanded = ref(true)
+// Collapsible sections - start collapsed
+const channelsExpanded = ref(false)
+const groupsExpanded = ref(false)
+const historyExpanded = ref(false)
 
 // History sub-tab ('channels' for channel tests, 'system' for system events)
 const historyTab = ref('channels')

@@ -35,7 +35,6 @@ import {
   Bars3Icon,
   ViewColumnsIcon,
   ArrowPathIcon,
-  BoltIcon,
   LockClosedIcon,
   BugAntIcon,
   GlobeAltIcon,
@@ -65,7 +64,6 @@ watch(() => route.query.tab, (newTab) => {
 // Tab definitions
 const tabs = [
   { id: 'appearance', name: 'Appearance', icon: PaintBrushIcon, iconColor: 'text-pink-500', bgActive: 'bg-pink-500/15 dark:bg-pink-500/20', textActive: 'text-pink-700 dark:text-pink-400', borderActive: 'border-pink-500/30' },
-  { id: 'generator', name: 'Generator', icon: BoltIcon, iconColor: 'text-emerald-500', bgActive: 'bg-emerald-500/15 dark:bg-emerald-500/20', textActive: 'text-emerald-700 dark:text-emerald-400', borderActive: 'border-emerald-500/30' },
   { id: 'security', name: 'Security', icon: ShieldCheckIcon, iconColor: 'text-red-500', bgActive: 'bg-red-500/15 dark:bg-red-500/20', textActive: 'text-red-700 dark:text-red-400', borderActive: 'border-red-500/30' },
   { id: 'access', name: 'Access Control', icon: GlobeAltIcon, iconColor: 'text-cyan-500', bgActive: 'bg-cyan-500/15 dark:bg-cyan-500/20', textActive: 'text-cyan-700 dark:text-cyan-400', borderActive: 'border-cyan-500/30' },
   { id: 'environment', name: 'Environment', icon: DocumentTextIcon, iconColor: 'text-indigo-500', bgActive: 'bg-indigo-500/15 dark:bg-indigo-500/20', textActive: 'text-indigo-700 dark:text-indigo-400', borderActive: 'border-indigo-500/30' },
@@ -498,19 +496,6 @@ watch(activeTab, (tab) => {
                 </div>
               </div>
             </div>
-          </div>
-        </Card>
-      </div>
-
-      <!-- Generator Tab -->
-      <div v-if="activeTab === 'generator'" class="space-y-6">
-        <Card>
-          <div class="text-center py-8 text-muted">
-            <p>Generator settings have been moved to:</p>
-            <ul class="mt-4 space-y-2">
-              <li><strong>Generator Control page</strong> - Min/Max run time settings</li>
-              <li><strong>System → GenSlave tab</strong> - Connection and heartbeat settings</li>
-            </ul>
           </div>
         </Card>
       </div>

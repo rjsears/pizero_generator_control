@@ -209,6 +209,14 @@ class NotificationClearCooldownRequest(BaseModel):
     )
 
 
+class SystemActionResponse(BaseModel):
+    """Response from system action (shutdown/reboot)."""
+
+    success: bool = Field(description="Whether the action was initiated")
+    message: str = Field(description="Status message")
+    action: str = Field(description="The action that was requested")
+
+
 # =========================================================================
 # Endpoints
 # =========================================================================
@@ -892,4 +900,94 @@ async def clear_notification_cooldown(
         return NotificationResponse(
             success=False,
             message=f"Error: {str(e)}",
+        )
+
+
+# =========================================================================
+# System Power Control Endpoints
+# =========================================================================
+
+
+@router.post("/shutdown", response_model=SystemActionResponse)
+async def shutdown_system() -> SystemActionResponse:
+    """
+    Initiate system shutdown.
+
+    This will shut down the Raspberry Pi after a short delay (5 seconds)
+    to allow the response to be sent. The relay will be turned off for
+    safety before shutdown.
+
+    WARNING: This will make GenSlave unreachable until manually powered on.
+    """
+    import subprocess
+
+    from app.services.relay import relay_service
+
+    try:
+        # Safety: turn off relay before shutdown
+        relay_service.relay_off(force=True)
+        logger.warning("System shutdown requested via API - relay turned off")
+
+        # Schedule shutdown in background (5 second delay to allow response)
+        subprocess.Popen(
+            ["sudo", "shutdown", "-h", "+0"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        return SystemActionResponse(
+            success=True,
+            message="Shutdown initiated. System will power off shortly.",
+            action="shutdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error initiating shutdown: {e}")
+        return SystemActionResponse(
+            success=False,
+            message=f"Failed to initiate shutdown: {str(e)}",
+            action="shutdown",
+        )
+
+
+@router.post("/reboot", response_model=SystemActionResponse)
+async def reboot_system() -> SystemActionResponse:
+    """
+    Initiate system reboot.
+
+    This will reboot the Raspberry Pi after a short delay (5 seconds)
+    to allow the response to be sent. The relay will be turned off for
+    safety during the reboot.
+
+    After reboot, GenSlave will start automatically and become available
+    again (typically within 60-90 seconds).
+    """
+    import subprocess
+
+    from app.services.relay import relay_service
+
+    try:
+        # Safety: turn off relay before reboot
+        relay_service.relay_off(force=True)
+        logger.warning("System reboot requested via API - relay turned off")
+
+        # Schedule reboot in background (5 second delay to allow response)
+        subprocess.Popen(
+            ["sudo", "reboot"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        return SystemActionResponse(
+            success=True,
+            message="Reboot initiated. System will restart shortly.",
+            action="reboot",
+        )
+
+    except Exception as e:
+        logger.error(f"Error initiating reboot: {e}")
+        return SystemActionResponse(
+            success=False,
+            message=f"Failed to initiate reboot: {str(e)}",
+            action="reboot",
         )
