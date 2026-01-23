@@ -90,9 +90,13 @@ export const systemApi = {
   sslRenew: () => api.post('/system/ssl/renew'),
   cloudflare: () => api.get('/system/cloudflare'),
   tailscale: () => api.get('/system/tailscale'),
+  hostWifi: () => api.get('/system/host/wifi'),
   terminalTargets: () => api.get('/system/terminal/targets'),
   externalServices: () => api.get('/system/external-services'),
   debug: () => api.get('/system/debug'),
+  // Host power control
+  hostShutdown: () => api.post('/system/host/shutdown'),
+  hostReboot: () => api.post('/system/host/reboot'),
   // Automation arm/disarm (GenMaster state machine control)
   getArmStatus: () => api.get('/system/arm'),
   arm: (source = 'web') => api.post('/system/arm', { source }),
@@ -162,6 +166,10 @@ export const genslaveApi = {
   testNotifications: () => api.post('/genslave/notifications/test'),
   setNotificationsEnabled: (enabled) => api.post('/genslave/notifications/enable', { enabled }),
   clearNotificationCooldown: (eventType = null) => api.post('/genslave/notifications/clear-cooldown', { event_type: eventType }),
+  // System power control (proxied to GenSlave)
+  shutdown: () => api.post('/genslave/shutdown'),
+  reboot: () => api.post('/genslave/reboot'),
+  getRebootStatus: () => api.get('/genslave/reboot-status'),
 }
 
 // GenMaster-specific: Schedule API

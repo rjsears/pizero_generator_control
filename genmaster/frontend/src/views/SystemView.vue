@@ -48,6 +48,7 @@ import {
   ChevronDownIcon,
   Cog6ToothIcon,
   FireIcon,
+  PowerIcon,
 } from '@heroicons/vue/24/outline'
 
 const route = useRoute()
@@ -122,17 +123,24 @@ const cloudflareInfo = ref({
   last_error: null,
 })
 const tailscaleInfo = ref({ installed: false, running: false, logged_in: false, tailscale_ip: null })
+const hostWifiInfo = ref({ available: false, connected: false, interface: null, ssid: null, signal_dbm: null, signal_percent: null, ip_address: null })
 const peersExpanded = ref(false)
 
 // SSL state
 const sslInfo = ref({ configured: false, certificates: [] })
 const sslLoading = ref(false)
 
-// Reboot dialog
+// Reboot dialog (legacy - kept for compatibility)
 const rebootDialog = ref({ open: false, loading: false })
 
 // SSL Renew dialog
 const sslRenewDialog = ref({ open: false, loading: false })
+
+// Host power control
+const showHostShutdownConfirm = ref(false)
+const showHostRebootConfirm = ref(false)
+const hostShuttingDown = ref(false)
+const hostRebooting = ref(false)
 
 // Progress color helper
 function getProgressColor(percent) {
@@ -285,11 +293,12 @@ async function loadNetworkInfo() {
   }, 1500)
 
   try {
-    const [networkRes, cloudflareRes, tailscaleRes, servicesRes] = await Promise.all([
+    const [networkRes, cloudflareRes, tailscaleRes, servicesRes, hostWifiRes] = await Promise.all([
       systemApi.getNetwork(),
       systemApi.getCloudflare().catch(() => ({ data: {} })),
       systemApi.getTailscale().catch(() => ({ data: {} })),
       systemApi.getExternalServices().catch(() => ({ data: [] })),
+      systemApi.hostWifi().catch(() => ({ data: {} })),
     ])
     networkInfo.value = networkRes.data || { hostname: '', interfaces: [], gateway: null, dns_servers: [] }
     // Merge with defaults to ensure all properties exist
@@ -312,6 +321,16 @@ async function loadNetworkInfo() {
       logged_in: false,
       tailscale_ip: null,
       ...(tailscaleRes.data || {})
+    }
+    hostWifiInfo.value = {
+      available: false,
+      connected: false,
+      interface: null,
+      ssid: null,
+      signal_dbm: null,
+      signal_percent: null,
+      ip_address: null,
+      ...(hostWifiRes.data || {})
     }
     // Filter out services without valid URLs to prevent href errors
     externalServices.value = (servicesRes.data || []).filter(s => s && s.url)
@@ -406,6 +425,46 @@ async function confirmReboot() {
   }
 }
 
+// =========================================================================
+// Host Power Control
+// =========================================================================
+
+function handleHostShutdown() {
+  showHostShutdownConfirm.value = true
+}
+
+async function executeHostShutdown() {
+  showHostShutdownConfirm.value = false
+  hostShuttingDown.value = true
+  try {
+    await systemApi.hostShutdown()
+    notificationStore.success('GenMaster host shutdown initiated. System will power off shortly.')
+  } catch (error) {
+    const message = error.response?.data?.detail || 'Failed to initiate host shutdown'
+    notificationStore.error(message)
+  } finally {
+    hostShuttingDown.value = false
+  }
+}
+
+function handleHostReboot() {
+  showHostRebootConfirm.value = true
+}
+
+async function executeHostReboot() {
+  showHostRebootConfirm.value = false
+  hostRebooting.value = true
+  try {
+    await systemApi.hostReboot()
+    notificationStore.success('GenMaster host reboot initiated. System will restart in ~60-90 seconds.')
+  } catch (error) {
+    const message = error.response?.data?.detail || 'Failed to initiate host reboot'
+    notificationStore.error(message)
+  } finally {
+    hostRebooting.value = false
+  }
+}
+
 // Watch for tab changes
 watch(activeTab, (newTab) => {
   if (newTab === 'network' && networkInfo.value.interfaces.length === 0) {
@@ -439,22 +498,47 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-400 dark:border-gray-700 p-1.5 flex gap-1.5 overflow-x-auto">
-      <button
-        v-for="tab in tabs"
-        :key="tab.id"
-        @click="activeTab = tab.id"
-        :class="[
-          'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap border',
-          activeTab === tab.id
-            ? `${tab.bgActive} ${tab.textActive} ${tab.borderActive}`
-            : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-transparent'
-        ]"
-      >
-        <component :is="tab.icon" :class="['h-4 w-4', activeTab === tab.id ? '' : tab.iconColor]" />
-        {{ tab.name }}
-      </button>
+    <!-- Tabs with Host Power Controls -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-400 dark:border-gray-700 p-1.5 flex items-center justify-between gap-1.5">
+      <!-- Tab buttons -->
+      <div class="flex gap-1.5 overflow-x-auto">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          @click="activeTab = tab.id"
+          :class="[
+            'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap border',
+            activeTab === tab.id
+              ? `${tab.bgActive} ${tab.textActive} ${tab.borderActive}`
+              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-transparent'
+          ]"
+        >
+          <component :is="tab.icon" :class="['h-4 w-4', activeTab === tab.id ? '' : tab.iconColor]" />
+          {{ tab.name }}
+        </button>
+      </div>
+
+      <!-- Host Power Controls -->
+      <div class="flex gap-1.5 flex-shrink-0">
+        <button
+          @click="handleHostReboot"
+          :disabled="hostRebooting"
+          class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 border border-transparent"
+          title="Reboot GenMaster host"
+        >
+          <ArrowPathIcon :class="['h-4 w-4', hostRebooting ? 'animate-spin' : '']" />
+          <span class="hidden sm:inline">Reboot</span>
+        </button>
+        <button
+          @click="handleHostShutdown"
+          :disabled="hostShuttingDown"
+          class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 border border-transparent"
+          title="Shutdown GenMaster host"
+        >
+          <PowerIcon :class="['h-4 w-4', hostShuttingDown ? 'animate-pulse' : '']" />
+          <span class="hidden sm:inline">Shutdown</span>
+        </button>
+      </div>
     </div>
 
     <!-- Health Tab -->
@@ -991,6 +1075,62 @@ onMounted(async () => {
           </Card>
         </div>
 
+        <!-- Host WiFi Info (if available) -->
+        <div v-if="hostWifiInfo.available" class="mt-6">
+          <Card :padding="false">
+            <template #header>
+              <div class="flex items-center justify-between w-full px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <WifiIcon class="h-5 w-5 text-cyan-500" />
+                  <h3 class="font-semibold text-primary">Host WiFi</h3>
+                </div>
+                <span
+                  :class="[
+                    'px-2 py-1 rounded-full text-xs font-medium',
+                    hostWifiInfo.connected
+                      ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
+                  ]"
+                >
+                  {{ hostWifiInfo.connected ? 'Connected' : 'Not Connected' }}
+                </span>
+              </div>
+            </template>
+            <div class="p-4">
+              <div class="space-y-3">
+                <div v-if="hostWifiInfo.interface" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">Interface</span>
+                  <span class="font-medium text-primary font-mono">{{ hostWifiInfo.interface }}</span>
+                </div>
+                <div v-if="hostWifiInfo.ssid" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">SSID</span>
+                  <span class="font-medium text-primary">{{ hostWifiInfo.ssid }}</span>
+                </div>
+                <div v-if="hostWifiInfo.ip_address" class="flex justify-between py-2 border-b border-gray-400 dark:border-black">
+                  <span class="text-secondary">IP Address</span>
+                  <span class="font-medium text-primary font-mono">{{ hostWifiInfo.ip_address }}</span>
+                </div>
+                <div v-if="hostWifiInfo.signal_percent !== null" class="py-2">
+                  <div class="flex justify-between mb-2">
+                    <span class="text-secondary">Signal Strength</span>
+                    <span class="font-medium text-primary">{{ hostWifiInfo.signal_percent }}% ({{ hostWifiInfo.signal_dbm }} dBm)</span>
+                  </div>
+                  <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div
+                      class="h-2 rounded-full transition-all duration-300"
+                      :class="[
+                        hostWifiInfo.signal_percent >= 70 ? 'bg-emerald-500' :
+                        hostWifiInfo.signal_percent >= 40 ? 'bg-amber-500' : 'bg-red-500'
+                      ]"
+                      :style="{ width: `${hostWifiInfo.signal_percent}%` }"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
         <!-- VPN & Tunnel Services -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
           <!-- Cloudflare Tunnel -->
@@ -1327,5 +1467,95 @@ onMounted(async () => {
       @confirm="confirmSslRenew"
       @cancel="sslRenewDialog.open = false"
     />
+
+    <!-- Host Shutdown Confirmation Modal -->
+    <Teleport to="body">
+      <div v-if="showHostShutdownConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="p-3 rounded-full bg-red-100 dark:bg-red-500/20">
+              <ExclamationTriangleIcon class="h-8 w-8 text-red-500" />
+            </div>
+            <h3 class="text-xl font-bold text-primary">Shutdown GenMaster Host</h3>
+          </div>
+          <div class="space-y-3 mb-6">
+            <p class="text-secondary">
+              Are you sure you want to <strong>shut down</strong> the GenMaster host?
+            </p>
+            <div class="p-3 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
+              <p class="text-sm text-red-700 dark:text-red-300 font-medium">
+                ⚠️ Warning: This will make GenMaster completely unreachable!
+              </p>
+              <ul class="text-sm text-red-600 dark:text-red-400 mt-2 list-disc list-inside">
+                <li>All containers (including web interface) will stop</li>
+                <li>Generator monitoring will be unavailable</li>
+                <li>You will need physical access to power it back on</li>
+              </ul>
+            </div>
+          </div>
+          <div class="flex justify-end gap-3">
+            <button
+              @click="showHostShutdownConfirm = false"
+              class="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              @click="executeHostShutdown"
+              :disabled="hostShuttingDown"
+              class="px-4 py-2 rounded-lg font-medium text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
+            >
+              <span v-if="hostShuttingDown">Shutting down...</span>
+              <span v-else>Shutdown Now</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Host Reboot Confirmation Modal -->
+    <Teleport to="body">
+      <div v-if="showHostRebootConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="p-3 rounded-full bg-amber-100 dark:bg-amber-500/20">
+              <ArrowPathIcon class="h-8 w-8 text-amber-500" />
+            </div>
+            <h3 class="text-xl font-bold text-primary">Reboot GenMaster Host</h3>
+          </div>
+          <div class="space-y-3 mb-6">
+            <p class="text-secondary">
+              Are you sure you want to <strong>reboot</strong> the GenMaster host?
+            </p>
+            <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
+              <p class="text-sm text-amber-700 dark:text-amber-300 font-medium">
+                ℹ️ GenMaster will be temporarily unavailable
+              </p>
+              <ul class="text-sm text-amber-600 dark:text-amber-400 mt-2 list-disc list-inside">
+                <li>All containers will restart automatically</li>
+                <li>System will be back online in ~60-90 seconds</li>
+                <li>Generator state will be preserved</li>
+              </ul>
+            </div>
+          </div>
+          <div class="flex justify-end gap-3">
+            <button
+              @click="showHostRebootConfirm = false"
+              class="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              @click="executeHostReboot"
+              :disabled="hostRebooting"
+              class="px-4 py-2 rounded-lg font-medium text-white bg-amber-500 hover:bg-amber-600 transition-colors disabled:opacity-50"
+            >
+              <span v-if="hostRebooting">Rebooting...</span>
+              <span v-else>Reboot Now</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

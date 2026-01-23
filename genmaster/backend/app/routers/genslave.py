@@ -372,3 +372,129 @@ async def clear_genslave_notification_cooldown(request: NotificationClearCooldow
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         await client.close()
+
+
+# =========================================================================
+# System Power Control Endpoints
+# =========================================================================
+
+
+class SystemActionResponse(BaseModel):
+    """Response from GenSlave system action."""
+
+    success: bool = Field(description="Whether the action was initiated")
+    message: str = Field(description="Status message")
+    action: str = Field(description="The action that was requested")
+
+
+# Track intentional reboots to suppress "GenSlave down" messages
+_intentional_reboot_until: int = 0
+
+
+def set_intentional_reboot(duration_seconds: int = 120) -> None:
+    """Mark that an intentional reboot is in progress."""
+    import time
+    global _intentional_reboot_until
+    _intentional_reboot_until = int(time.time()) + duration_seconds
+    logger.info(f"Intentional reboot marked for {duration_seconds}s")
+
+
+def is_intentional_reboot() -> bool:
+    """Check if we're in an intentional reboot window."""
+    import time
+    return time.time() < _intentional_reboot_until
+
+
+@router.post("/shutdown", response_model=SystemActionResponse)
+async def shutdown_genslave():
+    """
+    Shutdown GenSlave (Raspberry Pi).
+
+    This will shut down the Raspberry Pi running GenSlave.
+    The relay will be turned off for safety before shutdown.
+
+    WARNING: This will make GenSlave unreachable until manually powered on.
+    """
+    client = SlaveClient()
+    try:
+        response = await client.shutdown()
+
+        if not response.success:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to initiate GenSlave shutdown: {response.error}",
+            )
+
+        return SystemActionResponse(
+            success=True,
+            message="GenSlave shutdown initiated. System will power off shortly.",
+            action="shutdown",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error initiating GenSlave shutdown: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await client.close()
+
+
+@router.post("/reboot", response_model=SystemActionResponse)
+async def reboot_genslave():
+    """
+    Reboot GenSlave (Raspberry Pi).
+
+    This will reboot the Raspberry Pi running GenSlave.
+    The relay will be turned off for safety during the reboot.
+
+    After reboot, GenSlave will start automatically and become available
+    again (typically within 60-90 seconds).
+
+    The system will suppress "GenSlave down" warnings for 2 minutes after
+    an intentional reboot to prevent unnecessary alerts.
+    """
+    client = SlaveClient()
+    try:
+        response = await client.reboot()
+
+        if not response.success:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to initiate GenSlave reboot: {response.error}",
+            )
+
+        # Mark this as an intentional reboot (suppress warnings for 2 minutes)
+        set_intentional_reboot(120)
+
+        return SystemActionResponse(
+            success=True,
+            message="GenSlave reboot initiated. System will restart in ~60-90 seconds.",
+            action="reboot",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error initiating GenSlave reboot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await client.close()
+
+
+@router.get("/reboot-status")
+async def get_reboot_status():
+    """
+    Check if we're in an intentional reboot window.
+
+    This can be used by the frontend to suppress "GenSlave down" warnings
+    after an intentional reboot.
+    """
+    import time
+    in_reboot = is_intentional_reboot()
+    remaining = max(0, _intentional_reboot_until - int(time.time()))
+
+    return {
+        "in_reboot_window": in_reboot,
+        "remaining_seconds": remaining if in_reboot else 0,
+    }

@@ -64,6 +64,22 @@
               <BoltIcon :class="['h-4 w-4', testingConnection ? 'animate-pulse' : '']" />
               Test
             </button>
+            <button
+              @click="handleReboot"
+              :disabled="rebooting || !slaveInfo.online"
+              class="btn-secondary flex items-center gap-2 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10"
+            >
+              <ArrowPathIcon :class="['h-4 w-4', rebooting ? 'animate-spin' : '']" />
+              Reboot
+            </button>
+            <button
+              @click="handleShutdown"
+              :disabled="shuttingDown || !slaveInfo.online"
+              class="btn-secondary flex items-center gap-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
+            >
+              <PowerIcon :class="['h-4 w-4', shuttingDown ? 'animate-pulse' : '']" />
+              Shutdown
+            </button>
           </div>
         </div>
       </div>
@@ -751,6 +767,116 @@
       </Card>
     </template>
 
+    <!-- Reboot Window Banner (shown during intentional reboot) -->
+    <div
+      v-if="inRebootWindow"
+      class="rounded-xl p-4 border-2 border-blue-500 bg-gradient-to-r from-blue-500/10 to-blue-500/5"
+    >
+      <div class="flex items-center gap-4">
+        <div class="p-3 rounded-xl bg-blue-500/30">
+          <ArrowPathIcon class="h-8 w-8 text-blue-500 animate-spin" />
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-blue-700 dark:text-blue-300">
+            GenSlave Rebooting...
+          </h2>
+          <p class="text-sm text-blue-600 dark:text-blue-400">
+            System will be back online in ~{{ rebootRemainingSeconds }}s. Warnings suppressed during reboot.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shutdown Confirmation Modal -->
+    <Teleport to="body">
+      <div v-if="showShutdownConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="p-3 rounded-full bg-red-100 dark:bg-red-500/20">
+              <ExclamationTriangleIcon class="h-8 w-8 text-red-500" />
+            </div>
+            <h3 class="text-xl font-bold text-primary">Shutdown GenSlave</h3>
+          </div>
+          <div class="space-y-3 mb-6">
+            <p class="text-secondary">
+              Are you sure you want to <strong>shut down</strong> the GenSlave Raspberry Pi?
+            </p>
+            <div class="p-3 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
+              <p class="text-sm text-red-700 dark:text-red-300 font-medium">
+                ⚠️ Warning: This will make GenSlave completely unreachable!
+              </p>
+              <ul class="text-sm text-red-600 dark:text-red-400 mt-2 list-disc list-inside">
+                <li>The generator relay will be turned OFF</li>
+                <li>You will need physical access to power it back on</li>
+                <li>All remote control capability will be lost</li>
+              </ul>
+            </div>
+          </div>
+          <div class="flex justify-end gap-3">
+            <button
+              @click="showShutdownConfirm = false"
+              class="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              @click="executeShutdown"
+              :disabled="shuttingDown"
+              class="px-4 py-2 rounded-lg font-medium text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
+            >
+              <span v-if="shuttingDown">Shutting down...</span>
+              <span v-else>Shutdown Now</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Reboot Confirmation Modal -->
+    <Teleport to="body">
+      <div v-if="showRebootConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="p-3 rounded-full bg-amber-100 dark:bg-amber-500/20">
+              <ArrowPathIcon class="h-8 w-8 text-amber-500" />
+            </div>
+            <h3 class="text-xl font-bold text-primary">Reboot GenSlave</h3>
+          </div>
+          <div class="space-y-3 mb-6">
+            <p class="text-secondary">
+              Are you sure you want to <strong>reboot</strong> the GenSlave Raspberry Pi?
+            </p>
+            <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
+              <p class="text-sm text-amber-700 dark:text-amber-300 font-medium">
+                ℹ️ GenSlave will be temporarily unavailable
+              </p>
+              <ul class="text-sm text-amber-600 dark:text-amber-400 mt-2 list-disc list-inside">
+                <li>The generator relay will be turned OFF during reboot</li>
+                <li>System will restart automatically (~60-90 seconds)</li>
+                <li>"GenSlave down" warnings will be suppressed</li>
+              </ul>
+            </div>
+          </div>
+          <div class="flex justify-end gap-3">
+            <button
+              @click="showRebootConfirm = false"
+              class="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              @click="executeReboot"
+              :disabled="rebooting"
+              class="px-4 py-2 rounded-lg font-medium text-white bg-amber-500 hover:bg-amber-600 transition-colors disabled:opacity-50"
+            >
+              <span v-if="rebooting">Rebooting...</span>
+              <span v-else>Reboot Now</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
   </div>
 </template>
 
@@ -779,6 +905,7 @@ import {
   TrashIcon,
   PlusIcon,
   ClockIcon,
+  PowerIcon,
 } from '@heroicons/vue/24/outline'
 
 const notificationStore = useNotificationStore()
@@ -822,9 +949,17 @@ const showApiSecret = ref(false)  // Toggle visibility
 const savingApiSecret = ref(false)
 
 // Collapsible sections
-const systemInfoSectionExpanded = ref(true)  // Default expanded to show system info
+const systemInfoSectionExpanded = ref(false)  // Start collapsed
 const notificationSectionExpanded = ref(false)
 const connectionSectionExpanded = ref(false)
+
+// System power control
+const showShutdownConfirm = ref(false)
+const showRebootConfirm = ref(false)
+const shuttingDown = ref(false)
+const rebooting = ref(false)
+const inRebootWindow = ref(false)
+const rebootRemainingSeconds = ref(0)
 
 // Notification management
 const loadingNotifications = ref(false)
@@ -1188,6 +1323,82 @@ function formatSeconds(seconds) {
   const hours = Math.floor(seconds / 3600)
   const mins = Math.floor((seconds % 3600) / 60)
   return `${hours}h ${mins}m`
+}
+
+// =========================================================================
+// System Power Control
+// =========================================================================
+
+// Check if we're in an intentional reboot window
+async function checkRebootStatus() {
+  try {
+    const response = await genslaveApi.getRebootStatus()
+    inRebootWindow.value = response.data?.in_reboot_window || false
+    rebootRemainingSeconds.value = response.data?.remaining_seconds || 0
+  } catch {
+    // Ignore errors
+  }
+}
+
+// Handle shutdown button click
+function handleShutdown() {
+  showShutdownConfirm.value = true
+}
+
+// Execute shutdown
+async function executeShutdown() {
+  showShutdownConfirm.value = false
+  shuttingDown.value = true
+  try {
+    await genslaveApi.shutdown()
+    notificationStore.success('GenSlave shutdown initiated. System will power off shortly.')
+    // Mark as offline after a short delay
+    setTimeout(() => {
+      slaveInfo.value.online = false
+    }, 3000)
+  } catch (error) {
+    const message = error.response?.data?.detail || 'Failed to initiate shutdown'
+    notificationStore.error(message)
+  } finally {
+    shuttingDown.value = false
+  }
+}
+
+// Handle reboot button click
+function handleReboot() {
+  showRebootConfirm.value = true
+}
+
+// Execute reboot
+async function executeReboot() {
+  showRebootConfirm.value = false
+  rebooting.value = true
+  try {
+    await genslaveApi.reboot()
+    notificationStore.success('GenSlave reboot initiated. System will restart in ~60-90 seconds.')
+    // Set local reboot window flag to suppress warnings
+    inRebootWindow.value = true
+    rebootRemainingSeconds.value = 120
+    // Start countdown
+    const countdownInterval = setInterval(() => {
+      rebootRemainingSeconds.value--
+      if (rebootRemainingSeconds.value <= 0) {
+        inRebootWindow.value = false
+        clearInterval(countdownInterval)
+        // Refresh data after reboot window
+        loadSlaveInfo(true)
+      }
+    }, 1000)
+    // Mark as offline after a short delay
+    setTimeout(() => {
+      slaveInfo.value.online = false
+    }, 3000)
+  } catch (error) {
+    const message = error.response?.data?.detail || 'Failed to initiate reboot'
+    notificationStore.error(message)
+  } finally {
+    rebooting.value = false
+  }
 }
 
 // Lifecycle
