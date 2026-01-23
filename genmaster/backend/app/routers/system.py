@@ -17,6 +17,7 @@ import time
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 # Simple TTL cache for slow operations
 _cache: dict[str, dict[str, Any]] = {}
