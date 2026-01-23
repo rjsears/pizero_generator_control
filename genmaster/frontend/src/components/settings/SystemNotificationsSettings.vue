@@ -356,7 +356,8 @@ async function loadSslStatus() {
 async function loadEvents() {
   try {
     const response = await api.get('/system-notifications/events')
-    events.value = response.data
+    // API returns { events: [...], total: N, categories: [...] }
+    events.value = response.data?.events || []
   } catch (error) {
     console.error('Failed to load events:', error)
     events.value = []
@@ -381,11 +382,12 @@ async function loadGlobalSettings() {
 async function loadChannelsAndGroups() {
   try {
     const [channelsRes, groupsRes] = await Promise.all([
-      api.get('/notifications/services'),
+      api.get('/notifications/channels'),
       api.get('/notifications/groups'),
     ])
-    channels.value = channelsRes.data
-    groups.value = groupsRes.data
+    // Both endpoints return arrays directly
+    channels.value = Array.isArray(channelsRes.data) ? channelsRes.data : []
+    groups.value = Array.isArray(groupsRes.data) ? groupsRes.data : []
   } catch (error) {
     console.error('Failed to load channels/groups:', error)
     channels.value = []
@@ -396,7 +398,8 @@ async function loadChannelsAndGroups() {
 async function loadContainerConfigs() {
   try {
     const response = await api.get('/system-notifications/container-configs')
-    containerConfigs.value = response.data
+    // API returns { configs: [...], total: N }
+    containerConfigs.value = response.data?.configs || []
   } catch (error) {
     console.error('Failed to load container configs:', error)
     containerConfigs.value = []
