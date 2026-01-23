@@ -365,7 +365,7 @@ async function loadEvents() {
 
 async function loadGlobalSettings() {
   try {
-    const response = await api.get('/system-notifications/global-settings')
+    const response = await api.get('/system-notifications/settings')
     globalSettings.value = response.data
     // Initialize quiet hours form with current values
     if (response.data) {
@@ -505,7 +505,7 @@ async function updateEventThreshold(event, key, value) {
 async function updateGlobalSettings(updates) {
   saving.value = true
   try {
-    const response = await api.put('/system-notifications/global-settings', updates)
+    const response = await api.put('/system-notifications/settings', updates)
     globalSettings.value = response.data
     notificationStore.success('Global settings saved successfully')
   } catch (error) {
