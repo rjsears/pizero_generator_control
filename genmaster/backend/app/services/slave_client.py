@@ -349,6 +349,38 @@ class SlaveClient:
         )
 
     # =========================================================================
+    # WiFi Configuration
+    # =========================================================================
+
+    async def scan_wifi_networks(self) -> SlaveResponse:
+        """
+        Scan for available WiFi networks on GenSlave.
+
+        Returns:
+            Response with list of networks (ssid, signal_percent, security).
+        """
+        return await self._request("GET", "/api/system/wifi/networks")
+
+    async def connect_wifi(self, ssid: str, password: Optional[str] = None) -> SlaveResponse:
+        """
+        Connect GenSlave to a WiFi network.
+
+        Args:
+            ssid: WiFi network SSID.
+            password: WiFi password (None for open networks).
+
+        Returns:
+            Response indicating success/failure.
+        """
+        # Don't log password
+        logger.info(f"Requesting GenSlave WiFi connection to: {ssid}")
+        return await self._request(
+            "POST",
+            "/api/system/wifi/connect",
+            json={"ssid": ssid, "password": password},
+        )
+
+    # =========================================================================
     # System Power Control
     # =========================================================================
 

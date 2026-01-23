@@ -126,6 +126,15 @@ const tailscaleInfo = ref({ installed: false, running: false, logged_in: false, 
 const hostWifiInfo = ref({ available: false, connected: false, interface: null, ssid: null, signal_dbm: null, signal_percent: null, ip_address: null })
 const peersExpanded = ref(false)
 
+// WiFi configuration modal state
+const showWifiConfigModal = ref(false)
+const wifiNetworks = ref([])
+const wifiScanning = ref(false)
+const wifiConnecting = ref(false)
+const selectedWifiNetwork = ref(null)
+const wifiPassword = ref('')
+const wifiError = ref(null)
+
 // SSL state
 const sslInfo = ref({ configured: false, certificates: [] })
 const sslLoading = ref(false)
@@ -462,6 +471,81 @@ async function executeHostReboot() {
     notificationStore.error(message)
   } finally {
     hostRebooting.value = false
+  }
+}
+
+// =========================================================================
+// WiFi Configuration
+// =========================================================================
+
+async function openWifiConfigModal() {
+  showWifiConfigModal.value = true
+  wifiError.value = null
+  wifiPassword.value = ''
+  selectedWifiNetwork.value = null
+  await scanWifiNetworks()
+}
+
+function closeWifiConfigModal() {
+  showWifiConfigModal.value = false
+  wifiNetworks.value = []
+  wifiPassword.value = ''
+  selectedWifiNetwork.value = null
+  wifiError.value = null
+}
+
+async function scanWifiNetworks() {
+  wifiScanning.value = true
+  wifiError.value = null
+  try {
+    const response = await systemApi.scanWifiNetworks()
+    if (response.data?.success) {
+      wifiNetworks.value = response.data.networks || []
+    } else {
+      wifiError.value = response.data?.error || 'Failed to scan networks'
+    }
+  } catch (error) {
+    wifiError.value = error.response?.data?.detail || 'Failed to scan WiFi networks'
+  } finally {
+    wifiScanning.value = false
+  }
+}
+
+function selectWifiNetwork(network) {
+  selectedWifiNetwork.value = network
+  wifiPassword.value = ''
+  wifiError.value = null
+}
+
+async function connectToWifi() {
+  if (!selectedWifiNetwork.value) {
+    wifiError.value = 'Please select a network'
+    return
+  }
+
+  wifiConnecting.value = true
+  wifiError.value = null
+
+  try {
+    const response = await systemApi.connectWifi({
+      ssid: selectedWifiNetwork.value.ssid,
+      password: wifiPassword.value || null,
+    })
+
+    if (response.data?.success) {
+      notificationStore.success(response.data.message || `Connected to ${selectedWifiNetwork.value.ssid}`)
+      closeWifiConfigModal()
+      // Refresh network info after a short delay
+      setTimeout(() => {
+        loadNetworkInfo()
+      }, 2000)
+    } else {
+      wifiError.value = response.data?.error || 'Failed to connect'
+    }
+  } catch (error) {
+    wifiError.value = error.response?.data?.detail || 'Failed to connect to WiFi'
+  } finally {
+    wifiConnecting.value = false
   }
 }
 
@@ -1084,16 +1168,25 @@ onMounted(async () => {
                   <WifiIcon class="h-5 w-5 text-cyan-500" />
                   <h3 class="font-semibold text-primary">Host WiFi</h3>
                 </div>
-                <span
-                  :class="[
-                    'px-2 py-1 rounded-full text-xs font-medium',
-                    hostWifiInfo.connected
-                      ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
-                      : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
-                  ]"
-                >
-                  {{ hostWifiInfo.connected ? 'Connected' : 'Not Connected' }}
-                </span>
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="openWifiConfigModal"
+                    class="px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 bg-cyan-500 hover:bg-cyan-600 text-white"
+                  >
+                    <Cog6ToothIcon class="h-3.5 w-3.5" />
+                    Configure
+                  </button>
+                  <span
+                    :class="[
+                      'px-2 py-1 rounded-full text-xs font-medium',
+                      hostWifiInfo.connected
+                        ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
+                    ]"
+                  >
+                    {{ hostWifiInfo.connected ? 'Connected' : 'Not Connected' }}
+                  </span>
+                </div>
               </div>
             </template>
             <div class="p-4">
@@ -1552,6 +1645,127 @@ onMounted(async () => {
             >
               <span v-if="hostRebooting">Rebooting...</span>
               <span v-else>Reboot Now</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- WiFi Configuration Modal -->
+    <Teleport to="body">
+      <div v-if="showWifiConfigModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+              <div class="p-3 rounded-full bg-cyan-100 dark:bg-cyan-500/20">
+                <WifiIcon class="h-6 w-6 text-cyan-500" />
+              </div>
+              <h3 class="text-xl font-bold text-primary">Configure WiFi</h3>
+            </div>
+            <button
+              @click="closeWifiConfigModal"
+              class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <XCircleIcon class="h-5 w-5 text-gray-500" />
+            </button>
+          </div>
+
+          <!-- Error display -->
+          <div v-if="wifiError" class="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
+            <p class="text-sm text-red-700 dark:text-red-300">{{ wifiError }}</p>
+          </div>
+
+          <!-- Network List -->
+          <div class="mb-4">
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-sm font-medium text-secondary">Available Networks</label>
+              <button
+                @click="scanWifiNetworks"
+                :disabled="wifiScanning"
+                class="btn-secondary text-xs flex items-center gap-1"
+              >
+                <ArrowPathIcon :class="['h-3.5 w-3.5', wifiScanning ? 'animate-spin' : '']" />
+                Refresh
+              </button>
+            </div>
+
+            <div v-if="wifiScanning" class="py-8 text-center">
+              <ArrowPathIcon class="h-8 w-8 animate-spin mx-auto text-cyan-500" />
+              <p class="text-sm text-muted mt-2">Scanning for networks...</p>
+            </div>
+
+            <div v-else-if="wifiNetworks.length === 0" class="py-8 text-center text-muted">
+              <WifiIcon class="h-8 w-8 mx-auto opacity-50 mb-2" />
+              <p class="text-sm">No networks found</p>
+            </div>
+
+            <div v-else class="max-h-64 overflow-y-auto space-y-1 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <button
+                v-for="network in wifiNetworks"
+                :key="network.ssid"
+                @click="selectWifiNetwork(network)"
+                :class="[
+                  'w-full p-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors',
+                  selectedWifiNetwork?.ssid === network.ssid ? 'bg-cyan-50 dark:bg-cyan-500/10 border-l-4 border-cyan-500' : ''
+                ]"
+              >
+                <div class="flex items-center gap-3">
+                  <WifiIcon :class="[
+                    'h-5 w-5',
+                    network.signal_percent >= 70 ? 'text-emerald-500' :
+                    network.signal_percent >= 40 ? 'text-amber-500' : 'text-red-500'
+                  ]" />
+                  <div class="text-left">
+                    <p class="font-medium text-primary">{{ network.ssid }}</p>
+                    <p class="text-xs text-muted">{{ network.security }}</p>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <p class="text-sm font-medium text-primary">{{ network.signal_percent }}%</p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Password Input (shown when network is selected) -->
+          <div v-if="selectedWifiNetwork" class="mb-4">
+            <div class="p-3 rounded-lg bg-cyan-50 dark:bg-cyan-500/10 mb-3">
+              <p class="text-sm font-medium text-cyan-700 dark:text-cyan-300">
+                Selected: {{ selectedWifiNetwork.ssid }}
+              </p>
+            </div>
+
+            <div v-if="selectedWifiNetwork.security !== 'Open'">
+              <label class="block text-sm font-medium text-secondary mb-1">Password</label>
+              <input
+                v-model="wifiPassword"
+                type="password"
+                placeholder="Enter WiFi password"
+                class="input w-full"
+                @keyup.enter="connectToWifi"
+              />
+            </div>
+            <p v-else class="text-sm text-muted">
+              This is an open network (no password required)
+            </p>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <button
+              @click="closeWifiConfigModal"
+              class="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              @click="connectToWifi"
+              :disabled="wifiConnecting || !selectedWifiNetwork"
+              class="px-4 py-2 rounded-lg font-medium text-white bg-cyan-500 hover:bg-cyan-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              <ArrowPathIcon v-if="wifiConnecting" class="h-4 w-4 animate-spin" />
+              <WifiIcon v-else class="h-4 w-4" />
+              {{ wifiConnecting ? 'Connecting...' : 'Connect' }}
             </button>
           </div>
         </div>

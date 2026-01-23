@@ -14,7 +14,7 @@
 import asyncio
 import platform
 import time
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -1160,6 +1160,206 @@ async def get_host_wifi_info() -> dict:
     # Only cache if we got valid data
     if result.get("connected"):
         _set_cached("host_wifi", result)
+
+    return result
+
+
+@router.get("/host/wifi/networks")
+async def scan_host_wifi_networks() -> dict:
+    """
+    Scan for available WiFi networks on the Docker host.
+
+    Runs nmcli through a privileged container to access host WiFi scanning.
+    Returns list of networks with SSID, signal strength, and security type.
+    """
+    import logging
+    import re
+
+    logger = logging.getLogger(__name__)
+
+    result = {
+        "success": False,
+        "networks": [],
+        "error": None,
+    }
+
+    try:
+        import docker
+        client = docker.from_env()
+
+        # Run nmcli to scan for WiFi networks
+        # Using alpine with networkmanager installed
+        script = """
+            apk add --no-cache networkmanager >/dev/null 2>&1
+            nmcli -t -f SSID,SIGNAL,SECURITY device wifi list 2>/dev/null || echo "SCAN_FAILED"
+        """
+
+        try:
+            output = client.containers.run(
+                "alpine:latest",
+                command=["sh", "-c", script],
+                network_mode="host",
+                privileged=True,
+                remove=True,
+            )
+            output_str = output.decode("utf-8").strip()
+
+            if "SCAN_FAILED" in output_str or not output_str:
+                result["error"] = "WiFi scan failed - no wireless interface available"
+                return result
+
+            # Parse nmcli output: SSID:SIGNAL:SECURITY
+            networks = []
+            seen_ssids = set()
+
+            for line in output_str.split("\n"):
+                if not line.strip() or line.startswith("SCAN_FAILED"):
+                    continue
+
+                parts = line.split(":")
+                if len(parts) >= 2:
+                    ssid = parts[0].strip()
+                    # Skip empty SSIDs (hidden networks) and duplicates
+                    if not ssid or ssid in seen_ssids:
+                        continue
+
+                    seen_ssids.add(ssid)
+
+                    try:
+                        signal = int(parts[1]) if parts[1] else 0
+                    except ValueError:
+                        signal = 0
+
+                    security = parts[2].strip() if len(parts) > 2 else ""
+                    # Normalize security display
+                    if not security or security == "--":
+                        security = "Open"
+
+                    networks.append({
+                        "ssid": ssid,
+                        "signal_percent": signal,
+                        "security": security,
+                    })
+
+            # Sort by signal strength (strongest first)
+            networks.sort(key=lambda x: x["signal_percent"], reverse=True)
+            result["networks"] = networks
+            result["success"] = True
+
+        except Exception as e:
+            logger.warning(f"Failed to scan WiFi networks: {e}")
+            result["error"] = str(e)
+
+    except ImportError:
+        result["error"] = "Docker SDK not installed"
+    except Exception as e:
+        logger.warning(f"Failed to scan WiFi networks: {e}")
+        result["error"] = str(e)
+
+    return result
+
+
+class WifiConnectRequest(BaseModel):
+    """Request to connect to a WiFi network."""
+
+    ssid: str = Field(..., min_length=1, max_length=32, description="WiFi network SSID")
+    password: Optional[str] = Field(None, description="WiFi password (None for open networks)")
+
+
+@router.post("/host/wifi/connect")
+async def connect_host_wifi(request: WifiConnectRequest) -> dict:
+    """
+    Connect the Docker host to a WiFi network.
+
+    Runs nmcli through a privileged container to connect the host to WiFi.
+    Requires the SSID and optionally a password for secured networks.
+    """
+    import logging
+    import shlex
+
+    logger = logging.getLogger(__name__)
+
+    result = {
+        "success": False,
+        "message": "",
+        "error": None,
+    }
+
+    # Sanitize SSID to prevent command injection
+    ssid = request.ssid.strip()
+    if not ssid:
+        result["error"] = "SSID cannot be empty"
+        return result
+
+    # Log the connection attempt (without password)
+    logger.info(f"Attempting to connect host WiFi to SSID: {ssid}")
+
+    try:
+        import docker
+        client = docker.from_env()
+
+        # Build nmcli command - use shlex.quote for safe escaping
+        safe_ssid = shlex.quote(ssid)
+
+        if request.password:
+            # For secured networks
+            safe_password = shlex.quote(request.password)
+            nmcli_cmd = f"nmcli device wifi connect {safe_ssid} password {safe_password}"
+        else:
+            # For open networks
+            nmcli_cmd = f"nmcli device wifi connect {safe_ssid}"
+
+        script = f"""
+            apk add --no-cache networkmanager >/dev/null 2>&1
+            {nmcli_cmd} 2>&1
+        """
+
+        try:
+            output = client.containers.run(
+                "alpine:latest",
+                command=["sh", "-c", script],
+                network_mode="host",
+                privileged=True,
+                remove=True,
+            )
+            output_str = output.decode("utf-8").strip()
+
+            # Check for success indicators
+            if "successfully activated" in output_str.lower() or "connection successfully activated" in output_str.lower():
+                result["success"] = True
+                result["message"] = f"Successfully connected to {ssid}"
+                logger.info(f"Successfully connected host WiFi to: {ssid}")
+            elif "error" in output_str.lower():
+                result["error"] = output_str
+                logger.warning(f"WiFi connection failed: {output_str}")
+            else:
+                # Assume success if no explicit error
+                result["success"] = True
+                result["message"] = f"Connection initiated to {ssid}"
+
+        except docker.errors.ContainerError as e:
+            error_output = e.stderr.decode("utf-8") if e.stderr else str(e)
+            logger.warning(f"WiFi connection container error: {error_output}")
+
+            # Parse common nmcli errors
+            if "secrets were required" in error_output.lower() or "no secrets" in error_output.lower():
+                result["error"] = "Password required for this network"
+            elif "not found" in error_output.lower():
+                result["error"] = f"Network '{ssid}' not found"
+            elif "invalid" in error_output.lower():
+                result["error"] = "Invalid password"
+            else:
+                result["error"] = error_output
+
+        except Exception as e:
+            logger.warning(f"Failed to connect to WiFi: {e}")
+            result["error"] = str(e)
+
+    except ImportError:
+        result["error"] = "Docker SDK not installed"
+    except Exception as e:
+        logger.warning(f"Failed to connect to WiFi: {e}")
+        result["error"] = str(e)
 
     return result
 

@@ -375,6 +375,103 @@ async def clear_genslave_notification_cooldown(request: NotificationClearCooldow
 
 
 # =========================================================================
+# WiFi Configuration Endpoints
+# =========================================================================
+
+
+class WifiNetwork(BaseModel):
+    """WiFi network information."""
+
+    ssid: str = Field(description="Network SSID")
+    signal_percent: int = Field(description="Signal strength as percentage")
+    security: str = Field(description="Security type (Open, WPA, WPA2, etc.)")
+
+
+class WifiScanResponse(BaseModel):
+    """Response from WiFi network scan."""
+
+    success: bool = Field(description="Whether the scan was successful")
+    networks: list[WifiNetwork] = Field(default_factory=list, description="List of available networks")
+    error: Optional[str] = Field(None, description="Error message if scan failed")
+
+
+class WifiConnectRequest(BaseModel):
+    """Request to connect to a WiFi network."""
+
+    ssid: str = Field(..., min_length=1, max_length=32, description="WiFi network SSID")
+    password: Optional[str] = Field(None, description="WiFi password (None for open networks)")
+
+
+class WifiConnectResponse(BaseModel):
+    """Response from WiFi connect attempt."""
+
+    success: bool = Field(description="Whether connection was successful")
+    message: str = Field(description="Status message")
+    error: Optional[str] = Field(None, description="Error message if connection failed")
+
+
+@router.get("/wifi/networks", response_model=WifiScanResponse)
+async def get_genslave_wifi_networks():
+    """
+    Scan for available WiFi networks on GenSlave.
+
+    Proxies the request to GenSlave and returns a list of
+    available networks with SSID, signal strength, and security type.
+    """
+    client = SlaveClient()
+    try:
+        response = await client.scan_wifi_networks()
+
+        if not response.success:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to scan GenSlave WiFi networks: {response.error}",
+            )
+
+        return WifiScanResponse(**response.data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error scanning GenSlave WiFi networks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await client.close()
+
+
+@router.post("/wifi/connect", response_model=WifiConnectResponse)
+async def connect_genslave_wifi(request: WifiConnectRequest):
+    """
+    Connect GenSlave to a WiFi network.
+
+    Proxies the connection request to GenSlave.
+    Requires the SSID and optionally a password for secured networks.
+    """
+    client = SlaveClient()
+    try:
+        response = await client.connect_wifi(
+            ssid=request.ssid,
+            password=request.password,
+        )
+
+        if not response.success:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to connect GenSlave WiFi: {response.error}",
+            )
+
+        return WifiConnectResponse(**response.data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error connecting GenSlave WiFi: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await client.close()
+
+
+# =========================================================================
 # System Power Control Endpoints
 # =========================================================================
 

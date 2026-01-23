@@ -904,6 +904,188 @@ async def clear_notification_cooldown(
 
 
 # =========================================================================
+# WiFi Configuration Endpoints
+# =========================================================================
+
+
+class WifiNetwork(BaseModel):
+    """WiFi network information."""
+
+    ssid: str = Field(description="Network SSID")
+    signal_percent: int = Field(description="Signal strength as percentage")
+    security: str = Field(description="Security type (Open, WPA, WPA2, etc.)")
+
+
+class WifiScanResponse(BaseModel):
+    """Response from WiFi network scan."""
+
+    success: bool = Field(description="Whether the scan was successful")
+    networks: list[WifiNetwork] = Field(default_factory=list, description="List of available networks")
+    error: Optional[str] = Field(None, description="Error message if scan failed")
+
+
+class WifiConnectRequest(BaseModel):
+    """Request to connect to a WiFi network."""
+
+    ssid: str = Field(..., min_length=1, max_length=32, description="WiFi network SSID")
+    password: Optional[str] = Field(None, description="WiFi password (None for open networks)")
+
+
+class WifiConnectResponse(BaseModel):
+    """Response from WiFi connect attempt."""
+
+    success: bool = Field(description="Whether connection was successful")
+    message: str = Field(description="Status message")
+    error: Optional[str] = Field(None, description="Error message if connection failed")
+
+
+@router.get("/wifi/networks", response_model=WifiScanResponse)
+async def scan_wifi_networks() -> WifiScanResponse:
+    """
+    Scan for available WiFi networks.
+
+    Uses nmcli to scan for nearby WiFi networks and returns
+    a list with SSID, signal strength, and security type.
+    """
+    import subprocess
+
+    result = WifiScanResponse(success=False, networks=[], error=None)
+
+    try:
+        # Run nmcli to scan for WiFi networks
+        proc = subprocess.run(
+            ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        if proc.returncode != 0:
+            logger.warning(f"nmcli scan failed: {proc.stderr}")
+            result.error = proc.stderr or "WiFi scan failed"
+            return result
+
+        # Parse output: SSID:SIGNAL:SECURITY
+        networks = []
+        seen_ssids = set()
+
+        for line in proc.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+
+            parts = line.split(":")
+            if len(parts) >= 2:
+                ssid = parts[0].strip()
+                # Skip empty SSIDs (hidden networks) and duplicates
+                if not ssid or ssid in seen_ssids:
+                    continue
+
+                seen_ssids.add(ssid)
+
+                try:
+                    signal = int(parts[1]) if parts[1] else 0
+                except ValueError:
+                    signal = 0
+
+                security = parts[2].strip() if len(parts) > 2 else ""
+                # Normalize security display
+                if not security or security == "--":
+                    security = "Open"
+
+                networks.append(WifiNetwork(
+                    ssid=ssid,
+                    signal_percent=signal,
+                    security=security,
+                ))
+
+        # Sort by signal strength (strongest first)
+        networks.sort(key=lambda x: x.signal_percent, reverse=True)
+        result.networks = networks
+        result.success = True
+
+    except subprocess.TimeoutExpired:
+        logger.warning("WiFi scan timed out")
+        result.error = "WiFi scan timed out"
+    except FileNotFoundError:
+        logger.warning("nmcli not found - NetworkManager may not be installed")
+        result.error = "nmcli not found - NetworkManager not installed"
+    except Exception as e:
+        logger.warning(f"WiFi scan failed: {e}")
+        result.error = str(e)
+
+    return result
+
+
+@router.post("/wifi/connect", response_model=WifiConnectResponse)
+async def connect_wifi(request: WifiConnectRequest) -> WifiConnectResponse:
+    """
+    Connect to a WiFi network.
+
+    Uses nmcli to connect to the specified network.
+    Requires the SSID and optionally a password for secured networks.
+    """
+    import shlex
+    import subprocess
+
+    result = WifiConnectResponse(success=False, message="", error=None)
+
+    # Sanitize SSID
+    ssid = request.ssid.strip()
+    if not ssid:
+        result.error = "SSID cannot be empty"
+        return result
+
+    # Log the connection attempt (without password)
+    logger.info(f"Attempting to connect WiFi to SSID: {ssid}")
+
+    try:
+        # Build nmcli command
+        cmd = ["nmcli", "device", "wifi", "connect", ssid]
+
+        if request.password:
+            cmd.extend(["password", request.password])
+
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        output = proc.stdout + proc.stderr
+
+        # Check for success indicators
+        if proc.returncode == 0:
+            result.success = True
+            result.message = f"Successfully connected to {ssid}"
+            logger.info(f"Successfully connected WiFi to: {ssid}")
+        elif "secrets were required" in output.lower() or "no secrets" in output.lower():
+            result.error = "Password required for this network"
+            logger.warning(f"WiFi connection failed: password required")
+        elif "not found" in output.lower():
+            result.error = f"Network '{ssid}' not found"
+            logger.warning(f"WiFi connection failed: network not found")
+        elif "invalid" in output.lower():
+            result.error = "Invalid password"
+            logger.warning(f"WiFi connection failed: invalid password")
+        else:
+            result.error = output or "Connection failed"
+            logger.warning(f"WiFi connection failed: {output}")
+
+    except subprocess.TimeoutExpired:
+        logger.warning("WiFi connection timed out")
+        result.error = "Connection timed out"
+    except FileNotFoundError:
+        logger.warning("nmcli not found - NetworkManager may not be installed")
+        result.error = "nmcli not found - NetworkManager not installed"
+    except Exception as e:
+        logger.warning(f"WiFi connection failed: {e}")
+        result.error = str(e)
+
+    return result
+
+
+# =========================================================================
 # System Power Control Endpoints
 # =========================================================================
 
