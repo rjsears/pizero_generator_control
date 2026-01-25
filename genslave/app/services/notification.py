@@ -369,11 +369,11 @@ class NotificationService:
 
         title = "GenSlave FAILSAFE TRIGGERED"
         body = (
-            f"Generator relay has been turned OFF due to lost communication "
-            f"with GenMaster.\n\n"
+            f"Generator relay has been turned OFF and DISARMED due to lost "
+            f"communication with GenMaster.\n\n"
             f"No heartbeat received for {timeout_seconds} seconds.\n\n"
-            f"Please check GenMaster connectivity and re-arm the relay "
-            f"when communication is restored."
+            f"Please check GenMaster connectivity. You must manually re-arm "
+            f"from the GenMaster dashboard to resume generator control."
         )
 
         result = await self.send(
@@ -388,11 +388,15 @@ class NotificationService:
 
         return result
 
-    async def send_heartbeat_restored_alert(self) -> bool:
-        """Send a notification when heartbeat is restored but relay needs re-arming.
+    async def send_heartbeat_restored_alert(self, is_armed: bool = False) -> bool:
+        """Send a notification when heartbeat is restored after a failsafe event.
 
-        This is sent after a failsafe event when communication with GenMaster
-        is restored, but the relay is still disarmed and needs manual re-arming.
+        The message varies depending on whether the relay is armed or not:
+        - Armed: Informs user that generator control is active
+        - Disarmed: Prompts user to re-arm from GenMaster dashboard
+
+        Args:
+            is_armed: Current armed state after syncing with GenMaster
 
         Returns:
             True if notification was sent, False if skipped (cooldown or disabled).
@@ -407,17 +411,27 @@ class NotificationService:
             return False
 
         title = "GenSlave Communication Restored"
-        body = (
-            "Communication with GenMaster has been restored.\n\n"
-            "The relay is currently DISARMED after the failsafe event.\n\n"
-            "Please re-arm the relay from the GenMaster dashboard to "
-            "resume generator control."
-        )
+
+        if is_armed:
+            body = (
+                "Communication with GenMaster has been restored.\n\n"
+                "Your Generator Relay is ARMED.\n\n"
+                "Your generator will start automatically when commanded by GenMaster."
+            )
+            notify_type = apprise.NotifyType.SUCCESS
+        else:
+            body = (
+                "Communication with GenMaster has been restored.\n\n"
+                "However, your Generator Relay is NOT armed.\n\n"
+                "Please log into GenMaster and re-arm the Generator Relay "
+                "to resume automatic generator control."
+            )
+            notify_type = apprise.NotifyType.WARNING
 
         result = await self.send(
             title=title,
             body=body,
-            notify_type=apprise.NotifyType.WARNING,
+            notify_type=notify_type,
         )
 
         # Record that we sent (or attempted to send) the notification

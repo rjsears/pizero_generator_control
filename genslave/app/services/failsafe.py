@@ -92,15 +92,38 @@ class FailsafeMonitor:
             )
 
         # Clear failsafe if it was triggered
+        was_failsafe = self._failsafe_triggered
         if self._failsafe_triggered:
             logger.info("Heartbeat received - clearing failsafe state")
             self._failsafe_triggered = False
             self._failsafe_triggered_at = None
 
-            # Check if relay needs to be re-armed and send notification
-            if self._relay_service and not self._relay_service.is_armed:
-                logger.info("Relay is disarmed after failsafe recovery - sending reminder notification")
-                asyncio.create_task(notification_service.send_heartbeat_restored_alert())
+        # Sync armed state from GenMaster (GenMaster is the source of truth)
+        # This allows "self-healing" after temporary network issues
+        genmaster_armed = data.get("armed")
+        if genmaster_armed is not None and self._relay_service:
+            current_armed = self._relay_service.is_armed
+
+            if genmaster_armed and not current_armed:
+                # GenMaster says armed, we're disarmed - re-arm (self-heal)
+                logger.info("Syncing armed state from GenMaster: re-arming (self-heal)")
+                self._relay_service.arm(source="genmaster_sync")
+            elif not genmaster_armed and current_armed:
+                # GenMaster says disarmed, we're armed - disarm
+                logger.info("Syncing armed state from GenMaster: disarming")
+                self._relay_service.disarm(source="genmaster_sync")
+
+            # After failsafe recovery, send notification with current armed state
+            # This tells the user whether they need to re-arm or if it self-healed
+            if was_failsafe:
+                final_armed_state = self._relay_service.is_armed
+                logger.info(
+                    f"Failsafe recovery complete - sending notification "
+                    f"(armed: {final_armed_state})"
+                )
+                asyncio.create_task(
+                    notification_service.send_heartbeat_restored_alert(is_armed=final_armed_state)
+                )
 
         # Process command if present and armed
         command = data.get("command", "none")
@@ -211,10 +234,15 @@ class FailsafeMonitor:
         self._failsafe_triggered = True
         self._failsafe_triggered_at = int(time.time())
 
-        # Turn off relay (force=True to bypass armed check)
+        # Turn off relay AND disarm (force=True to bypass armed check)
+        # Disarming ensures that even when GenMaster reconnects, manual re-arming is required
         if self._relay_service:
             success = self._relay_service.relay_off(force=True)
             logger.info(f"Failsafe relay OFF: {'success' if success else 'failed'}")
+
+            # Disarm to require manual intervention before automation can resume
+            disarm_result = self._relay_service.disarm(source="failsafe")
+            logger.info(f"Failsafe disarm: {disarm_result.get('message', 'unknown')}")
 
         # Send notifications via Apprise (primary method)
         # Use actual timeout, not config default
