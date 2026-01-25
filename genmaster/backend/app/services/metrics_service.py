@@ -311,10 +311,13 @@ def get_core_services_status() -> dict[str, Any]:
 
         # Define core services to check
         core_services = {
-            "genmaster_api": ["genmaster_api", "genmaster_backend", "genmaster-api"],
+            "genmaster_api": ["genmaster_api", "genmaster_backend", "genmaster-api", "genmaster"],
             "nginx": ["genmaster_nginx", "nginx"],
             "postgres": ["genmaster_postgres", "genmaster_db", "postgres"],
             "redis": ["genmaster_redis", "redis"],
+            "cloudflared": ["genmaster_cloudflared", "cloudflared"],
+            "tailscale": ["genmaster_tailscale", "tailscale"],
+            "portainer": ["genmaster_portainer", "portainer"],
         }
 
         services = {}
