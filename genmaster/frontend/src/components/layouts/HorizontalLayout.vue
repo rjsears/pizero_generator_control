@@ -92,7 +92,7 @@ async function handleLogout() {
                 'flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors',
                 isActive(item.route)
                   ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                  : 'text-secondary hover:text-primary hover:bg-surface-hover'
+                  : 'text-secondary hover:text-emerald-700 hover:bg-emerald-100 dark:hover:text-emerald-300 dark:hover:bg-emerald-500/20'
               ]"
             >
               <component :is="item.icon" class="h-5 w-5 mr-1.5" />
