@@ -110,7 +110,7 @@ async function handleLogout() {
             themeStore.sidebarCollapsed ? 'justify-center px-2 py-3' : 'px-3 py-2.5',
             isActive(item.route)
               ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-l-2 border-blue-500'
-              : 'text-secondary hover:text-primary hover:bg-surface-hover'
+              : 'text-secondary hover:text-emerald-700 hover:bg-emerald-100 dark:hover:text-emerald-300 dark:hover:bg-emerald-500/20'
           ]"
           :title="themeStore.sidebarCollapsed ? item.name : ''"
         >
