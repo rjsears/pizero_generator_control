@@ -580,66 +580,48 @@ async def get_cloudflare_status() -> dict:
                         result["version"] = cf_container.image.tags[0].split(":")[-1]
 
                 # Parse logs for connection status, tunnel ID, connector ID, and edge locations
+                # Using the same approach as n8n_nginx which is proven to work
                 try:
-                    logs = cf_container.logs(tail=500).decode("utf-8", errors="ignore")
+                    logs = cf_container.logs(tail=100).decode("utf-8", errors="ignore")
+                    logs_lower = logs.lower()
                     edge_locs = set()
-                    has_recent_error = False
 
+                    # PRIMARY CONNECTION CHECK (from n8n_nginx)
+                    # Check if "Connection" (case-sensitive) and "registered" both appear in logs
+                    if "Connection" in logs and "registered" in logs_lower:
+                        result["connected"] = True
+                        logger.debug("Cloudflare connected: found 'Connection' and 'registered' in logs")
+
+                    # Parse line by line for additional info
                     for line in logs.split("\n"):
                         line_lower = line.lower()
 
-                        # Look for tunnel ID
-                        if "tunnelid" in line_lower or "tunnel id" in line_lower:
-                            match = re.search(r'[a-f0-9-]{36}', line)
+                        # Look for tunnel ID (tunnelID=xxx-xxx-xxx)
+                        if "tunnelid" in line_lower:
+                            match = re.search(r'tunnelID=([a-f0-9-]{36})', line, re.IGNORECASE)
                             if match:
-                                result["tunnel_id"] = match.group()
+                                result["tunnel_id"] = match.group(1)
 
-                        # Look for connector ID
+                        # Look for connector ID (connectorID=xxx-xxx-xxx)
                         if "connectorid" in line_lower:
-                            match = re.search(r'[a-f0-9-]{36}', line)
-                            if match and match.group() != result.get("tunnel_id"):
-                                result["connector_id"] = match.group()
+                            match = re.search(r'connectorID=([a-f0-9-]{36})', line, re.IGNORECASE)
+                            if match:
+                                result["connector_id"] = match.group(1)
 
-                        # Check for connection registered (primary indicator of connected status)
-                        # Multiple patterns for different cloudflared versions
-                        if "registered" in line_lower and ("connector" in line_lower or "connection" in line_lower):
-                            result["connected"] = True
-                            # Extract edge location
-                            loc_match = re.search(r'location=(\w+)', line)
-                            if loc_match:
-                                edge_locs.add(loc_match.group(1))
-
-                        # Check for tunnel connected message
-                        if "tunnel" in line_lower and "connected" in line_lower:
-                            result["connected"] = True
-
-                        # Additional patterns for newer cloudflared versions
-                        if "connection" in line_lower and any(x in line_lower for x in ["established", "started", "serving"]):
-                            result["connected"] = True
-
-                        # "Registered Cloudflare Tunnel connector" pattern
-                        if "registered" in line_lower and "cloudflare" in line_lower:
-                            result["connected"] = True
-
-                        # INF level log with "connected" anywhere
-                        if "inf" in line_lower and "connected" in line_lower:
-                            result["connected"] = True
-
-                        # Extract edge location from various formats (location=XYZ or edge=XYZ)
-                        loc_match = re.search(r'(?:location|edge)[=:][\s"]*(\w{3})', line, re.IGNORECASE)
+                        # Extract edge location from "Registered tunnel connection" lines
+                        # Pattern: location=LAX or location=SFO
+                        loc_match = re.search(r'location=(\w+)', line, re.IGNORECASE)
                         if loc_match:
                             edge_locs.add(loc_match.group(1).upper())
 
-                        # Look for errors (but keep the last one)
-                        if "err" in line_lower and "error" in line_lower:
-                            result["last_error"] = line.strip()[-200:]
-                            # Check if error is recent (last 50 lines - roughly)
-                            has_recent_error = True
+                        # Look for errors (keep last one, filter common non-errors)
+                        if ("err" in line_lower or "level=error" in line_lower) and "error" in line_lower:
+                            # Skip common non-error messages
+                            if "no error" not in line_lower and "error=<nil>" not in line_lower:
+                                result["last_error"] = line.strip()[-200:]
 
                     if edge_locs:
                         result["edge_locations"] = list(edge_locs)
-                        # If we found edge locations, we're likely connected
-                        result["connected"] = True
 
                 except Exception as e:
                     logger.debug(f"Could not parse cloudflared logs: {e}")
@@ -753,30 +735,25 @@ async def get_cloudflare_status() -> dict:
         logger.warning(f"Failed to get Cloudflare status: {e}")
         result["error"] = str(e)
 
-    # Fallback heuristic: If container is running and we have strong indicators,
-    # consider it connected even if log parsing didn't find explicit "connected" messages
-    if (
-        result.get("running")
-        and not result.get("connected")
-        and (result.get("version") or result.get("tunnel_id"))
-        and (result.get("edge_locations") or result.get("connections_per_location"))
-    ):
-        result["connected"] = True
-        logger.debug("Cloudflare connected via fallback heuristic (running + tunnel info + edge locations)")
+    # Fallback checks if primary log parsing didn't find connection
+    if result.get("running") and not result.get("connected"):
+        # Check 1: If we have HA connections from metrics, we're definitely connected
+        if result.get("metrics", {}).get("ha_connections", 0) > 0:
+            result["connected"] = True
+            logger.debug("Cloudflare connected: ha_connections > 0")
 
-    # Also consider connected if running and we have any metrics with traffic
-    if (
-        result.get("running")
-        and not result.get("connected")
-        and result.get("metrics")
-        and result["metrics"].get("total_requests", 0) > 0
-    ):
-        result["connected"] = True
-        logger.debug("Cloudflare connected via fallback heuristic (running + has traffic)")
+        # Check 2: If we have edge locations (from logs or metrics), we're likely connected
+        elif result.get("edge_locations") or result.get("connections_per_location"):
+            result["connected"] = True
+            logger.debug("Cloudflare connected: edge locations found")
 
-    # Only cache if cloudflare is connected (don't cache "not connected" state)
-    if result.get("connected"):
-        _set_cached("cloudflare", result)
+        # Check 3: If we have traffic, we're connected
+        elif result.get("metrics", {}).get("total_requests", 0) > 0:
+            result["connected"] = True
+            logger.debug("Cloudflare connected: has traffic")
+
+    # Cache the result (cache both connected and not connected for 30s)
+    _set_cached("cloudflare", result)
     return result
 
 
