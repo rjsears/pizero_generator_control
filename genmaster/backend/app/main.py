@@ -31,6 +31,7 @@ from app.routers import (
     config,
     containers,
     dev,
+    env_config,
     exercise,
     generator,
     generator_info,
@@ -384,6 +385,7 @@ app.include_router(generator_info.router, prefix="/api/generator-info", tags=["G
 app.include_router(exercise.router, prefix="/api/exercise", tags=["Exercise"])
 app.include_router(system_notifications.router, prefix="/api/system-notifications", tags=["System Notifications"])
 app.include_router(genslave.router, prefix="/api/genslave", tags=["GenSlave"])
+app.include_router(env_config.router, prefix="/api/env-config", tags=["Environment Config"])
 
 
 # Root status endpoint
