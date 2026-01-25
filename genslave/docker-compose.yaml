@@ -42,9 +42,12 @@ services:
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
 
     # Persist data and logs
+    # Mount wpa_supplicant for WiFi configuration
     volumes:
       - genslave_data:/opt/genslave/data
       - genslave_logs:/opt/genslave/logs
+      - /etc/wpa_supplicant:/etc/wpa_supplicant:rw
+      - /var/run/wpa_supplicant:/var/run/wpa_supplicant:rw
 
     # Health check
     healthcheck:

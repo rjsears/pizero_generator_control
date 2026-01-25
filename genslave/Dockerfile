@@ -29,7 +29,7 @@ WORKDIR /opt/genslave
 
 # Install Python and all dependencies via apt (pre-compiled for ARM)
 # This avoids pip trying to compile numpy/PIL from source
-# network-manager provides nmcli for WiFi configuration
+# wireless-tools and wpasupplicant provide WiFi configuration tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
@@ -45,7 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iproute2 \
     wireless-tools \
     iw \
-    network-manager \
+    wpasupplicant \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

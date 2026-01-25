@@ -944,59 +944,104 @@ async def scan_wifi_networks() -> WifiScanResponse:
     """
     Scan for available WiFi networks.
 
-    Uses nmcli to scan for nearby WiFi networks and returns
+    Uses iwlist to scan for nearby WiFi networks and returns
     a list with SSID, signal strength, and security type.
+    Works with wpa_supplicant (standard on Raspberry Pi).
     """
+    import re
     import subprocess
 
     result = WifiScanResponse(success=False, networks=[], error=None)
 
     try:
-        # Run nmcli to scan for WiFi networks
+        # Find wireless interface
         proc = subprocess.run(
-            ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list"],
+            ["iwconfig"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        # Find interface name (usually wlan0)
+        interface = None
+        for line in proc.stdout.split("\n"):
+            if "IEEE 802.11" in line:
+                interface = line.split()[0]
+                break
+
+        if not interface:
+            result.error = "No WiFi interface found"
+            return result
+
+        # Scan for networks using iwlist
+        proc = subprocess.run(
+            ["iwlist", interface, "scan"],
             capture_output=True,
             text=True,
             timeout=30,
         )
 
         if proc.returncode != 0:
-            logger.warning(f"nmcli scan failed: {proc.stderr}")
+            logger.warning(f"iwlist scan failed: {proc.stderr}")
             result.error = proc.stderr or "WiFi scan failed"
             return result
 
-        # Parse output: SSID:SIGNAL:SECURITY
+        # Parse iwlist output
         networks = []
         seen_ssids = set()
+        current_network = {}
 
-        for line in proc.stdout.strip().split("\n"):
-            if not line.strip():
-                continue
+        for line in proc.stdout.split("\n"):
+            line = line.strip()
 
-            parts = line.split(":")
-            if len(parts) >= 2:
-                ssid = parts[0].strip()
-                # Skip empty SSIDs (hidden networks) and duplicates
-                if not ssid or ssid in seen_ssids:
-                    continue
+            # New cell (network)
+            if line.startswith("Cell"):
+                if current_network.get("ssid") and current_network["ssid"] not in seen_ssids:
+                    seen_ssids.add(current_network["ssid"])
+                    networks.append(WifiNetwork(
+                        ssid=current_network.get("ssid", ""),
+                        signal_percent=current_network.get("signal", 0),
+                        security=current_network.get("security", "Open"),
+                    ))
+                current_network = {"security": "Open"}
 
-                seen_ssids.add(ssid)
+            # SSID
+            elif "ESSID:" in line:
+                match = re.search(r'ESSID:"([^"]*)"', line)
+                if match:
+                    current_network["ssid"] = match.group(1)
 
-                try:
-                    signal = int(parts[1]) if parts[1] else 0
-                except ValueError:
-                    signal = 0
+            # Signal level
+            elif "Signal level=" in line:
+                # Format: Signal level=-XX dBm or Signal level=XX/100
+                match = re.search(r"Signal level[=:](-?\d+)", line)
+                if match:
+                    signal_dbm = int(match.group(1))
+                    # Convert dBm to percentage (roughly: -30 dBm = 100%, -90 dBm = 0%)
+                    if signal_dbm < 0:
+                        signal_percent = min(100, max(0, 2 * (signal_dbm + 100)))
+                    else:
+                        signal_percent = signal_dbm  # Already a percentage
+                    current_network["signal"] = signal_percent
 
-                security = parts[2].strip() if len(parts) > 2 else ""
-                # Normalize security display
-                if not security or security == "--":
-                    security = "Open"
+            # Security (WPA/WPA2)
+            elif "IE:" in line and ("WPA" in line or "RSN" in line):
+                if "WPA2" in line or "RSN" in line:
+                    current_network["security"] = "WPA2"
+                elif "WPA" in line:
+                    current_network["security"] = "WPA"
 
-                networks.append(WifiNetwork(
-                    ssid=ssid,
-                    signal_percent=signal,
-                    security=security,
-                ))
+            # WEP
+            elif "Encryption key:on" in line and current_network.get("security") == "Open":
+                current_network["security"] = "WEP"
+
+        # Add last network
+        if current_network.get("ssid") and current_network["ssid"] not in seen_ssids:
+            networks.append(WifiNetwork(
+                ssid=current_network.get("ssid", ""),
+                signal_percent=current_network.get("signal", 0),
+                security=current_network.get("security", "Open"),
+            ))
 
         # Sort by signal strength (strongest first)
         networks.sort(key=lambda x: x.signal_percent, reverse=True)
@@ -1007,8 +1052,8 @@ async def scan_wifi_networks() -> WifiScanResponse:
         logger.warning("WiFi scan timed out")
         result.error = "WiFi scan timed out"
     except FileNotFoundError:
-        logger.warning("nmcli not found - NetworkManager may not be installed")
-        result.error = "nmcli not found - NetworkManager not installed"
+        logger.warning("iwlist not found - wireless-tools may not be installed")
+        result.error = "iwlist not found - wireless-tools not installed"
     except Exception as e:
         logger.warning(f"WiFi scan failed: {e}")
         result.error = str(e)
@@ -1062,54 +1107,77 @@ class WifiDeleteResponse(BaseModel):
     error: Optional[str] = Field(None, description="Error message if deletion failed")
 
 
+WPA_SUPPLICANT_CONF = "/etc/wpa_supplicant/wpa_supplicant.conf"
+
+
+def _parse_wpa_supplicant_conf() -> list[dict]:
+    """
+    Parse wpa_supplicant.conf to extract configured networks.
+
+    Returns a list of dicts with 'ssid', 'priority', and 'disabled' keys.
+    """
+    import re
+
+    networks = []
+
+    try:
+        with open(WPA_SUPPLICANT_CONF, "r") as f:
+            content = f.read()
+
+        # Find all network blocks
+        network_pattern = re.compile(r"network\s*=\s*\{([^}]+)\}", re.DOTALL)
+
+        for match in network_pattern.finditer(content):
+            block = match.group(1)
+            network = {}
+
+            # Extract SSID
+            ssid_match = re.search(r'ssid\s*=\s*"([^"]+)"', block)
+            if ssid_match:
+                network["ssid"] = ssid_match.group(1)
+
+            # Extract priority (higher = preferred)
+            priority_match = re.search(r"priority\s*=\s*(\d+)", block)
+            network["priority"] = int(priority_match.group(1)) if priority_match else 0
+
+            # Check if disabled
+            disabled_match = re.search(r"disabled\s*=\s*(\d+)", block)
+            network["disabled"] = disabled_match and disabled_match.group(1) == "1"
+
+            if network.get("ssid"):
+                networks.append(network)
+
+    except FileNotFoundError:
+        logger.warning(f"wpa_supplicant.conf not found at {WPA_SUPPLICANT_CONF}")
+    except Exception as e:
+        logger.warning(f"Failed to parse wpa_supplicant.conf: {e}")
+
+    return networks
+
+
 @router.get("/wifi/saved", response_model=WifiSavedListResponse)
 async def list_saved_wifi_networks() -> WifiSavedListResponse:
     """
     List saved WiFi network profiles.
 
-    Returns all WiFi connection profiles that have been configured,
-    including those added for auto-connect.
+    Parses wpa_supplicant.conf to return all configured networks.
+    Works with wpa_supplicant (standard on Raspberry Pi).
     """
-    import subprocess
-
     result = WifiSavedListResponse(success=False, networks=[], error=None)
 
     try:
-        # List all WiFi connections
-        proc = subprocess.run(
-            ["nmcli", "-t", "-f", "NAME,TYPE,AUTOCONNECT", "connection", "show"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        networks = _parse_wpa_supplicant_conf()
 
-        if proc.returncode != 0:
-            logger.warning(f"nmcli list failed: {proc.stderr}")
-            result.error = proc.stderr or "Failed to list saved networks"
-            return result
-
-        networks = []
-        for line in proc.stdout.strip().split("\n"):
-            if not line.strip():
-                continue
-
-            parts = line.split(":")
-            if len(parts) >= 3 and parts[1] == "802-11-wireless":
-                networks.append(WifiSavedNetwork(
-                    name=parts[0],
-                    ssid=parts[0],  # Usually same as name
-                    auto_connect=parts[2].lower() == "yes",
-                ))
-
-        result.networks = networks
+        result.networks = [
+            WifiSavedNetwork(
+                name=net["ssid"],
+                ssid=net["ssid"],
+                auto_connect=not net.get("disabled", False),
+            )
+            for net in networks
+        ]
         result.success = True
 
-    except subprocess.TimeoutExpired:
-        logger.warning("Listing saved networks timed out")
-        result.error = "Operation timed out"
-    except FileNotFoundError:
-        logger.warning("nmcli not found")
-        result.error = "nmcli not found - NetworkManager not installed"
     except Exception as e:
         logger.warning(f"Failed to list saved networks: {e}")
         result.error = str(e)
@@ -1117,16 +1185,37 @@ async def list_saved_wifi_networks() -> WifiSavedListResponse:
     return result
 
 
+def _reload_wpa_supplicant() -> bool:
+    """
+    Reload wpa_supplicant configuration.
+
+    Uses wpa_cli to reconfigure without restarting the daemon.
+    Returns True if successful.
+    """
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["wpa_cli", "-i", "wlan0", "reconfigure"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return proc.returncode == 0
+    except Exception as e:
+        logger.warning(f"Failed to reload wpa_supplicant: {e}")
+        return False
+
+
 @router.post("/wifi/add", response_model=WifiAddResponse)
 async def add_wifi_network(request: WifiAddRequest) -> WifiAddResponse:
     """
     Add a known WiFi network for auto-connect.
 
-    Creates a saved WiFi connection profile that will automatically
-    connect when the network becomes available. Useful for pre-configuring
-    networks before the device is deployed to a location.
+    Adds a network block to wpa_supplicant.conf and reconfigures.
+    Works with wpa_supplicant (standard on Raspberry Pi).
     """
-    import subprocess
+    import re
 
     result = WifiAddResponse(success=False, message="", error=None)
 
@@ -1139,48 +1228,56 @@ async def add_wifi_network(request: WifiAddRequest) -> WifiAddResponse:
     logger.info(f"Adding known WiFi network: {ssid}")
 
     try:
-        # Use nmcli to add a WiFi connection profile
-        # This creates a saved connection that will auto-connect when available
-        cmd = [
-            "nmcli", "connection", "add",
-            "type", "wifi",
-            "con-name", ssid,
-            "ssid", ssid,
-            "wifi-sec.key-mgmt", "wpa-psk",
-            "wifi-sec.psk", request.password,
-        ]
+        # Check if network already exists
+        existing = _parse_wpa_supplicant_conf()
+        if any(net["ssid"] == ssid for net in existing):
+            result.error = f"Network '{ssid}' already exists. Delete it first to update."
+            return result
 
-        if request.auto_connect:
-            cmd.extend(["connection.autoconnect", "yes"])
-        else:
-            cmd.extend(["connection.autoconnect", "no"])
+        # Read current config
+        try:
+            with open(WPA_SUPPLICANT_CONF, "r") as f:
+                content = f.read()
+        except FileNotFoundError:
+            # Create basic config if it doesn't exist
+            content = """ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+country=US
 
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+"""
 
-        output = proc.stdout + proc.stderr
+        # Build network block
+        # Escape any special characters in SSID
+        safe_ssid = ssid.replace("\\", "\\\\").replace('"', '\\"')
+        safe_password = request.password.replace("\\", "\\\\").replace('"', '\\"')
 
-        if proc.returncode == 0:
+        network_block = f'''
+network={{
+    ssid="{safe_ssid}"
+    psk="{safe_password}"
+    key_mgmt=WPA-PSK
+    priority=1
+}}
+'''
+
+        # Append network block
+        with open(WPA_SUPPLICANT_CONF, "w") as f:
+            f.write(content.rstrip() + "\n" + network_block)
+
+        # Reload wpa_supplicant
+        if _reload_wpa_supplicant():
             result.success = True
             result.message = f"WiFi network '{ssid}' added successfully. It will auto-connect when available."
             logger.info(f"Successfully added WiFi network: {ssid}")
-        elif "already exists" in output.lower():
-            result.error = f"Network '{ssid}' already exists. Delete it first to update."
-            logger.warning(f"WiFi network already exists: {ssid}")
         else:
-            result.error = output or "Failed to add network"
-            logger.warning(f"Failed to add WiFi network: {output}")
+            # Config was written but reload failed - still partially successful
+            result.success = True
+            result.message = f"WiFi network '{ssid}' added. Reboot may be required for changes to take effect."
+            logger.warning(f"Added WiFi network but reload failed: {ssid}")
 
-    except subprocess.TimeoutExpired:
-        logger.warning("Adding WiFi network timed out")
-        result.error = "Operation timed out"
-    except FileNotFoundError:
-        logger.warning("nmcli not found")
-        result.error = "nmcli not found - NetworkManager not installed"
+    except PermissionError:
+        logger.warning("Permission denied writing to wpa_supplicant.conf")
+        result.error = "Permission denied - container needs write access to /etc/wpa_supplicant"
     except Exception as e:
         logger.warning(f"Failed to add WiFi network: {e}")
         result.error = str(e)
@@ -1193,9 +1290,10 @@ async def delete_wifi_network(request: WifiDeleteRequest) -> WifiDeleteResponse:
     """
     Delete a saved WiFi network profile.
 
-    Removes a previously saved WiFi connection profile.
+    Removes a network block from wpa_supplicant.conf and reconfigures.
+    Works with wpa_supplicant (standard on Raspberry Pi).
     """
-    import subprocess
+    import re
 
     result = WifiDeleteResponse(success=False, message="", error=None)
 
@@ -1207,31 +1305,47 @@ async def delete_wifi_network(request: WifiDeleteRequest) -> WifiDeleteResponse:
     logger.info(f"Deleting WiFi network: {name}")
 
     try:
-        proc = subprocess.run(
-            ["nmcli", "connection", "delete", name],
-            capture_output=True,
-            text=True,
-            timeout=30,
+        # Read current config
+        try:
+            with open(WPA_SUPPLICANT_CONF, "r") as f:
+                content = f.read()
+        except FileNotFoundError:
+            result.error = "wpa_supplicant.conf not found"
+            return result
+
+        # Escape special regex characters in SSID
+        escaped_ssid = re.escape(name)
+
+        # Find and remove the network block for this SSID
+        # Match network block containing ssid="<name>"
+        pattern = re.compile(
+            r'\n?network\s*=\s*\{[^}]*ssid\s*=\s*"' + escaped_ssid + r'"[^}]*\}',
+            re.DOTALL
         )
 
-        output = proc.stdout + proc.stderr
+        new_content, count = pattern.subn("", content)
 
-        if proc.returncode == 0:
+        if count == 0:
+            result.error = f"Network '{name}' not found"
+            return result
+
+        # Write updated config
+        with open(WPA_SUPPLICANT_CONF, "w") as f:
+            f.write(new_content.strip() + "\n")
+
+        # Reload wpa_supplicant
+        if _reload_wpa_supplicant():
             result.success = True
             result.message = f"WiFi network '{name}' deleted successfully."
             logger.info(f"Successfully deleted WiFi network: {name}")
-        elif "not found" in output.lower():
-            result.error = f"Network '{name}' not found"
         else:
-            result.error = output or "Failed to delete network"
-            logger.warning(f"Failed to delete WiFi network: {output}")
+            result.success = True
+            result.message = f"WiFi network '{name}' deleted. Reboot may be required for changes to take effect."
+            logger.warning(f"Deleted WiFi network but reload failed: {name}")
 
-    except subprocess.TimeoutExpired:
-        logger.warning("Deleting WiFi network timed out")
-        result.error = "Operation timed out"
-    except FileNotFoundError:
-        logger.warning("nmcli not found")
-        result.error = "nmcli not found - NetworkManager not installed"
+    except PermissionError:
+        logger.warning("Permission denied writing to wpa_supplicant.conf")
+        result.error = "Permission denied - container needs write access to /etc/wpa_supplicant"
     except Exception as e:
         logger.warning(f"Failed to delete WiFi network: {e}")
         result.error = str(e)
@@ -1244,11 +1358,12 @@ async def connect_wifi(request: WifiConnectRequest) -> WifiConnectResponse:
     """
     Connect to a WiFi network.
 
-    Uses nmcli to connect to the specified network.
-    Requires the SSID and optionally a password for secured networks.
+    Adds the network to wpa_supplicant.conf if not present, then connects.
+    Works with wpa_supplicant (standard on Raspberry Pi).
     """
-    import shlex
+    import re
     import subprocess
+    import time
 
     result = WifiConnectResponse(success=False, message="", error=None)
 
@@ -1262,45 +1377,101 @@ async def connect_wifi(request: WifiConnectRequest) -> WifiConnectResponse:
     logger.info(f"Attempting to connect WiFi to SSID: {ssid}")
 
     try:
-        # Build nmcli command
-        cmd = ["nmcli", "device", "wifi", "connect", ssid]
+        # Check if network is already configured
+        existing = _parse_wpa_supplicant_conf()
+        network_exists = any(net["ssid"] == ssid for net in existing)
 
-        if request.password:
-            cmd.extend(["password", request.password])
+        # If network doesn't exist and we have a password, add it
+        if not network_exists:
+            if not request.password:
+                result.error = f"Network '{ssid}' not configured. Password required for new networks."
+                return result
 
+            # Add the network to wpa_supplicant.conf
+            try:
+                with open(WPA_SUPPLICANT_CONF, "r") as f:
+                    content = f.read()
+            except FileNotFoundError:
+                content = """ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+country=US
+
+"""
+
+            # Build network block with high priority for immediate connection
+            safe_ssid = ssid.replace("\\", "\\\\").replace('"', '\\"')
+            safe_password = request.password.replace("\\", "\\\\").replace('"', '\\"')
+
+            network_block = f'''
+network={{
+    ssid="{safe_ssid}"
+    psk="{safe_password}"
+    key_mgmt=WPA-PSK
+    priority=10
+}}
+'''
+
+            with open(WPA_SUPPLICANT_CONF, "w") as f:
+                f.write(content.rstrip() + "\n" + network_block)
+
+            logger.info(f"Added network '{ssid}' to wpa_supplicant.conf")
+
+        # Reconfigure wpa_supplicant to pick up changes
         proc = subprocess.run(
-            cmd,
+            ["wpa_cli", "-i", "wlan0", "reconfigure"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
-        output = proc.stdout + proc.stderr
+        if proc.returncode != 0:
+            logger.warning(f"wpa_cli reconfigure failed: {proc.stderr}")
 
-        # Check for success indicators
+        # Give it time to connect
+        time.sleep(3)
+
+        # Check if we're connected to the requested network
+        proc = subprocess.run(
+            ["wpa_cli", "-i", "wlan0", "status"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
         if proc.returncode == 0:
-            result.success = True
-            result.message = f"Successfully connected to {ssid}"
-            logger.info(f"Successfully connected WiFi to: {ssid}")
-        elif "secrets were required" in output.lower() or "no secrets" in output.lower():
-            result.error = "Password required for this network"
-            logger.warning(f"WiFi connection failed: password required")
-        elif "not found" in output.lower():
-            result.error = f"Network '{ssid}' not found"
-            logger.warning(f"WiFi connection failed: network not found")
-        elif "invalid" in output.lower():
-            result.error = "Invalid password"
-            logger.warning(f"WiFi connection failed: invalid password")
-        else:
-            result.error = output or "Connection failed"
-            logger.warning(f"WiFi connection failed: {output}")
+            status_output = proc.stdout
+            # Check if connected to our SSID
+            ssid_match = re.search(r"^ssid=(.+)$", status_output, re.MULTILINE)
+            state_match = re.search(r"^wpa_state=(.+)$", status_output, re.MULTILINE)
 
+            current_ssid = ssid_match.group(1) if ssid_match else None
+            current_state = state_match.group(1) if state_match else None
+
+            if current_state == "COMPLETED" and current_ssid == ssid:
+                result.success = True
+                result.message = f"Successfully connected to {ssid}"
+                logger.info(f"Successfully connected WiFi to: {ssid}")
+            elif current_state == "COMPLETED":
+                # Connected but to a different network
+                result.message = f"Network '{ssid}' added. Currently connected to '{current_ssid}'."
+                result.success = True
+            else:
+                # Not fully connected yet
+                result.success = True
+                result.message = f"Network '{ssid}' configured. Connection in progress (state: {current_state})."
+        else:
+            result.success = True
+            result.message = f"Network '{ssid}' configured. Connection may take a moment."
+
+    except PermissionError:
+        logger.warning("Permission denied writing to wpa_supplicant.conf")
+        result.error = "Permission denied - container needs write access to /etc/wpa_supplicant"
     except subprocess.TimeoutExpired:
         logger.warning("WiFi connection timed out")
         result.error = "Connection timed out"
-    except FileNotFoundError:
-        logger.warning("nmcli not found - NetworkManager may not be installed")
-        result.error = "nmcli not found - NetworkManager not installed"
+    except FileNotFoundError as e:
+        logger.warning(f"Required tool not found: {e}")
+        result.error = "wpa_cli not found - wpa_supplicant tools not installed"
     except Exception as e:
         logger.warning(f"WiFi connection failed: {e}")
         result.error = str(e)
