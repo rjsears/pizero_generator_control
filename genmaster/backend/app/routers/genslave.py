@@ -471,6 +471,142 @@ async def connect_genslave_wifi(request: WifiConnectRequest):
         await client.close()
 
 
+class WifiAddRequest(BaseModel):
+    """Request to add a known WiFi network."""
+
+    ssid: str = Field(..., min_length=1, max_length=32, description="WiFi network SSID")
+    password: str = Field(..., min_length=8, max_length=63, description="WiFi password (WPA/WPA2)")
+    auto_connect: bool = Field(True, description="Automatically connect when network is available")
+
+
+class WifiAddResponse(BaseModel):
+    """Response from adding a known WiFi network."""
+
+    success: bool = Field(description="Whether the network was added successfully")
+    message: str = Field(description="Status message")
+    error: Optional[str] = Field(None, description="Error message if adding failed")
+
+
+class WifiSavedNetwork(BaseModel):
+    """Saved WiFi network information."""
+
+    name: str = Field(description="Connection profile name")
+    ssid: str = Field(description="Network SSID")
+    auto_connect: bool = Field(description="Whether auto-connect is enabled")
+
+
+class WifiSavedListResponse(BaseModel):
+    """Response listing saved WiFi networks."""
+
+    success: bool = Field(description="Whether the list was retrieved successfully")
+    networks: list[WifiSavedNetwork] = Field(default_factory=list, description="List of saved networks")
+    error: Optional[str] = Field(None, description="Error message if listing failed")
+
+
+class WifiDeleteRequest(BaseModel):
+    """Request to delete a saved WiFi network."""
+
+    name: str = Field(..., min_length=1, description="Connection profile name to delete")
+
+
+class WifiDeleteResponse(BaseModel):
+    """Response from deleting a saved WiFi network."""
+
+    success: bool = Field(description="Whether the network was deleted successfully")
+    message: str = Field(description="Status message")
+    error: Optional[str] = Field(None, description="Error message if deletion failed")
+
+
+@router.get("/wifi/saved", response_model=WifiSavedListResponse)
+async def list_genslave_saved_wifi():
+    """
+    List saved WiFi network profiles on GenSlave.
+
+    Returns all WiFi connection profiles that have been configured,
+    including those added for auto-connect.
+    """
+    client = SlaveClient()
+    try:
+        response = await client.list_saved_wifi_networks()
+
+        if not response.success:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to list GenSlave saved WiFi networks: {response.error}",
+            )
+
+        return WifiSavedListResponse(**response.data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing GenSlave saved WiFi networks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await client.close()
+
+
+@router.post("/wifi/add", response_model=WifiAddResponse)
+async def add_genslave_wifi(request: WifiAddRequest):
+    """
+    Add a known WiFi network to GenSlave for auto-connect.
+
+    Creates a saved WiFi connection profile that will automatically
+    connect when the network becomes available.
+    """
+    client = SlaveClient()
+    try:
+        response = await client.add_wifi_network(
+            ssid=request.ssid,
+            password=request.password,
+            auto_connect=request.auto_connect,
+        )
+
+        if not response.success:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to add GenSlave WiFi network: {response.error}",
+            )
+
+        return WifiAddResponse(**response.data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding GenSlave WiFi network: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await client.close()
+
+
+@router.post("/wifi/delete", response_model=WifiDeleteResponse)
+async def delete_genslave_wifi(request: WifiDeleteRequest):
+    """
+    Delete a saved WiFi network from GenSlave.
+
+    Removes a previously saved WiFi connection profile.
+    """
+    client = SlaveClient()
+    try:
+        response = await client.delete_wifi_network(name=request.name)
+
+        if not response.success:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to delete GenSlave WiFi network: {response.error}",
+            )
+
+        return WifiDeleteResponse(**response.data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting GenSlave WiFi network: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await client.close()
+
+
 # =========================================================================
 # System Power Control Endpoints
 # =========================================================================
