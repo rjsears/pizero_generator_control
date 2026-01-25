@@ -42,9 +42,11 @@ services:
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
 
     # Persist data and logs
+    # Mount D-Bus socket for nmcli to communicate with host NetworkManager
     volumes:
       - genslave_data:/opt/genslave/data
       - genslave_logs:/opt/genslave/logs
+      - /var/run/dbus:/var/run/dbus:rw
 
     # Health check
     healthcheck:
