@@ -211,10 +211,15 @@ class FailsafeMonitor:
         self._failsafe_triggered = True
         self._failsafe_triggered_at = int(time.time())
 
-        # Turn off relay (force=True to bypass armed check)
+        # Turn off relay AND disarm (force=True to bypass armed check)
+        # Disarming ensures that even when GenMaster reconnects, manual re-arming is required
         if self._relay_service:
             success = self._relay_service.relay_off(force=True)
             logger.info(f"Failsafe relay OFF: {'success' if success else 'failed'}")
+
+            # Disarm to require manual intervention before automation can resume
+            disarm_result = self._relay_service.disarm(source="failsafe")
+            logger.info(f"Failsafe disarm: {disarm_result.get('message', 'unknown')}")
 
         # Send notifications via Apprise (primary method)
         # Use actual timeout, not config default
