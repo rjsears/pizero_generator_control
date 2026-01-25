@@ -689,7 +689,7 @@ onMounted(async () => {
     </div>
 
     <!-- Tabs with Host Power Controls -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-400 dark:border-gray-700 p-1.5 flex items-center justify-between gap-1.5">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-400 dark:border-gray-700 p-1.5 flex items-center justify-between gap-1.5 relative z-10">
       <!-- Tab buttons -->
       <div class="flex gap-1.5 overflow-x-auto">
         <button
@@ -700,7 +700,7 @@ onMounted(async () => {
             'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap border',
             activeTab === tab.id
               ? `${tab.bgActive} ${tab.textActive} ${tab.borderActive}`
-              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-transparent'
+              : 'text-gray-500 dark:text-gray-400 hover:bg-emerald-100 hover:text-emerald-700 dark:hover:bg-emerald-500/20 dark:hover:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-500/30 border-transparent'
           ]"
         >
           <component :is="tab.icon" :class="['h-4 w-4', activeTab === tab.id ? '' : tab.iconColor]" />
