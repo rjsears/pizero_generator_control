@@ -135,6 +135,19 @@ const selectedWifiNetwork = ref(null)
 const wifiPassword = ref('')
 const wifiError = ref(null)
 
+// Add known network state
+const showAddNetworkModal = ref(false)
+const addNetworkSsid = ref('')
+const addNetworkPassword = ref('')
+const addNetworkAutoConnect = ref(true)
+const addingNetwork = ref(false)
+const addNetworkError = ref(null)
+
+// Saved networks state
+const savedNetworks = ref([])
+const loadingSavedNetworks = ref(false)
+const deletingNetwork = ref(null)
+
 // SSL state
 const sslInfo = ref({ configured: false, certificates: [] })
 const sslLoading = ref(false)
@@ -546,6 +559,99 @@ async function connectToWifi() {
     wifiError.value = error.response?.data?.detail || 'Failed to connect to WiFi'
   } finally {
     wifiConnecting.value = false
+  }
+}
+
+// =========================================================================
+// Add Known WiFi Network Functions
+// =========================================================================
+
+async function openAddNetworkModal() {
+  showAddNetworkModal.value = true
+  addNetworkSsid.value = ''
+  addNetworkPassword.value = ''
+  addNetworkAutoConnect.value = true
+  addNetworkError.value = null
+  await loadSavedNetworks()
+}
+
+function closeAddNetworkModal() {
+  showAddNetworkModal.value = false
+  addNetworkSsid.value = ''
+  addNetworkPassword.value = ''
+  addNetworkAutoConnect.value = true
+  addNetworkError.value = null
+}
+
+async function loadSavedNetworks() {
+  loadingSavedNetworks.value = true
+  try {
+    const response = await systemApi.listSavedWifiNetworks()
+    if (response.data?.success) {
+      savedNetworks.value = response.data.networks || []
+    } else {
+      console.error('Failed to load saved networks:', response.data?.error)
+    }
+  } catch (error) {
+    console.error('Failed to load saved networks:', error)
+  } finally {
+    loadingSavedNetworks.value = false
+  }
+}
+
+async function addKnownNetwork() {
+  if (!addNetworkSsid.value.trim()) {
+    addNetworkError.value = 'Please enter an SSID'
+    return
+  }
+  if (!addNetworkPassword.value) {
+    addNetworkError.value = 'Please enter a password'
+    return
+  }
+
+  addingNetwork.value = true
+  addNetworkError.value = null
+
+  try {
+    const response = await systemApi.addWifiNetwork({
+      ssid: addNetworkSsid.value.trim(),
+      password: addNetworkPassword.value,
+      auto_connect: addNetworkAutoConnect.value,
+    })
+
+    if (response.data?.success) {
+      notificationStore.success(response.data.message || `Added network "${addNetworkSsid.value}"`)
+      addNetworkSsid.value = ''
+      addNetworkPassword.value = ''
+      await loadSavedNetworks()
+    } else {
+      addNetworkError.value = response.data?.error || 'Failed to add network'
+    }
+  } catch (error) {
+    addNetworkError.value = error.response?.data?.detail || 'Failed to add network'
+  } finally {
+    addingNetwork.value = false
+  }
+}
+
+async function deleteSavedNetwork(networkName) {
+  if (!confirm(`Delete saved network "${networkName}"?`)) {
+    return
+  }
+
+  deletingNetwork.value = networkName
+  try {
+    const response = await systemApi.deleteWifiNetwork({ name: networkName })
+    if (response.data?.success) {
+      notificationStore.success(response.data.message || `Deleted network "${networkName}"`)
+      await loadSavedNetworks()
+    } else {
+      notificationStore.error(response.data?.error || 'Failed to delete network')
+    }
+  } catch (error) {
+    notificationStore.error(error.response?.data?.detail || 'Failed to delete network')
+  } finally {
+    deletingNetwork.value = null
   }
 }
 
@@ -1170,11 +1276,20 @@ onMounted(async () => {
                 </div>
                 <div class="flex items-center gap-2">
                   <button
+                    @click="openAddNetworkModal"
+                    class="px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 bg-purple-500 hover:bg-purple-600 text-white"
+                  >
+                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Network
+                  </button>
+                  <button
                     @click="openWifiConfigModal"
                     class="px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 bg-cyan-500 hover:bg-cyan-600 text-white"
                   >
-                    <Cog6ToothIcon class="h-3.5 w-3.5" />
-                    Configure
+                    <SignalIcon class="h-3.5 w-3.5" />
+                    Scan &amp; Connect
                   </button>
                   <span
                     :class="[
@@ -1766,6 +1881,142 @@ onMounted(async () => {
               <ArrowPathIcon v-if="wifiConnecting" class="h-4 w-4 animate-spin" />
               <WifiIcon v-else class="h-4 w-4" />
               {{ wifiConnecting ? 'Connecting...' : 'Connect' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Add Known Network Modal -->
+    <Teleport to="body">
+      <div v-if="showAddNetworkModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+              <div class="p-3 rounded-full bg-purple-100 dark:bg-purple-500/20">
+                <WifiIcon class="h-6 w-6 text-purple-500" />
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-primary">Add Known Network</h3>
+                <p class="text-sm text-muted">Pre-configure WiFi for automatic connection</p>
+              </div>
+            </div>
+            <button
+              @click="closeAddNetworkModal"
+              class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <XCircleIcon class="h-5 w-5 text-gray-500" />
+            </button>
+          </div>
+
+          <!-- Error display -->
+          <div v-if="addNetworkError" class="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
+            <p class="text-sm text-red-700 dark:text-red-300">{{ addNetworkError }}</p>
+          </div>
+
+          <!-- Add Network Form -->
+          <div class="space-y-4 mb-6">
+            <div>
+              <label class="block text-sm font-medium text-secondary mb-1">Network Name (SSID)</label>
+              <input
+                v-model="addNetworkSsid"
+                type="text"
+                placeholder="Enter network SSID"
+                class="input w-full"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-secondary mb-1">Password</label>
+              <input
+                v-model="addNetworkPassword"
+                type="password"
+                placeholder="Enter network password"
+                class="input w-full"
+                @keyup.enter="addKnownNetwork"
+              />
+            </div>
+            <div class="flex items-center gap-2">
+              <input
+                v-model="addNetworkAutoConnect"
+                type="checkbox"
+                id="autoConnect"
+                class="rounded border-gray-300 text-purple-500 focus:ring-purple-500"
+              />
+              <label for="autoConnect" class="text-sm text-secondary">Auto-connect when network is available</label>
+            </div>
+            <button
+              @click="addKnownNetwork"
+              :disabled="addingNetwork || !addNetworkSsid.trim() || !addNetworkPassword"
+              class="w-full px-4 py-2 rounded-lg font-medium text-white bg-purple-500 hover:bg-purple-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <ArrowPathIcon v-if="addingNetwork" class="h-4 w-4 animate-spin" />
+              <svg v-else class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              {{ addingNetwork ? 'Adding...' : 'Add Network' }}
+            </button>
+          </div>
+
+          <!-- Saved Networks List -->
+          <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-sm font-medium text-secondary">Saved WiFi Networks</h4>
+              <button
+                @click="loadSavedNetworks"
+                :disabled="loadingSavedNetworks"
+                class="btn-secondary text-xs flex items-center gap-1"
+              >
+                <ArrowPathIcon :class="['h-3.5 w-3.5', loadingSavedNetworks ? 'animate-spin' : '']" />
+                Refresh
+              </button>
+            </div>
+
+            <div v-if="loadingSavedNetworks" class="py-4 text-center">
+              <ArrowPathIcon class="h-6 w-6 animate-spin mx-auto text-purple-500" />
+            </div>
+
+            <div v-else-if="savedNetworks.length === 0" class="py-4 text-center text-muted">
+              <WifiIcon class="h-6 w-6 mx-auto opacity-50 mb-1" />
+              <p class="text-sm">No saved networks</p>
+            </div>
+
+            <div v-else class="max-h-48 overflow-y-auto space-y-2">
+              <div
+                v-for="network in savedNetworks"
+                :key="network.name"
+                class="flex items-center justify-between p-3 bg-surface-hover rounded-lg"
+              >
+                <div class="flex items-center gap-3">
+                  <WifiIcon class="h-5 w-5 text-purple-500" />
+                  <div>
+                    <p class="font-medium text-primary">{{ network.name }}</p>
+                    <p class="text-xs text-muted">
+                      {{ network.auto_connect ? 'Auto-connect enabled' : 'Manual connection' }}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  @click="deleteSavedNetwork(network.name)"
+                  :disabled="deletingNetwork === network.name"
+                  class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                  title="Delete network"
+                >
+                  <ArrowPathIcon v-if="deletingNetwork === network.name" class="h-4 w-4 animate-spin" />
+                  <svg v-else class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Close Button -->
+          <div class="flex justify-end pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+            <button
+              @click="closeAddNetworkModal"
+              class="btn-secondary"
+            >
+              Close
             </button>
           </div>
         </div>

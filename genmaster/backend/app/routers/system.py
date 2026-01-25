@@ -583,6 +583,7 @@ async def get_cloudflare_status() -> dict:
                 try:
                     logs = cf_container.logs(tail=500).decode("utf-8", errors="ignore")
                     edge_locs = set()
+                    has_recent_error = False
 
                     for line in logs.split("\n"):
                         line_lower = line.lower()
@@ -600,6 +601,7 @@ async def get_cloudflare_status() -> dict:
                                 result["connector_id"] = match.group()
 
                         # Check for connection registered (primary indicator of connected status)
+                        # Multiple patterns for different cloudflared versions
                         if "registered" in line_lower and ("connector" in line_lower or "connection" in line_lower):
                             result["connected"] = True
                             # Extract edge location
@@ -611,12 +613,33 @@ async def get_cloudflare_status() -> dict:
                         if "tunnel" in line_lower and "connected" in line_lower:
                             result["connected"] = True
 
+                        # Additional patterns for newer cloudflared versions
+                        if "connection" in line_lower and any(x in line_lower for x in ["established", "started", "serving"]):
+                            result["connected"] = True
+
+                        # "Registered Cloudflare Tunnel connector" pattern
+                        if "registered" in line_lower and "cloudflare" in line_lower:
+                            result["connected"] = True
+
+                        # INF level log with "connected" anywhere
+                        if "inf" in line_lower and "connected" in line_lower:
+                            result["connected"] = True
+
+                        # Extract edge location from various formats (location=XYZ or edge=XYZ)
+                        loc_match = re.search(r'(?:location|edge)[=:][\s"]*(\w{3})', line, re.IGNORECASE)
+                        if loc_match:
+                            edge_locs.add(loc_match.group(1).upper())
+
                         # Look for errors (but keep the last one)
                         if "err" in line_lower and "error" in line_lower:
                             result["last_error"] = line.strip()[-200:]
+                            # Check if error is recent (last 50 lines - roughly)
+                            has_recent_error = True
 
                     if edge_locs:
                         result["edge_locations"] = list(edge_locs)
+                        # If we found edge locations, we're likely connected
+                        result["connected"] = True
 
                 except Exception as e:
                     logger.debug(f"Could not parse cloudflared logs: {e}")
@@ -729,6 +752,27 @@ async def get_cloudflare_status() -> dict:
     except Exception as e:
         logger.warning(f"Failed to get Cloudflare status: {e}")
         result["error"] = str(e)
+
+    # Fallback heuristic: If container is running and we have strong indicators,
+    # consider it connected even if log parsing didn't find explicit "connected" messages
+    if (
+        result.get("running")
+        and not result.get("connected")
+        and (result.get("version") or result.get("tunnel_id"))
+        and (result.get("edge_locations") or result.get("connections_per_location"))
+    ):
+        result["connected"] = True
+        logger.debug("Cloudflare connected via fallback heuristic (running + tunnel info + edge locations)")
+
+    # Also consider connected if running and we have any metrics with traffic
+    if (
+        result.get("running")
+        and not result.get("connected")
+        and result.get("metrics")
+        and result["metrics"].get("total_requests", 0) > 0
+    ):
+        result["connected"] = True
+        logger.debug("Cloudflare connected via fallback heuristic (running + has traffic)")
 
     # Only cache if cloudflare is connected (don't cache "not connected" state)
     if result.get("connected"):
@@ -1360,6 +1404,248 @@ async def connect_host_wifi(request: WifiConnectRequest) -> dict:
         result["error"] = "Docker SDK not installed"
     except Exception as e:
         logger.warning(f"Failed to connect to WiFi: {e}")
+        result["error"] = str(e)
+
+    return result
+
+
+class WifiAddRequest(BaseModel):
+    """Request to add a known WiFi network."""
+
+    ssid: str = Field(..., min_length=1, max_length=32, description="WiFi network SSID")
+    password: str = Field(..., min_length=8, max_length=63, description="WiFi password (WPA/WPA2)")
+    auto_connect: bool = Field(True, description="Automatically connect when network is available")
+
+
+@router.get("/host/wifi/saved")
+async def list_host_saved_wifi() -> dict:
+    """
+    List saved WiFi network profiles on the Docker host.
+
+    Runs nmcli through a privileged container to list saved connections.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    result = {
+        "success": False,
+        "networks": [],
+        "error": None,
+    }
+
+    try:
+        import docker
+        client = docker.from_env()
+
+        script = """
+            apk add --no-cache networkmanager >/dev/null 2>&1
+            nmcli -t -f NAME,TYPE,AUTOCONNECT connection show 2>/dev/null || echo "LIST_FAILED"
+        """
+
+        try:
+            output = client.containers.run(
+                "alpine:latest",
+                command=["sh", "-c", script],
+                network_mode="host",
+                privileged=True,
+                remove=True,
+            )
+            output_str = output.decode("utf-8").strip()
+
+            if "LIST_FAILED" in output_str:
+                result["error"] = "Failed to list saved networks"
+                return result
+
+            networks = []
+            for line in output_str.split("\n"):
+                if not line.strip() or "LIST_FAILED" in line:
+                    continue
+
+                parts = line.split(":")
+                if len(parts) >= 3 and parts[1] == "802-11-wireless":
+                    networks.append({
+                        "name": parts[0],
+                        "ssid": parts[0],
+                        "auto_connect": parts[2].lower() == "yes",
+                    })
+
+            result["networks"] = networks
+            result["success"] = True
+
+        except Exception as e:
+            logger.warning(f"Failed to list saved WiFi networks: {e}")
+            result["error"] = str(e)
+
+    except ImportError:
+        result["error"] = "Docker SDK not installed"
+    except Exception as e:
+        logger.warning(f"Failed to list saved WiFi networks: {e}")
+        result["error"] = str(e)
+
+    return result
+
+
+@router.post("/host/wifi/add")
+async def add_host_wifi(request: WifiAddRequest) -> dict:
+    """
+    Add a known WiFi network to the Docker host for auto-connect.
+
+    Creates a saved WiFi connection profile that will automatically
+    connect when the network becomes available.
+    """
+    import logging
+    import shlex
+
+    logger = logging.getLogger(__name__)
+
+    result = {
+        "success": False,
+        "message": "",
+        "error": None,
+    }
+
+    ssid = request.ssid.strip()
+    if not ssid:
+        result["error"] = "SSID cannot be empty"
+        return result
+
+    logger.info(f"Adding known WiFi network to host: {ssid}")
+
+    try:
+        import docker
+        client = docker.from_env()
+
+        safe_ssid = shlex.quote(ssid)
+        safe_password = shlex.quote(request.password)
+        auto_connect = "yes" if request.auto_connect else "no"
+
+        script = f"""
+            apk add --no-cache networkmanager >/dev/null 2>&1
+            nmcli connection add type wifi con-name {safe_ssid} ssid {safe_ssid} \\
+                wifi-sec.key-mgmt wpa-psk wifi-sec.psk {safe_password} \\
+                connection.autoconnect {auto_connect} 2>&1
+        """
+
+        try:
+            output = client.containers.run(
+                "alpine:latest",
+                command=["sh", "-c", script],
+                network_mode="host",
+                privileged=True,
+                remove=True,
+            )
+            output_str = output.decode("utf-8").strip()
+
+            if "successfully added" in output_str.lower() or "connection" in output_str.lower():
+                result["success"] = True
+                result["message"] = f"WiFi network '{ssid}' added successfully. It will auto-connect when available."
+                logger.info(f"Successfully added WiFi network to host: {ssid}")
+            elif "already exists" in output_str.lower():
+                result["error"] = f"Network '{ssid}' already exists. Delete it first to update."
+            else:
+                result["error"] = output_str or "Failed to add network"
+                logger.warning(f"Failed to add WiFi network: {output_str}")
+
+        except docker.errors.ContainerError as e:
+            error_output = e.stderr.decode("utf-8") if e.stderr else str(e)
+            logger.warning(f"WiFi add container error: {error_output}")
+            if "already exists" in error_output.lower():
+                result["error"] = f"Network '{ssid}' already exists. Delete it first to update."
+            else:
+                result["error"] = error_output
+
+        except Exception as e:
+            logger.warning(f"Failed to add WiFi network: {e}")
+            result["error"] = str(e)
+
+    except ImportError:
+        result["error"] = "Docker SDK not installed"
+    except Exception as e:
+        logger.warning(f"Failed to add WiFi network: {e}")
+        result["error"] = str(e)
+
+    return result
+
+
+class WifiDeleteRequest(BaseModel):
+    """Request to delete a saved WiFi network."""
+
+    name: str = Field(..., min_length=1, description="Connection profile name to delete")
+
+
+@router.post("/host/wifi/delete")
+async def delete_host_wifi(request: WifiDeleteRequest) -> dict:
+    """
+    Delete a saved WiFi network from the Docker host.
+
+    Removes a previously saved WiFi connection profile.
+    """
+    import logging
+    import shlex
+
+    logger = logging.getLogger(__name__)
+
+    result = {
+        "success": False,
+        "message": "",
+        "error": None,
+    }
+
+    name = request.name.strip()
+    if not name:
+        result["error"] = "Connection name cannot be empty"
+        return result
+
+    logger.info(f"Deleting WiFi network from host: {name}")
+
+    try:
+        import docker
+        client = docker.from_env()
+
+        safe_name = shlex.quote(name)
+
+        script = f"""
+            apk add --no-cache networkmanager >/dev/null 2>&1
+            nmcli connection delete {safe_name} 2>&1
+        """
+
+        try:
+            output = client.containers.run(
+                "alpine:latest",
+                command=["sh", "-c", script],
+                network_mode="host",
+                privileged=True,
+                remove=True,
+            )
+            output_str = output.decode("utf-8").strip()
+
+            if "successfully deleted" in output_str.lower() or "deleted" in output_str.lower():
+                result["success"] = True
+                result["message"] = f"WiFi network '{name}' deleted successfully."
+                logger.info(f"Successfully deleted WiFi network from host: {name}")
+            elif "not found" in output_str.lower():
+                result["error"] = f"Network '{name}' not found"
+            else:
+                result["error"] = output_str or "Failed to delete network"
+                logger.warning(f"Failed to delete WiFi network: {output_str}")
+
+        except docker.errors.ContainerError as e:
+            error_output = e.stderr.decode("utf-8") if e.stderr else str(e)
+            logger.warning(f"WiFi delete container error: {error_output}")
+            if "not found" in error_output.lower():
+                result["error"] = f"Network '{name}' not found"
+            else:
+                result["error"] = error_output
+
+        except Exception as e:
+            logger.warning(f"Failed to delete WiFi network: {e}")
+            result["error"] = str(e)
+
+    except ImportError:
+        result["error"] = "Docker SDK not installed"
+    except Exception as e:
+        logger.warning(f"Failed to delete WiFi network: {e}")
         result["error"] = str(e)
 
     return result
