@@ -1223,6 +1223,7 @@ async def scan_host_wifi_networks() -> dict:
                 network_mode="host",
                 privileged=True,
                 remove=True,
+                volumes={"/var/run/dbus": {"bind": "/var/run/dbus", "mode": "rw"}},
             )
             output_str = output.decode("utf-8").strip()
 
@@ -1343,6 +1344,7 @@ async def connect_host_wifi(request: WifiConnectRequest) -> dict:
                 network_mode="host",
                 privileged=True,
                 remove=True,
+                volumes={"/var/run/dbus": {"bind": "/var/run/dbus", "mode": "rw"}},
             )
             output_str = output.decode("utf-8").strip()
 
@@ -1427,6 +1429,7 @@ async def list_host_saved_wifi() -> dict:
                 network_mode="host",
                 privileged=True,
                 remove=True,
+                volumes={"/var/run/dbus": {"bind": "/var/run/dbus", "mode": "rw"}},
             )
             output_str = output.decode("utf-8").strip()
 
@@ -1511,6 +1514,7 @@ async def add_host_wifi(request: WifiAddRequest) -> dict:
                 network_mode="host",
                 privileged=True,
                 remove=True,
+                volumes={"/var/run/dbus": {"bind": "/var/run/dbus", "mode": "rw"}},
             )
             output_str = output.decode("utf-8").strip()
 
@@ -1594,6 +1598,7 @@ async def delete_host_wifi(request: WifiDeleteRequest) -> dict:
                 network_mode="host",
                 privileged=True,
                 remove=True,
+                volumes={"/var/run/dbus": {"bind": "/var/run/dbus", "mode": "rw"}},
             )
             output_str = output.decode("utf-8").strip()
 
