@@ -20,7 +20,8 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.openapi.docs import get_redoc_html
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
@@ -338,9 +339,21 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/api/docs",
-    redoc_url="/api/redoc",
+    redoc_url=None,  # Custom route below with working CDN URL
     openapi_url="/api/openapi.json",
 )
+
+
+# Custom ReDoc route with working CDN URL
+# FastAPI's default uses @next which has broken paths
+@app.get("/api/redoc", include_in_schema=False)
+async def redoc_html() -> HTMLResponse:
+    """Serve ReDoc API documentation."""
+    return get_redoc_html(
+        openapi_url="/api/openapi.json",
+        title="GenMaster API - ReDoc",
+        redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@2.1.3/bundles/redoc.standalone.js",
+    )
 
 # CORS middleware - allow all origins for development
 # In production, restrict to specific origins
