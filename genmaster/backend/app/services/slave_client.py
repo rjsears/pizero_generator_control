@@ -380,6 +380,52 @@ class SlaveClient:
             json={"ssid": ssid, "password": password},
         )
 
+    async def list_saved_wifi_networks(self) -> SlaveResponse:
+        """
+        List saved WiFi network profiles on GenSlave.
+
+        Returns:
+            Response with list of saved networks.
+        """
+        return await self._request("GET", "/api/system/wifi/saved")
+
+    async def add_wifi_network(self, ssid: str, password: str, auto_connect: bool = True) -> SlaveResponse:
+        """
+        Add a known WiFi network to GenSlave for auto-connect.
+
+        Args:
+            ssid: WiFi network SSID.
+            password: WiFi password.
+            auto_connect: Whether to auto-connect when available.
+
+        Returns:
+            Response indicating success/failure.
+        """
+        # Don't log password
+        logger.info(f"Adding known WiFi network to GenSlave: {ssid}")
+        return await self._request(
+            "POST",
+            "/api/system/wifi/add",
+            json={"ssid": ssid, "password": password, "auto_connect": auto_connect},
+        )
+
+    async def delete_wifi_network(self, name: str) -> SlaveResponse:
+        """
+        Delete a saved WiFi network from GenSlave.
+
+        Args:
+            name: Connection profile name to delete.
+
+        Returns:
+            Response indicating success/failure.
+        """
+        logger.info(f"Deleting WiFi network from GenSlave: {name}")
+        return await self._request(
+            "POST",
+            "/api/system/wifi/delete",
+            json={"name": name},
+        )
+
     # =========================================================================
     # System Power Control
     # =========================================================================

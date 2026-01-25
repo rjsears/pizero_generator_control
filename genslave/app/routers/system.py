@@ -1016,6 +1016,229 @@ async def scan_wifi_networks() -> WifiScanResponse:
     return result
 
 
+class WifiAddRequest(BaseModel):
+    """Request to add a known WiFi network."""
+
+    ssid: str = Field(..., min_length=1, max_length=32, description="WiFi network SSID")
+    password: str = Field(..., min_length=8, max_length=63, description="WiFi password (WPA/WPA2)")
+    auto_connect: bool = Field(True, description="Automatically connect when network is available")
+
+
+class WifiAddResponse(BaseModel):
+    """Response from adding a known WiFi network."""
+
+    success: bool = Field(description="Whether the network was added successfully")
+    message: str = Field(description="Status message")
+    error: Optional[str] = Field(None, description="Error message if adding failed")
+
+
+class WifiSavedNetwork(BaseModel):
+    """Saved WiFi network information."""
+
+    name: str = Field(description="Connection profile name")
+    ssid: str = Field(description="Network SSID")
+    auto_connect: bool = Field(description="Whether auto-connect is enabled")
+
+
+class WifiSavedListResponse(BaseModel):
+    """Response listing saved WiFi networks."""
+
+    success: bool = Field(description="Whether the list was retrieved successfully")
+    networks: list[WifiSavedNetwork] = Field(default_factory=list, description="List of saved networks")
+    error: Optional[str] = Field(None, description="Error message if listing failed")
+
+
+class WifiDeleteRequest(BaseModel):
+    """Request to delete a saved WiFi network."""
+
+    name: str = Field(..., min_length=1, description="Connection profile name to delete")
+
+
+class WifiDeleteResponse(BaseModel):
+    """Response from deleting a saved WiFi network."""
+
+    success: bool = Field(description="Whether the network was deleted successfully")
+    message: str = Field(description="Status message")
+    error: Optional[str] = Field(None, description="Error message if deletion failed")
+
+
+@router.get("/wifi/saved", response_model=WifiSavedListResponse)
+async def list_saved_wifi_networks() -> WifiSavedListResponse:
+    """
+    List saved WiFi network profiles.
+
+    Returns all WiFi connection profiles that have been configured,
+    including those added for auto-connect.
+    """
+    import subprocess
+
+    result = WifiSavedListResponse(success=False, networks=[], error=None)
+
+    try:
+        # List all WiFi connections
+        proc = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,TYPE,AUTOCONNECT", "connection", "show"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        if proc.returncode != 0:
+            logger.warning(f"nmcli list failed: {proc.stderr}")
+            result.error = proc.stderr or "Failed to list saved networks"
+            return result
+
+        networks = []
+        for line in proc.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+
+            parts = line.split(":")
+            if len(parts) >= 3 and parts[1] == "802-11-wireless":
+                networks.append(WifiSavedNetwork(
+                    name=parts[0],
+                    ssid=parts[0],  # Usually same as name
+                    auto_connect=parts[2].lower() == "yes",
+                ))
+
+        result.networks = networks
+        result.success = True
+
+    except subprocess.TimeoutExpired:
+        logger.warning("Listing saved networks timed out")
+        result.error = "Operation timed out"
+    except FileNotFoundError:
+        logger.warning("nmcli not found")
+        result.error = "nmcli not found - NetworkManager not installed"
+    except Exception as e:
+        logger.warning(f"Failed to list saved networks: {e}")
+        result.error = str(e)
+
+    return result
+
+
+@router.post("/wifi/add", response_model=WifiAddResponse)
+async def add_wifi_network(request: WifiAddRequest) -> WifiAddResponse:
+    """
+    Add a known WiFi network for auto-connect.
+
+    Creates a saved WiFi connection profile that will automatically
+    connect when the network becomes available. Useful for pre-configuring
+    networks before the device is deployed to a location.
+    """
+    import subprocess
+
+    result = WifiAddResponse(success=False, message="", error=None)
+
+    ssid = request.ssid.strip()
+    if not ssid:
+        result.error = "SSID cannot be empty"
+        return result
+
+    # Log the add attempt (without password)
+    logger.info(f"Adding known WiFi network: {ssid}")
+
+    try:
+        # Use nmcli to add a WiFi connection profile
+        # This creates a saved connection that will auto-connect when available
+        cmd = [
+            "nmcli", "connection", "add",
+            "type", "wifi",
+            "con-name", ssid,
+            "ssid", ssid,
+            "wifi-sec.key-mgmt", "wpa-psk",
+            "wifi-sec.psk", request.password,
+        ]
+
+        if request.auto_connect:
+            cmd.extend(["connection.autoconnect", "yes"])
+        else:
+            cmd.extend(["connection.autoconnect", "no"])
+
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        output = proc.stdout + proc.stderr
+
+        if proc.returncode == 0:
+            result.success = True
+            result.message = f"WiFi network '{ssid}' added successfully. It will auto-connect when available."
+            logger.info(f"Successfully added WiFi network: {ssid}")
+        elif "already exists" in output.lower():
+            result.error = f"Network '{ssid}' already exists. Delete it first to update."
+            logger.warning(f"WiFi network already exists: {ssid}")
+        else:
+            result.error = output or "Failed to add network"
+            logger.warning(f"Failed to add WiFi network: {output}")
+
+    except subprocess.TimeoutExpired:
+        logger.warning("Adding WiFi network timed out")
+        result.error = "Operation timed out"
+    except FileNotFoundError:
+        logger.warning("nmcli not found")
+        result.error = "nmcli not found - NetworkManager not installed"
+    except Exception as e:
+        logger.warning(f"Failed to add WiFi network: {e}")
+        result.error = str(e)
+
+    return result
+
+
+@router.post("/wifi/delete", response_model=WifiDeleteResponse)
+async def delete_wifi_network(request: WifiDeleteRequest) -> WifiDeleteResponse:
+    """
+    Delete a saved WiFi network profile.
+
+    Removes a previously saved WiFi connection profile.
+    """
+    import subprocess
+
+    result = WifiDeleteResponse(success=False, message="", error=None)
+
+    name = request.name.strip()
+    if not name:
+        result.error = "Connection name cannot be empty"
+        return result
+
+    logger.info(f"Deleting WiFi network: {name}")
+
+    try:
+        proc = subprocess.run(
+            ["nmcli", "connection", "delete", name],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        output = proc.stdout + proc.stderr
+
+        if proc.returncode == 0:
+            result.success = True
+            result.message = f"WiFi network '{name}' deleted successfully."
+            logger.info(f"Successfully deleted WiFi network: {name}")
+        elif "not found" in output.lower():
+            result.error = f"Network '{name}' not found"
+        else:
+            result.error = output or "Failed to delete network"
+            logger.warning(f"Failed to delete WiFi network: {output}")
+
+    except subprocess.TimeoutExpired:
+        logger.warning("Deleting WiFi network timed out")
+        result.error = "Operation timed out"
+    except FileNotFoundError:
+        logger.warning("nmcli not found")
+        result.error = "nmcli not found - NetworkManager not installed"
+    except Exception as e:
+        logger.warning(f"Failed to delete WiFi network: {e}")
+        result.error = str(e)
+
+    return result
+
+
 @router.post("/wifi/connect", response_model=WifiConnectResponse)
 async def connect_wifi(request: WifiConnectRequest) -> WifiConnectResponse:
     """

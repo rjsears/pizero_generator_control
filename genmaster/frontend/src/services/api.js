@@ -171,6 +171,9 @@ export const genslaveApi = {
   // WiFi configuration (proxied to GenSlave)
   scanWifiNetworks: () => api.get('/genslave/wifi/networks'),
   connectWifi: (data) => api.post('/genslave/wifi/connect', data),
+  listSavedWifiNetworks: () => api.get('/genslave/wifi/saved'),
+  addWifiNetwork: (data) => api.post('/genslave/wifi/add', data),
+  deleteWifiNetwork: (data) => api.post('/genslave/wifi/delete', data),
   // System power control (proxied to GenSlave)
   shutdown: () => api.post('/genslave/shutdown'),
   reboot: () => api.post('/genslave/reboot'),

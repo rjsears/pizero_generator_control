@@ -309,14 +309,24 @@
           <template #header>
             <div class="flex items-center justify-between w-full px-4 py-3">
               <h3 class="font-semibold text-primary">Network & WiFi</h3>
-              <button
-                @click="openWifiConfigModal"
-                :disabled="!slaveInfo.online"
-                class="px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 bg-cyan-500 hover:bg-cyan-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Cog6ToothIcon class="h-3.5 w-3.5" />
-                Configure WiFi
-              </button>
+              <div class="flex items-center gap-2">
+                <button
+                  @click="openAddNetworkModal"
+                  :disabled="!slaveInfo.online"
+                  class="px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <PlusIcon class="h-3.5 w-3.5" />
+                  Add Network
+                </button>
+                <button
+                  @click="openWifiConfigModal"
+                  :disabled="!slaveInfo.online"
+                  class="px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 bg-cyan-500 hover:bg-cyan-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <WifiIcon class="h-3.5 w-3.5" />
+                  Scan & Connect
+                </button>
+              </div>
             </div>
           </template>
           <div class="p-4">
@@ -1013,6 +1023,121 @@
       </div>
     </Teleport>
 
+    <!-- Add Known Network Modal -->
+    <Teleport to="body">
+      <div v-if="showAddNetworkModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+              <div class="p-3 rounded-full bg-emerald-100 dark:bg-emerald-500/20">
+                <PlusIcon class="h-6 w-6 text-emerald-500" />
+              </div>
+              <h3 class="text-xl font-bold text-primary">Add Known Network</h3>
+            </div>
+            <button
+              @click="closeAddNetworkModal"
+              class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <XCircleIcon class="h-5 w-5 text-gray-500" />
+            </button>
+          </div>
+
+          <p class="text-sm text-secondary mb-4">
+            Add a WiFi network that GenSlave will automatically connect to when available.
+            Useful for pre-configuring networks before deployment.
+          </p>
+
+          <!-- Error display -->
+          <div v-if="addNetworkError" class="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
+            <p class="text-sm text-red-700 dark:text-red-300">{{ addNetworkError }}</p>
+          </div>
+
+          <!-- Add Network Form -->
+          <div class="space-y-4 mb-6">
+            <div>
+              <label class="block text-sm font-medium text-secondary mb-1">Network Name (SSID)</label>
+              <input
+                v-model="addNetworkSsid"
+                type="text"
+                placeholder="Enter WiFi network name"
+                class="input w-full"
+                maxlength="32"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-secondary mb-1">Password</label>
+              <input
+                v-model="addNetworkPassword"
+                type="password"
+                placeholder="Enter WiFi password (min 8 characters)"
+                class="input w-full"
+                @keyup.enter="addKnownNetwork"
+              />
+            </div>
+            <div class="flex items-center gap-2">
+              <input
+                v-model="addNetworkAutoConnect"
+                type="checkbox"
+                id="autoConnect"
+                class="rounded border-gray-300 text-emerald-500 focus:ring-emerald-500"
+              />
+              <label for="autoConnect" class="text-sm text-secondary">
+                Auto-connect when network is available
+              </label>
+            </div>
+          </div>
+
+          <!-- Saved Networks List -->
+          <div v-if="savedNetworks.length > 0" class="mb-6">
+            <h4 class="text-sm font-medium text-secondary mb-2">Saved Networks</h4>
+            <div class="space-y-2 max-h-40 overflow-y-auto">
+              <div
+                v-for="network in savedNetworks"
+                :key="network.name"
+                class="flex items-center justify-between p-3 rounded-lg bg-surface-hover"
+              >
+                <div class="flex items-center gap-2">
+                  <WifiIcon class="h-4 w-4 text-emerald-500" />
+                  <span class="text-sm font-medium text-primary">{{ network.name }}</span>
+                  <span v-if="network.auto_connect" class="text-xs px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                    Auto
+                  </span>
+                </div>
+                <button
+                  @click="deleteSavedNetwork(network.name)"
+                  :disabled="deletingNetwork === network.name"
+                  class="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 rounded transition-colors"
+                  title="Delete network"
+                >
+                  <TrashIcon v-if="deletingNetwork !== network.name" class="h-4 w-4" />
+                  <ArrowPathIcon v-else class="h-4 w-4 animate-spin" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <button
+              @click="closeAddNetworkModal"
+              class="btn-secondary"
+            >
+              Close
+            </button>
+            <button
+              @click="addKnownNetwork"
+              :disabled="addingNetwork || !addNetworkSsid.trim() || addNetworkPassword.length < 8"
+              class="px-4 py-2 rounded-lg font-medium text-white bg-emerald-500 hover:bg-emerald-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              <ArrowPathIcon v-if="addingNetwork" class="h-4 w-4 animate-spin" />
+              <PlusIcon v-else class="h-4 w-4" />
+              {{ addingNetwork ? 'Adding...' : 'Add Network' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
   </div>
 </template>
 
@@ -1106,6 +1231,19 @@ const wifiConnecting = ref(false)
 const selectedWifiNetwork = ref(null)
 const wifiPassword = ref('')
 const wifiError = ref(null)
+
+// Add known network state
+const showAddNetworkModal = ref(false)
+const addNetworkSsid = ref('')
+const addNetworkPassword = ref('')
+const addNetworkAutoConnect = ref(true)
+const addingNetwork = ref(false)
+const addNetworkError = ref(null)
+
+// Saved networks state
+const savedNetworks = ref([])
+const loadingSavedNetworks = ref(false)
+const deletingNetwork = ref(null)
 
 // Notification management
 const loadingNotifications = ref(false)
@@ -1543,6 +1681,92 @@ async function connectToSlaveWifi() {
     wifiError.value = error.response?.data?.detail || 'Failed to connect to WiFi'
   } finally {
     wifiConnecting.value = false
+  }
+}
+
+// =========================================================================
+// Add Known Network
+// =========================================================================
+
+function openAddNetworkModal() {
+  showAddNetworkModal.value = true
+  addNetworkSsid.value = ''
+  addNetworkPassword.value = ''
+  addNetworkAutoConnect.value = true
+  addNetworkError.value = null
+  loadSavedNetworks()
+}
+
+function closeAddNetworkModal() {
+  showAddNetworkModal.value = false
+  addNetworkSsid.value = ''
+  addNetworkPassword.value = ''
+  addNetworkError.value = null
+}
+
+async function loadSavedNetworks() {
+  loadingSavedNetworks.value = true
+  try {
+    const response = await genslaveApi.listSavedWifiNetworks()
+    if (response.data?.success) {
+      savedNetworks.value = response.data.networks || []
+    }
+  } catch (error) {
+    console.warn('Failed to load saved networks:', error)
+  } finally {
+    loadingSavedNetworks.value = false
+  }
+}
+
+async function addKnownNetwork() {
+  if (!addNetworkSsid.value.trim()) {
+    addNetworkError.value = 'SSID is required'
+    return
+  }
+  if (!addNetworkPassword.value || addNetworkPassword.value.length < 8) {
+    addNetworkError.value = 'Password must be at least 8 characters'
+    return
+  }
+
+  addingNetwork.value = true
+  addNetworkError.value = null
+
+  try {
+    const response = await genslaveApi.addWifiNetwork({
+      ssid: addNetworkSsid.value.trim(),
+      password: addNetworkPassword.value,
+      auto_connect: addNetworkAutoConnect.value,
+    })
+
+    if (response.data?.success) {
+      notificationStore.success(response.data.message || `Network '${addNetworkSsid.value}' added`)
+      addNetworkSsid.value = ''
+      addNetworkPassword.value = ''
+      loadSavedNetworks()
+    } else {
+      addNetworkError.value = response.data?.error || 'Failed to add network'
+    }
+  } catch (error) {
+    addNetworkError.value = error.response?.data?.detail || 'Failed to add network'
+  } finally {
+    addingNetwork.value = false
+  }
+}
+
+async function deleteSavedNetwork(name) {
+  deletingNetwork.value = name
+  try {
+    const response = await genslaveApi.deleteWifiNetwork({ name })
+    if (response.data?.success) {
+      notificationStore.success(`Network '${name}' deleted`)
+      loadSavedNetworks()
+    } else {
+      notificationStore.error(response.data?.error || 'Failed to delete network')
+    }
+  } catch (error) {
+    notificationStore.error(error.response?.data?.detail || 'Failed to delete network')
+  } finally {
+    deletingNetwork.value = null
   }
 }
 
