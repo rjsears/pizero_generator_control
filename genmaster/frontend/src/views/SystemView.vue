@@ -700,7 +700,7 @@ onMounted(async () => {
             'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap border',
             activeTab === tab.id
               ? `${tab.bgActive} ${tab.textActive} ${tab.borderActive}`
-              : 'text-gray-500 dark:text-gray-400 hover:bg-emerald-100 hover:text-emerald-700 dark:hover:bg-emerald-500/20 dark:hover:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-500/30 border-transparent'
+              : 'text-gray-500 dark:text-gray-400 hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white hover:border-emerald-600 dark:hover:border-emerald-500 border-transparent'
           ]"
         >
           <component :is="tab.icon" :class="['h-4 w-4', activeTab === tab.id ? '' : tab.iconColor]" />
