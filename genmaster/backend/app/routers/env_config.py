@@ -22,10 +22,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.routers.auth import get_admin_user
+from app.dependencies import AdminUser
 
 logger = logging.getLogger(__name__)
 
@@ -434,7 +434,7 @@ def get_backups() -> list[dict]:
 
 @router.get("")
 async def get_env_config(
-    _: dict = Depends(get_admin_user)
+    admin: AdminUser
 ) -> dict[str, Any]:
     """Get all environment variables grouped by category."""
     variables = read_env_file()
@@ -501,7 +501,7 @@ async def get_env_config(
 async def update_variable(
     key: str,
     update: EnvVariableUpdate,
-    _: dict = Depends(get_admin_user)
+    admin: AdminUser
 ) -> dict[str, Any]:
     """Update an environment variable."""
     # Create backup first
@@ -527,7 +527,7 @@ async def update_variable(
 @router.post("")
 async def add_variable(
     variable: EnvVariable,
-    _: dict = Depends(get_admin_user)
+    admin: AdminUser
 ) -> dict[str, Any]:
     """Add a new environment variable."""
     # Validate key format
@@ -563,7 +563,7 @@ async def add_variable(
 @router.delete("/{key}")
 async def delete_variable(
     key: str,
-    _: dict = Depends(get_admin_user)
+    admin: AdminUser
 ) -> dict[str, Any]:
     """Delete an environment variable."""
     # Don't allow deleting known variables
@@ -594,7 +594,7 @@ async def delete_variable(
 
 @router.get("/backups")
 async def list_backups(
-    _: dict = Depends(get_admin_user)
+    admin: AdminUser
 ) -> dict[str, Any]:
     """List available .env backups."""
     return {
@@ -604,7 +604,7 @@ async def list_backups(
 
 @router.post("/backup")
 async def create_backup_endpoint(
-    _: dict = Depends(get_admin_user)
+    admin: AdminUser
 ) -> dict[str, Any]:
     """Create a new backup of the current .env file."""
     filename = create_backup()
@@ -618,7 +618,7 @@ async def create_backup_endpoint(
 @router.post("/restore")
 async def restore_backup(
     request: RestoreRequest,
-    _: dict = Depends(get_admin_user)
+    admin: AdminUser
 ) -> dict[str, Any]:
     """Restore .env from a backup file."""
     backup_path = ENV_BACKUP_DIR / request.filename
@@ -642,7 +642,7 @@ async def restore_backup(
 
 @router.post("/reload")
 async def reload_variables(
-    _: dict = Depends(get_admin_user)
+    admin: AdminUser
 ) -> dict[str, Any]:
     """Reload environment variables into the current process."""
     variables = read_env_file()
@@ -661,7 +661,7 @@ async def reload_variables(
 @router.get("/affected-containers/{key}")
 async def get_affected_containers(
     key: str,
-    _: dict = Depends(get_admin_user)
+    admin: AdminUser
 ) -> dict[str, Any]:
     """Get containers that use a specific environment variable."""
     # For GenMaster, the main container uses most variables
@@ -709,7 +709,7 @@ async def get_affected_containers(
 @router.post("/restart-containers")
 async def restart_containers(
     request: RestartContainersRequest,
-    _: dict = Depends(get_admin_user)
+    admin: AdminUser
 ) -> dict[str, Any]:
     """Restart specified containers."""
     import subprocess
@@ -750,7 +750,7 @@ async def restart_containers(
 
 @router.post("/health-check")
 async def run_health_check(
-    _: dict = Depends(get_admin_user)
+    admin: AdminUser
 ) -> dict[str, Any]:
     """Run health checks on the current configuration."""
     variables = read_env_file()
