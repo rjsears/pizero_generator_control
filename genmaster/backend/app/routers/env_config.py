@@ -31,9 +31,35 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Path to the .env file (in the app's working directory)
-ENV_FILE_PATH = Path("/opt/genmaster/.env")
-ENV_BACKUP_DIR = Path("/opt/genmaster/env_backups")
+# Path to the .env file - check multiple common locations
+# Priority: ENV_FILE_PATH env var > mounted /config/.env > /app/.env
+def _find_env_file() -> Path:
+    """Find the .env file in common locations."""
+    # Check environment variable first (allows custom mount location)
+    custom_path = os.environ.get("ENV_FILE_PATH")
+    if custom_path:
+        return Path(custom_path)
+
+    # Check common locations
+    candidates = [
+        Path("/config/.env"),                           # Common Docker mount point
+        Path("/app/.env"),                               # Container working directory
+        Path("/data/.env"),                              # Data directory mount
+        Path("/root/generator_control/genmaster/.env"),  # Host path if accessible
+        Path(".env"),                                    # Current directory
+    ]
+
+    for path in candidates:
+        if path.exists():
+            logger.info(f"Found .env file at: {path}")
+            return path
+
+    # Default to /config/.env (user should mount here)
+    logger.warning("No .env file found. Mount your .env file to /config/.env")
+    return Path("/config/.env")
+
+ENV_FILE_PATH = _find_env_file()
+ENV_BACKUP_DIR = ENV_FILE_PATH.parent / "env_backups"
 
 
 # ============================================================================
