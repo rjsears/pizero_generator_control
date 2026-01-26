@@ -325,7 +325,10 @@ class StateMachine:
                 # Turn on the relay via GenSlave
                 # GenSlave will reject if relay is not armed
                 slave_client = await self._get_slave_client()
-                relay_response = await slave_client.relay_on()
+                try:
+                    relay_response = await slave_client.relay_on()
+                finally:
+                    await slave_client.close()
                 if not relay_response.success:
                     error_msg = relay_response.error or "Unknown error"
                     # Provide helpful message if GenSlave rejected due to not being armed
@@ -426,10 +429,13 @@ class StateMachine:
 
                 # Turn off the relay via GenSlave
                 slave_client = await self._get_slave_client()
-                relay_response = await slave_client.relay_off()
-                if not relay_response.success:
-                    logger.error(f"Failed to turn off relay: {relay_response.error}")
-                    # Continue anyway to update state - relay may already be off
+                try:
+                    relay_response = await slave_client.relay_off()
+                    if not relay_response.success:
+                        logger.error(f"Failed to turn off relay: {relay_response.error}")
+                        # Continue anyway to update state - relay may already be off
+                finally:
+                    await slave_client.close()
 
                 logger.info("GenSlave relay turned OFF")
 
