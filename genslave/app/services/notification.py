@@ -369,11 +369,11 @@ class NotificationService:
 
         title = "GenSlave FAILSAFE TRIGGERED"
         body = (
-            f"Generator relay has been turned OFF and DISARMED due to lost "
-            f"communication with GenMaster.\n\n"
+            f"GenSlave FAILSAFE has been TRIGGERED.\n\n"
+            f"Your generator relay has been turned OFF and DISARMED due to lost "
+            f"communications with GenMaster.\n\n"
             f"No heartbeat received for {timeout_seconds} seconds.\n\n"
-            f"Please check GenMaster connectivity. You must manually re-arm "
-            f"from the GenMaster dashboard to resume generator control."
+            f"Please check GenMaster connectivity."
         )
 
         result = await self.send(

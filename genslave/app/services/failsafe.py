@@ -113,17 +113,24 @@ class FailsafeMonitor:
                 logger.info("Syncing armed state from GenMaster: disarming")
                 self._relay_service.disarm(source="genmaster_sync")
 
-            # After failsafe recovery, send notification with current armed state
-            # This tells the user whether they need to re-arm or if it self-healed
-            if was_failsafe:
+        # After failsafe recovery, send notification with current armed state
+        # This tells the user whether they need to re-arm or if it self-healed
+        # This runs regardless of whether armed sync happened
+        if was_failsafe:
+            if self._relay_service:
                 final_armed_state = self._relay_service.is_armed
-                logger.info(
-                    f"Failsafe recovery complete - sending notification "
-                    f"(armed: {final_armed_state})"
-                )
-                asyncio.create_task(
-                    notification_service.send_heartbeat_restored_alert(is_armed=final_armed_state)
-                )
+            else:
+                # No relay service or no armed field from GenMaster - assume not armed
+                # User will need to manually check and re-arm
+                final_armed_state = False
+
+            logger.info(
+                f"Failsafe recovery complete - sending notification "
+                f"(armed: {final_armed_state}, genmaster_armed_field: {genmaster_armed})"
+            )
+            asyncio.create_task(
+                notification_service.send_heartbeat_restored_alert(is_armed=final_armed_state)
+            )
 
         # Process command if present and armed
         command = data.get("command", "none")
