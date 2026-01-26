@@ -116,12 +116,9 @@ class StateMachine:
             # Check if we had a running generator before crash/reboot
             was_running = state.generator_running
 
-            # SAFETY: Always disarm on boot - require operator to re-arm
+            # Preserve armed state across reboots - GenSlave maintains actual state
             if state.slave_relay_armed:
-                logger.warning(
-                    "Relay was armed before reboot - disarming for safety"
-                )
-                state.slave_relay_armed = False
+                logger.info("Relay was armed before reboot - preserving armed state")
 
             # Reset slave connection status - will be updated by heartbeat
             state.slave_connection_status = "unknown"
