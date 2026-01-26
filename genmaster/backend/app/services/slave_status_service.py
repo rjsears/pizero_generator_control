@@ -126,7 +126,7 @@ class SlaveStatusService:
     """
 
     # Polling intervals
-    FAST_POLL_INTERVAL = 1.0  # Health, relay state, failsafe (also sends heartbeat)
+    FAST_POLL_INTERVAL = 5.0  # Health, relay state, failsafe (reduced from 1s to reduce load)
     SLOW_POLL_INTERVAL = 30.0  # System info (CPU, RAM, disk, etc.)
 
     # Offline detection
@@ -143,6 +143,9 @@ class SlaveStatusService:
         self._state_machine: Optional["StateMachine"] = None
         self._heartbeat_interval: int = settings.heartbeat_interval_seconds
         self._last_heartbeat_time: int = 0
+        # Shared client - reused across all polls to prevent connection exhaustion
+        self._shared_client: Optional[SlaveClient] = None
+        self._client_lock = asyncio.Lock()
 
     def set_state_machine(self, state_machine: "StateMachine") -> None:
         """
@@ -195,7 +198,36 @@ class SlaveStatusService:
 
         self._fast_task = None
         self._slow_task = None
+
+        # Close shared client
+        if self._shared_client:
+            await self._shared_client.close()
+            self._shared_client = None
+
         logger.info("SlaveStatusService stopped")
+
+    async def _get_shared_client(self) -> SlaveClient:
+        """Get or create the shared SlaveClient.
+
+        Uses a lock to prevent multiple concurrent client creations.
+        The client is reused across all polling operations to prevent
+        connection pool exhaustion.
+        """
+        async with self._client_lock:
+            if self._shared_client is None:
+                self._shared_client = await _create_slave_client(timeout=3.0)
+                logger.debug("Created shared SlaveClient")
+            return self._shared_client
+
+    async def _reset_shared_client(self) -> None:
+        """Reset the shared client (e.g., after errors or config changes)."""
+        async with self._client_lock:
+            if self._shared_client:
+                try:
+                    await self._shared_client.close()
+                except Exception:
+                    pass
+                self._shared_client = None
 
     async def _fast_poll_loop(self) -> None:
         """
@@ -241,92 +273,90 @@ class SlaveStatusService:
         try:
             await asyncio.wait_for(
                 self._do_poll_fast_endpoints(),
-                timeout=8.0,  # Hard limit to prevent event loop blocking
+                timeout=5.0,  # Hard limit to prevent event loop blocking
             )
         except asyncio.TimeoutError:
-            logger.warning("Fast poll timed out after 8s - possible network issue")
+            logger.warning("Fast poll timed out after 5s - possible network issue")
             async with self._lock:
                 self._handle_failure("Poll operation timed out")
 
     async def _do_poll_fast_endpoints(self) -> None:
-        """Internal implementation of fast endpoint polling."""
-        client = await _create_slave_client()
+        """Internal implementation of fast endpoint polling.
+
+        Uses the shared client to prevent connection pool exhaustion.
+        """
+        client = await self._get_shared_client()
         now = int(time.time())
 
-        try:
-            # Poll all fast endpoints concurrently
-            health_resp, relay_resp, failsafe_resp = await asyncio.gather(
-                client.get_health_status(),
-                client.get_relay_state(),
-                client.get_failsafe_status(),
-                return_exceptions=True,
-            )
+        # Poll all fast endpoints concurrently
+        health_resp, relay_resp, failsafe_resp = await asyncio.gather(
+            client.get_health_status(),
+            client.get_relay_state(),
+            client.get_failsafe_status(),
+            return_exceptions=True,
+        )
 
-            async with self._lock:
-                self._cache.last_update = now
+        async with self._lock:
+            self._cache.last_update = now
 
-                # Process health response (primary indicator of online status)
-                if isinstance(health_resp, Exception):
-                    self._handle_failure(str(health_resp))
-                elif health_resp.success:
-                    self._cache.health = health_resp.data or {}
-                    self._cache.health_updated = now
-                    self._cache.last_latency_ms = health_resp.latency_ms
-                    self._mark_success(now)
-                else:
-                    self._handle_failure(health_resp.error)
+            # Process health response (primary indicator of online status)
+            if isinstance(health_resp, Exception):
+                self._handle_failure(str(health_resp))
+            elif health_resp.success:
+                self._cache.health = health_resp.data or {}
+                self._cache.health_updated = now
+                self._cache.last_latency_ms = health_resp.latency_ms
+                self._mark_success(now)
+            else:
+                self._handle_failure(health_resp.error)
 
-                # Process relay state response
-                if isinstance(relay_resp, Exception):
-                    logger.debug(f"Relay state poll exception: {relay_resp}")
-                elif relay_resp.success:
-                    self._cache.relay_state = relay_resp.data or {}
-                    self._cache.relay_state_updated = now
-                else:
-                    logger.debug(f"Relay state poll failed: {relay_resp.error}")
+            # Process relay state response
+            if isinstance(relay_resp, Exception):
+                logger.debug(f"Relay state poll exception: {relay_resp}")
+            elif relay_resp.success:
+                self._cache.relay_state = relay_resp.data or {}
+                self._cache.relay_state_updated = now
+            else:
+                logger.debug(f"Relay state poll failed: {relay_resp.error}")
 
-                # Process failsafe response
-                if isinstance(failsafe_resp, Exception):
-                    logger.debug(f"Failsafe poll exception: {failsafe_resp}")
-                elif failsafe_resp.success:
-                    self._cache.failsafe = failsafe_resp.data or {}
-                    self._cache.failsafe_updated = now
-                else:
-                    logger.debug(f"Failsafe poll failed: {failsafe_resp.error}")
-
-        finally:
-            await client.close()
+            # Process failsafe response
+            if isinstance(failsafe_resp, Exception):
+                logger.debug(f"Failsafe poll exception: {failsafe_resp}")
+            elif failsafe_resp.success:
+                self._cache.failsafe = failsafe_resp.data or {}
+                self._cache.failsafe_updated = now
+            else:
+                logger.debug(f"Failsafe poll failed: {failsafe_resp.error}")
 
     async def _poll_slow_endpoints(self) -> None:
         """Fetch system info from GenSlave.
 
-        Uses asyncio.wait_for to ensure this never blocks for more than 10 seconds total.
+        Uses asyncio.wait_for to ensure this never blocks for more than 5 seconds total.
         """
         try:
             await asyncio.wait_for(
                 self._do_poll_slow_endpoints(),
-                timeout=10.0,  # Hard limit to prevent event loop blocking
+                timeout=5.0,  # Hard limit to prevent event loop blocking
             )
         except asyncio.TimeoutError:
-            logger.warning("Slow poll timed out after 10s - possible network issue")
+            logger.warning("Slow poll timed out after 5s - possible network issue")
 
     async def _do_poll_slow_endpoints(self) -> None:
-        """Internal implementation of slow endpoint polling."""
-        client = await _create_slave_client()
+        """Internal implementation of slow endpoint polling.
+
+        Uses the shared client to prevent connection pool exhaustion.
+        """
+        client = await self._get_shared_client()
         now = int(time.time())
 
-        try:
-            response = await client.get_system_health()
+        response = await client.get_system_health()
 
-            async with self._lock:
-                if response.success:
-                    self._cache.system_info = response.data or {}
-                    self._cache.system_info_updated = now
-                else:
-                    logger.debug(f"System info poll failed: {response.error}")
-
-        finally:
-            await client.close()
+        async with self._lock:
+            if response.success:
+                self._cache.system_info = response.data or {}
+                self._cache.system_info_updated = now
+            else:
+                logger.debug(f"System info poll failed: {response.error}")
 
     async def _send_heartbeat(self) -> HeartbeatResult:
         """
@@ -347,75 +377,77 @@ class SlaveStatusService:
         try:
             return await asyncio.wait_for(
                 self._do_send_heartbeat(),
-                timeout=8.0,  # Hard limit to prevent event loop blocking
+                timeout=5.0,  # Hard limit to prevent event loop blocking
             )
         except asyncio.TimeoutError:
-            logger.warning("Heartbeat timed out after 8s - possible network issue")
+            logger.warning("Heartbeat timed out after 5s - possible network issue")
             self._cache.heartbeat_failures += 1
             return HeartbeatResult(success=False, error="Heartbeat operation timed out")
 
     async def _do_send_heartbeat(self) -> HeartbeatResult:
-        """Internal implementation of heartbeat sending."""
+        """Internal implementation of heartbeat sending.
+
+        Uses the shared client to prevent connection pool exhaustion.
+        """
         self._cache.heartbeat_sequence += 1
         timestamp = int(time.time())
 
-        client = await _create_slave_client(timeout=5.0)  # 5s timeout for heartbeat
+        client = await self._get_shared_client()
 
-        try:
-            # Get current master state to send
-            generator_status = await self._state_machine.get_generator_status()
-            is_armed = await self._state_machine.is_armed()
+        # Get current master state to send
+        generator_status = await self._state_machine.get_generator_status()
+        is_armed = await self._state_machine.is_armed()
 
-            # Send heartbeat
-            response = await client.heartbeat(
-                timestamp=timestamp,
-                generator_running=generator_status.running,
-                armed=is_armed,
-                heartbeat_interval=self._heartbeat_interval,
-                command="none",  # Commands are sent separately, not via heartbeat
-            )
+        # Send heartbeat
+        response = await client.heartbeat(
+            timestamp=timestamp,
+            generator_running=generator_status.running,
+            armed=is_armed,
+            heartbeat_interval=self._heartbeat_interval,
+            command="none",  # Commands are sent separately, not via heartbeat
+        )
 
-            # Build result
-            result = HeartbeatResult(
-                success=response.success,
-                latency_ms=response.latency_ms,
-                slave_status=response.data,
-                error=response.error,
-            )
+        # Build result
+        result = HeartbeatResult(
+            success=response.success,
+            latency_ms=response.latency_ms,
+            slave_status=response.data,
+            error=response.error,
+        )
 
-            # Update cache
-            async with self._lock:
-                self._cache.last_heartbeat_sent = timestamp
-                if result.success:
-                    self._cache.last_heartbeat_success = timestamp
-                    self._cache.heartbeat_failures = 0
-                    # Heartbeat success also indicates GenSlave is reachable
-                    # Update the same fields as _mark_success() to prevent stale indicator
-                    self._cache.last_successful_fetch = timestamp
-                    self._cache.is_online = True
-                    self._cache.consecutive_failures = 0
-                    self._cache.last_error = None
-                else:
-                    self._cache.heartbeat_failures += 1
-
-            # Update state machine with heartbeat result
-            await self._state_machine.update_heartbeat_status(
-                success=result.success,
-                slave_status=result.slave_status,
-                latency_ms=result.latency_ms,
-            )
-
+        # Update cache
+        async with self._lock:
+            self._cache.last_heartbeat_sent = timestamp
             if result.success:
-                logger.debug(
-                    f"Heartbeat #{self._cache.heartbeat_sequence} successful "
-                    f"(latency: {result.latency_ms:.1f}ms)"
-                )
+                self._cache.last_heartbeat_success = timestamp
+                self._cache.heartbeat_failures = 0
+                # Heartbeat success also indicates GenSlave is reachable
+                # Update the same fields as _mark_success() to prevent stale indicator
+                self._cache.last_successful_fetch = timestamp
+                self._cache.is_online = True
+                self._cache.consecutive_failures = 0
+                self._cache.last_error = None
             else:
-                logger.warning(
-                    f"Heartbeat #{self._cache.heartbeat_sequence} failed: {result.error}"
-                )
+                self._cache.heartbeat_failures += 1
 
-            return result
+        # Update state machine with heartbeat result
+        await self._state_machine.update_heartbeat_status(
+            success=result.success,
+            slave_status=result.slave_status,
+            latency_ms=result.latency_ms,
+        )
+
+        if result.success:
+            logger.debug(
+                f"Heartbeat #{self._cache.heartbeat_sequence} successful "
+                f"(latency: {result.latency_ms:.1f}ms)"
+            )
+        else:
+            logger.warning(
+                f"Heartbeat #{self._cache.heartbeat_sequence} failed: {result.error}"
+            )
+
+        return result
 
         finally:
             await client.close()
