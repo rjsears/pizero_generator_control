@@ -1266,8 +1266,9 @@ const savingNotificationEnabled = ref(false)
 const sendingTestNotification = ref(false)
 const clearingCooldown = ref(false)
 
-// Polling
+// Polling - fire-and-forget with overlap protection
 let pollInterval = null
+let pollInProgress = false
 
 // Load GenSlave info using cached data from unified SlaveStatusService
 // This ensures consistent status with the Generator Tab
@@ -1850,8 +1851,15 @@ async function executeReboot() {
 onMounted(() => {
   loadSlaveInfo()
   loadNotificationConfig()
-  // Poll every 30 seconds
-  pollInterval = setInterval(loadSlaveInfo, 30000)
+  // Poll every 30 seconds - fire-and-forget with overlap protection
+  // This prevents UI blocking when GenSlave is slow/offline
+  pollInterval = setInterval(() => {
+    if (pollInProgress) return  // Skip if previous poll still running
+    pollInProgress = true
+    loadSlaveInfo().finally(() => {
+      pollInProgress = false
+    })
+  }, 30000)
 })
 
 onUnmounted(() => {
