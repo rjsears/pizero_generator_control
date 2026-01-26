@@ -41,7 +41,10 @@ def get_webhook_service():
 
 
 async def get_slave_client():
-    """Create a SlaveClient with config from database."""
+    """Create a SlaveClient with config from database.
+
+    Uses yield pattern to ensure proper cleanup of HTTP connections.
+    """
     from app.database import AsyncSessionLocal
     from app.models import Config
     from app.services.slave_client import SlaveClient
@@ -58,17 +61,23 @@ async def get_slave_client():
             base_url = f"http://{config.genslave_ip}:8001"
         else:
             base_url = config.slave_api_url
-        return SlaveClient(
+        client = SlaveClient(
             base_url=base_url,
             secret=config.slave_api_secret,
         )
     else:
         # Fallback to settings if no config in database
         from app.config import settings
-        return SlaveClient(
+        client = SlaveClient(
             base_url=settings.slave_api_url,
             secret=settings.slave_api_secret,
         )
+
+    # Yield client and ensure cleanup
+    try:
+        yield client
+    finally:
+        await client.close()
 
 
 @router.get("", response_model=HealthCheck)
