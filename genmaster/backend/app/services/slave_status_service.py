@@ -342,6 +342,12 @@ class SlaveStatusService:
                 if result.success:
                     self._cache.last_heartbeat_success = timestamp
                     self._cache.heartbeat_failures = 0
+                    # Heartbeat success also indicates GenSlave is reachable
+                    # Update the same fields as _mark_success() to prevent stale indicator
+                    self._cache.last_successful_fetch = timestamp
+                    self._cache.is_online = True
+                    self._cache.consecutive_failures = 0
+                    self._cache.last_error = None
                 else:
                     self._cache.heartbeat_failures += 1
 
