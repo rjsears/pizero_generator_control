@@ -97,6 +97,8 @@ class FailsafeMonitor:
             logger.info("Heartbeat received - clearing failsafe state")
             self._failsafe_triggered = False
             self._failsafe_triggered_at = None
+            # Clear notification cooldowns so next failsafe event can send notifications
+            notification_service.clear_cooldown()
 
         # Sync armed state from GenMaster (GenMaster is the source of truth)
         # This allows "self-healing" after temporary network issues
