@@ -369,10 +369,10 @@ class NotificationService:
 
         title = "GenSlave FAILSAFE TRIGGERED"
         body = (
-            f"GenSlave FAILSAFE has been TRIGGERED.\n\n"
+            f"GenSlave FAILSAFE has been TRIGGERED. "
             f"Your generator relay has been turned OFF and DISARMED due to lost "
-            f"communications with GenMaster.\n\n"
-            f"No heartbeat received for {timeout_seconds} seconds.\n\n"
+            f"communications with GenMaster. "
+            f"No heartbeat received for {timeout_seconds} seconds. "
             f"Please check GenMaster connectivity."
         )
 
@@ -414,17 +414,16 @@ class NotificationService:
 
         if is_armed:
             body = (
-                "Communication with GenMaster has been restored.\n\n"
-                "Your Generator Relay is ARMED.\n\n"
-                "Your generator will start automatically when commanded by GenMaster."
+                "Communications has been restored with GenMaster and your "
+                "Generator Relay is Armed. Your generator will start "
+                "automatically when commanded."
             )
             notify_type = apprise.NotifyType.SUCCESS
         else:
             body = (
-                "Communication with GenMaster has been restored.\n\n"
-                "However, your Generator Relay is NOT armed.\n\n"
-                "Please log into GenMaster and re-arm the Generator Relay "
-                "to resume automatic generator control."
+                "Communication has been restored with GenMaster, however your "
+                "generator relay is NOT armed. Please log into GenMaster and "
+                "rearm the Generator Relay."
             )
             notify_type = apprise.NotifyType.WARNING
 
