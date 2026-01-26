@@ -1758,7 +1758,7 @@ onMounted(async () => {
   // Load runtime limits status (lockout/cooldown state)
   await fetchRuntimeLimitsStatus()
 
-  // Fast refresh every 2 seconds using cached endpoints (instant responses)
+  // Fast refresh every 5 seconds using cached endpoints (matches backend polling)
   refreshInterval = setInterval(async () => {
     await Promise.all([
       generatorStore.fetchStatus(),
@@ -1767,7 +1767,7 @@ onMounted(async () => {
     ])
     // Update runtime timer based on new status
     updateRuntimeTimer()
-  }, 2000)
+  }, 5000)
 
   // Slow refresh every 30 seconds for less critical data
   slowRefreshInterval = setInterval(async () => {
