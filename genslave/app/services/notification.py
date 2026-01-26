@@ -49,8 +49,8 @@ class NotificationService:
     DB_LAST_RESTORED_SENT_KEY = "last_restored_notification_at"
 
     # Default cooldown values (in minutes)
-    DEFAULT_FAILSAFE_COOLDOWN = 5
-    DEFAULT_RESTORED_COOLDOWN = 5
+    DEFAULT_FAILSAFE_COOLDOWN = 15
+    DEFAULT_RESTORED_COOLDOWN = 15
 
     def __init__(self):
         self._apprise: Optional[apprise.Apprise] = None
