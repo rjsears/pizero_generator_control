@@ -1080,6 +1080,8 @@ const localRunTimeMinutes = computed(() => Math.floor(localRunTimeSeconds.value 
 let runtimeInterval = null
 let refreshInterval = null
 let slowRefreshInterval = null
+let fastPollInProgress = false
+let slowPollInProgress = false
 
 // Modal states
 const showStartModal = ref(false)
@@ -1758,27 +1760,38 @@ onMounted(async () => {
   // Load runtime limits status (lockout/cooldown state)
   await fetchRuntimeLimitsStatus()
 
-  // Fast refresh every 2 seconds using cached endpoints (instant responses)
-  refreshInterval = setInterval(async () => {
-    await Promise.all([
+  // Fast refresh every 5 seconds using cached endpoints (matches backend polling)
+  // Fire-and-forget with overlap protection - keeps UI responsive
+  refreshInterval = setInterval(() => {
+    if (fastPollInProgress) return  // Skip if previous poll still running
+    fastPollInProgress = true
+
+    Promise.all([
       generatorStore.fetchStatus(),
       systemStore.fetchSlaveStatusCached(),  // Use cached endpoint for instant response
       fetchRelayState(),  // Uses cached endpoint
-    ])
-    // Update runtime timer based on new status
-    updateRuntimeTimer()
-  }, 2000)
+    ]).finally(() => {
+      fastPollInProgress = false
+      updateRuntimeTimer()
+    })
+  }, 5000)
 
   // Slow refresh every 30 seconds for less critical data
-  slowRefreshInterval = setInterval(async () => {
-    await Promise.all([
+  // Fire-and-forget with overlap protection
+  slowRefreshInterval = setInterval(() => {
+    if (slowPollInProgress) return  // Skip if previous poll still running
+    slowPollInProgress = true
+
+    Promise.all([
       generatorStore.fetchStats(),
       systemStore.fetchHealth(),
       systemStore.fetchVictronStatus(),
       fetchFuelUsage(),
       fetchRuntimeLimitsStatus(),
       fetchHostWifi(),
-    ])
+    ]).finally(() => {
+      slowPollInProgress = false
+    })
   }, 30000)
 })
 
