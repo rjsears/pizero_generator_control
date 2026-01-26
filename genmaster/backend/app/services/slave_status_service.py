@@ -449,9 +449,6 @@ class SlaveStatusService:
 
         return result
 
-        finally:
-            await client.close()
-
     def _mark_success(self, timestamp: int) -> None:
         """Mark a successful fetch (must be called with lock held)."""
         self._cache.last_successful_fetch = timestamp
