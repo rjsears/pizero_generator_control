@@ -461,6 +461,12 @@ class SlaveStatusService:
         self._cache.consecutive_failures += 1
         self._cache.last_error = error
 
+        # Reset the HTTP client after 2 failures to clear any stale connections
+        # This helps recover from connection pool issues (half-open connections, etc.)
+        if self._cache.consecutive_failures == 2:
+            logger.info("Resetting HTTP client after consecutive failures")
+            asyncio.create_task(self._reset_shared_client())
+
         if self._cache.consecutive_failures >= self.OFFLINE_THRESHOLD:
             if self._cache.is_online:
                 logger.warning(
