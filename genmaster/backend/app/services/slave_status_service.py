@@ -33,8 +33,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def _create_slave_client(timeout: float = 5.0) -> SlaveClient:
-    """Create a SlaveClient with config from Redis cache (or database fallback)."""
+async def _create_slave_client(timeout: float = 3.0) -> SlaveClient:
+    """Create a SlaveClient with config from Redis cache (or database fallback).
+
+    Args:
+        timeout: Total request timeout in seconds. Default reduced from 5.0 to 3.0
+                 since GenSlave should respond much faster on local network.
+    """
     config = await get_cached_config()
 
     if config:
@@ -229,7 +234,22 @@ class SlaveStatusService:
             await asyncio.sleep(self.SLOW_POLL_INTERVAL)
 
     async def _poll_fast_endpoints(self) -> None:
-        """Fetch health, relay state, and failsafe from GenSlave."""
+        """Fetch health, relay state, and failsafe from GenSlave.
+
+        Uses asyncio.wait_for to ensure this never blocks for more than 8 seconds total.
+        """
+        try:
+            await asyncio.wait_for(
+                self._do_poll_fast_endpoints(),
+                timeout=8.0,  # Hard limit to prevent event loop blocking
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Fast poll timed out after 8s - possible network issue")
+            async with self._lock:
+                self._handle_failure("Poll operation timed out")
+
+    async def _do_poll_fast_endpoints(self) -> None:
+        """Internal implementation of fast endpoint polling."""
         client = await _create_slave_client()
         now = int(time.time())
 
@@ -278,7 +298,20 @@ class SlaveStatusService:
             await client.close()
 
     async def _poll_slow_endpoints(self) -> None:
-        """Fetch system info from GenSlave."""
+        """Fetch system info from GenSlave.
+
+        Uses asyncio.wait_for to ensure this never blocks for more than 10 seconds total.
+        """
+        try:
+            await asyncio.wait_for(
+                self._do_poll_slow_endpoints(),
+                timeout=10.0,  # Hard limit to prevent event loop blocking
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Slow poll timed out after 10s - possible network issue")
+
+    async def _do_poll_slow_endpoints(self) -> None:
+        """Internal implementation of slow endpoint polling."""
         client = await _create_slave_client()
         now = int(time.time())
 
@@ -299,6 +332,8 @@ class SlaveStatusService:
         """
         Send a heartbeat to GenSlave.
 
+        Uses asyncio.wait_for to ensure this never blocks for more than 8 seconds total.
+
         Heartbeats tell GenSlave:
         - GenMaster is alive and connected
         - Current generator running state
@@ -309,10 +344,22 @@ class SlaveStatusService:
             logger.warning("Cannot send heartbeat: StateMachine not set")
             return HeartbeatResult(success=False, error="StateMachine not configured")
 
+        try:
+            return await asyncio.wait_for(
+                self._do_send_heartbeat(),
+                timeout=8.0,  # Hard limit to prevent event loop blocking
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Heartbeat timed out after 8s - possible network issue")
+            self._cache.heartbeat_failures += 1
+            return HeartbeatResult(success=False, error="Heartbeat operation timed out")
+
+    async def _do_send_heartbeat(self) -> HeartbeatResult:
+        """Internal implementation of heartbeat sending."""
         self._cache.heartbeat_sequence += 1
         timestamp = int(time.time())
 
-        client = await _create_slave_client(timeout=10.0)  # Longer timeout for heartbeat
+        client = await _create_slave_client(timeout=5.0)  # 5s timeout for heartbeat
 
         try:
             # Get current master state to send
