@@ -12,11 +12,29 @@
 """FastAPI application entry point with service lifecycle management."""
 
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator, Optional
 
-from pathlib import Path
+# Load .env file BEFORE importing settings
+# This ensures environment variables are available for pydantic-settings and os.getenv() calls
+# Priority: /config/.env (Docker mount) > /app/.env (container default) > .env (current dir)
+from dotenv import load_dotenv
+
+_env_file_paths = [
+    Path("/config/.env"),  # Docker compose mount point
+    Path("/app/.env"),     # Container working directory
+    Path(".env"),          # Current directory fallback
+]
+
+for _env_path in _env_file_paths:
+    if _env_path.exists():
+        load_dotenv(_env_path, override=True)
+        # Log will be configured later, so use print for early startup
+        print(f"Loaded environment from: {_env_path}")
+        break
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
