@@ -45,7 +45,7 @@ class SlaveClient:
         self,
         base_url: Optional[str] = None,
         secret: Optional[str] = None,
-        timeout: float = 10.0,
+        timeout: float = 3.0,
     ):
         """
         Initialize GenSlave client.
@@ -53,7 +53,7 @@ class SlaveClient:
         Args:
             base_url: GenSlave API URL (default from settings)
             secret: API secret (default from settings)
-            timeout: Request timeout in seconds
+            timeout: Request timeout in seconds (default 3s - GenSlave should respond in <100ms)
         """
         self.base_url = (base_url or settings.slave_api_url).rstrip("/")
         self.secret = secret or settings.slave_api_secret
