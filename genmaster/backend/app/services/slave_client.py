@@ -63,9 +63,19 @@ class SlaveClient:
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._client is None:
+            # Use explicit timeout configuration to prevent event loop blocking.
+            # connect=2.0 ensures we fail fast if GenSlave is unreachable.
+            # The total timeout (self.timeout) is the overall request limit.
             self._client = httpx.AsyncClient(
-                timeout=self.timeout,
+                timeout=httpx.Timeout(
+                    timeout=self.timeout,  # Total timeout for entire request
+                    connect=2.0,  # Strict connect timeout - fail fast on network issues
+                ),
                 headers={"X-API-Key": self.secret},
+                limits=httpx.Limits(
+                    max_connections=10,
+                    max_keepalive_connections=5,
+                ),
             )
         return self._client
 
