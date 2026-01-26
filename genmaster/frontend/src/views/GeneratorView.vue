@@ -1340,8 +1340,14 @@ async function fetchHostWifi() {
 }
 
 // Fetch relay state (using cached endpoint for instant response)
+// Only shows loading indicator on initial fetch, not background refreshes
 async function fetchRelayState() {
-  relayStateLoading.value = true
+  // Only show loading on initial fetch (when armed state is unknown)
+  const isInitialFetch = relayArmed.value === null
+  if (isInitialFetch) {
+    relayStateLoading.value = true
+  }
+
   try {
     // Use cached endpoint for instant response
     const response = await genslaveApi.getRelayCached()
@@ -1362,23 +1368,32 @@ async function fetchRelayState() {
       relayArmed.value = false
     }
   } finally {
-    relayStateLoading.value = false
+    if (isInitialFetch) {
+      relayStateLoading.value = false
+    }
   }
 }
 
 // Toggle relay arm/disarm
 async function toggleRelayArm() {
   togglingRelay.value = true
+  const wasArmed = relayArmed.value
   try {
-    if (relayArmed.value) {
+    if (wasArmed) {
       await genslaveApi.disarm()
       relayArmed.value = false
+      notificationStore.success('Generator relay disarmed')
     } else {
       await genslaveApi.arm()
       relayArmed.value = true
+      notificationStore.success('Generator relay armed')
     }
   } catch (err) {
     console.error('Failed to toggle relay arm state:', err)
+    // Show error to user
+    const action = wasArmed ? 'disarm' : 'arm'
+    notificationStore.error(`Failed to ${action} relay: ${err.message || 'Connection error'}`)
+    // Don't change the state on error - it stays as it was
   } finally {
     togglingRelay.value = false
   }

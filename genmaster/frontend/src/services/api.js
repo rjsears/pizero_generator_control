@@ -15,9 +15,10 @@ import axios from 'axios'
 import router from '../router'
 
 // Create axios instance - GenMaster always uses /api
+// Short timeout (5s) to fail fast and keep UI responsive
 const api = axios.create({
   baseURL: '/api',
-  timeout: 30000,
+  timeout: 5000,
   headers: {
     'Content-Type': 'application/json',
   },
