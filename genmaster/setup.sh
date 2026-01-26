@@ -2656,7 +2656,7 @@ TAILSCALE_ROUTES=${tailscale_routes}
 EOF
     fi
 
-    chmod 600 "${SCRIPT_DIR}/.env"
+    chmod 644 "${SCRIPT_DIR}/.env"
     print_success ".env generated"
 
     if [ "$MOCK_GPIO_MODE" = true ]; then
