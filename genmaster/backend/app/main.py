@@ -30,11 +30,15 @@ _env_file_paths = [
 ]
 
 for _env_path in _env_file_paths:
-    if _env_path.exists():
-        load_dotenv(_env_path, override=True)
-        # Log will be configured later, so use print for early startup
-        print(f"Loaded environment from: {_env_path}")
-        break
+    if _env_path.exists() and os.access(_env_path, os.R_OK):
+        try:
+            load_dotenv(_env_path, override=True)
+            # Log will be configured later, so use print for early startup
+            print(f"Loaded environment from: {_env_path}")
+            break
+        except PermissionError:
+            print(f"Warning: Cannot read {_env_path} - permission denied")
+            continue
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
