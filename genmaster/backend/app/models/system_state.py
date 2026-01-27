@@ -79,6 +79,7 @@ class SystemState(Base):
     slave_connection_status: Mapped[str] = mapped_column(default="unknown")
     slave_relay_state: Mapped[Optional[bool]] = mapped_column(nullable=True)
     slave_relay_armed: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    manual_disarm_active: Mapped[bool] = mapped_column(default=False)
 
     # Runtime Lockout/Cooldown
     runtime_lockout_active: Mapped[bool] = mapped_column(default=False)
