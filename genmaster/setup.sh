@@ -69,6 +69,7 @@ GENSLAVE_API_URL=""
 GENSLAVE_API_SECRET=""
 GENSLAVE_IP=""
 GENSLAVE_HOSTNAME="genslave"
+AUTO_ARM_RELAY_ON_CONNECT=false
 
 # Mock GPIO mode (auto-detected based on hardware)
 MOCK_GPIO_MODE=false
@@ -580,6 +581,7 @@ SAVED_GENSLAVE_API_URL="$GENSLAVE_API_URL"
 SAVED_GENSLAVE_API_SECRET="$GENSLAVE_API_SECRET"
 SAVED_GENSLAVE_IP="$GENSLAVE_IP"
 SAVED_GENSLAVE_HOSTNAME="$GENSLAVE_HOSTNAME"
+SAVED_AUTO_ARM_RELAY_ON_CONNECT="$AUTO_ARM_RELAY_ON_CONNECT"
 SAVED_WEBHOOK_URL="$WEBHOOK_URL"
 SAVED_WEBHOOK_SECRET="$WEBHOOK_SECRET"
 SAVED_INSTALL_PORTAINER="$INSTALL_PORTAINER"
@@ -611,6 +613,7 @@ load_state() {
         GENSLAVE_API_SECRET="${SAVED_GENSLAVE_API_SECRET:-}"
         GENSLAVE_IP="${SAVED_GENSLAVE_IP:-}"
         GENSLAVE_HOSTNAME="${SAVED_GENSLAVE_HOSTNAME:-genslave}"
+        AUTO_ARM_RELAY_ON_CONNECT="${SAVED_AUTO_ARM_RELAY_ON_CONNECT:-false}"
         WEBHOOK_URL="${SAVED_WEBHOOK_URL:-}"
         WEBHOOK_SECRET="${SAVED_WEBHOOK_SECRET:-}"
         INSTALL_PORTAINER="${SAVED_INSTALL_PORTAINER:-false}"
@@ -1714,9 +1717,26 @@ configure_genslave() {
         print_info "Testing connection to GenSlave..."
         validate_genslave
 
+        # Auto-Arm Configuration
+        echo ""
+        echo -e "  ${WHITE}Auto-Arm Configuration${NC}"
+        echo -e "  ${GRAY}When enabled, the GenSlave relay will automatically be armed${NC}"
+        echo -e "  ${GRAY}whenever communication is restored after a disconnection.${NC}"
+        echo -e "  ${GRAY}This will NOT override a manual disarm from the UI.${NC}"
+        echo ""
+
+        if confirm_prompt "Enable auto-arm relay on connection restore?" "n"; then
+            AUTO_ARM_RELAY_ON_CONNECT=true
+            print_success "Auto-arm on connection restore enabled"
+        else
+            AUTO_ARM_RELAY_ON_CONNECT=false
+            print_info "Auto-arm on connection restore disabled"
+        fi
+
         print_success "GenSlave configured"
     else
         GENSLAVE_ENABLED=false
+        AUTO_ARM_RELAY_ON_CONNECT=false
         print_info "GenSlave disabled (UI-only mode)"
     fi
 }
@@ -2444,7 +2464,8 @@ generate_env_file() {
         # Load existing values as fallbacks (preserve what we have)
         local EXISTING_DOMAIN EXISTING_SECRET_KEY EXISTING_TIMEZONE EXISTING_DB_NAME
         local EXISTING_DB_USER EXISTING_DB_PASSWORD EXISTING_GENSLAVE_ENABLED
-        local EXISTING_GENSLAVE_API_URL EXISTING_GENSLAVE_API_SECRET EXISTING_WEBHOOK_URL
+        local EXISTING_GENSLAVE_API_URL EXISTING_GENSLAVE_API_SECRET EXISTING_AUTO_ARM_RELAY_ON_CONNECT
+        local EXISTING_WEBHOOK_URL
         local EXISTING_WEBHOOK_SECRET EXISTING_DNS_PROVIDER EXISTING_DNS_CERTBOT_IMAGE
         local EXISTING_DNS_CREDENTIALS_FILE EXISTING_LETSENCRYPT_EMAIL
         local EXISTING_CLOUDFLARE_TUNNEL_TOKEN EXISTING_TAILSCALE_AUTH_KEY
@@ -2475,6 +2496,7 @@ generate_env_file() {
                 GENSLAVE_ENABLED) EXISTING_GENSLAVE_ENABLED="$value" ;;
                 SLAVE_API_URL) EXISTING_GENSLAVE_API_URL="$value" ;;
                 SLAVE_API_SECRET) EXISTING_GENSLAVE_API_SECRET="$value" ;;
+                AUTO_ARM_RELAY_ON_CONNECT) EXISTING_AUTO_ARM_RELAY_ON_CONNECT="$value" ;;
                 WEBHOOK_BASE_URL) EXISTING_WEBHOOK_URL="$value" ;;
                 WEBHOOK_SECRET) EXISTING_WEBHOOK_SECRET="$value" ;;
                 DNS_PROVIDER) EXISTING_DNS_PROVIDER="$value" ;;
@@ -2506,6 +2528,7 @@ generate_env_file() {
         GENSLAVE_ENABLED="${GENSLAVE_ENABLED:-$EXISTING_GENSLAVE_ENABLED}"
         GENSLAVE_API_URL="${GENSLAVE_API_URL:-$EXISTING_GENSLAVE_API_URL}"
         GENSLAVE_API_SECRET="${GENSLAVE_API_SECRET:-$EXISTING_GENSLAVE_API_SECRET}"
+        AUTO_ARM_RELAY_ON_CONNECT="${AUTO_ARM_RELAY_ON_CONNECT:-$EXISTING_AUTO_ARM_RELAY_ON_CONNECT}"
         WEBHOOK_URL="${WEBHOOK_URL:-$EXISTING_WEBHOOK_URL}"
         WEBHOOK_SECRET="${WEBHOOK_SECRET:-$EXISTING_WEBHOOK_SECRET}"
         DNS_PROVIDER_NAME="${DNS_PROVIDER_NAME:-$EXISTING_DNS_PROVIDER}"
@@ -2578,6 +2601,7 @@ SLAVE_API_URL=${GENSLAVE_API_URL}
 SLAVE_API_SECRET=${GENSLAVE_API_SECRET}
 GENSLAVE_IP=${GENSLAVE_IP}
 GENSLAVE_HOSTNAME=${GENSLAVE_HOSTNAME:-genslave}
+AUTO_ARM_RELAY_ON_CONNECT=${AUTO_ARM_RELAY_ON_CONNECT:-false}
 
 # Generator Information (optional - can be configured via web UI)
 # Set these values to pre-populate generator info on first startup

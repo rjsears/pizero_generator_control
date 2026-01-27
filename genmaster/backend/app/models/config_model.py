@@ -83,6 +83,9 @@ class Config(Base):
     # Fuel Tracking
     fuel_tracking_reset_timestamp: Mapped[Optional[int]] = mapped_column(nullable=True, default=None)
 
+    # Auto-Arm on Connection Restore
+    auto_arm_relay_on_connect: Mapped[bool] = mapped_column(default=False)
+
     # Metadata
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()

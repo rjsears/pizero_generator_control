@@ -683,7 +683,7 @@ class StateMachine:
             state = await self._get_state(db)
             return state.slave_relay_armed or False
 
-    async def set_armed_state(self, armed: bool) -> None:
+    async def set_armed_state(self, armed: bool, manual: bool = True) -> None:
         """
         Set the relay armed state in the database.
 
@@ -693,12 +693,69 @@ class StateMachine:
 
         Args:
             armed: True to arm, False to disarm
+            manual: True if this is a manual action from the user (default)
         """
         async with AsyncSessionLocal() as db:
             state = await self._get_state(db)
             state.slave_relay_armed = armed
+
+            # Track manual disarm/arm for auto-arm feature
+            if manual:
+                if armed:
+                    # Manual arm clears the manual_disarm_active flag
+                    state.manual_disarm_active = False
+                    logger.info("Manual arm - clearing manual_disarm_active flag")
+                else:
+                    # Manual disarm sets the flag to prevent auto-arm
+                    state.manual_disarm_active = True
+                    logger.info("Manual disarm - setting manual_disarm_active flag")
+
             await db.commit()
-            logger.info(f"Relay armed state set to {armed} in GenMaster database")
+            logger.info(f"Relay armed state set to {armed} in GenMaster database (manual={manual})")
+
+    async def _auto_arm_relay(self) -> bool:
+        """
+        Automatically arm the relay on connection restore.
+
+        This is called when auto-arm is enabled and the connection is restored.
+        It sends the arm command to GenSlave and updates local state.
+
+        Returns:
+            True if auto-arm succeeded, False otherwise
+        """
+        try:
+            slave_client = await self._get_slave_client()
+            try:
+                response = await slave_client.arm_relay()
+            finally:
+                await slave_client.close()
+
+            if response.success:
+                # Update local state (not a manual action)
+                await self.set_armed_state(armed=True, manual=False)
+                logger.info("Auto-armed relay on connection restore")
+                await self.log_event(
+                    "RELAY_AUTO_ARMED",
+                    {"reason": "connection_restored"},
+                )
+                await self._send_webhook("relay.auto_armed", {"reason": "connection_restored"})
+                return True
+            else:
+                logger.warning(f"Auto-arm failed: {response.error}")
+                await self.log_event(
+                    "RELAY_AUTO_ARM_FAILED",
+                    {"error": response.error},
+                    severity="WARNING",
+                )
+                return False
+        except Exception as e:
+            logger.error(f"Auto-arm error: {e}")
+            await self.log_event(
+                "RELAY_AUTO_ARM_ERROR",
+                {"error": str(e)},
+                severity="ERROR",
+            )
+            return False
 
     # =========================================================================
     # Heartbeat/Communication Operations
@@ -762,6 +819,20 @@ class StateMachine:
                     logger.info("GenSlave connection restored")
                     await self.log_event("COMMUNICATION_RESTORED", {"latency_ms": latency_ms})
                     await self._send_webhook("communication.restored", {})
+
+                    # Check if auto-arm should trigger
+                    if config.auto_arm_relay_on_connect and not state.manual_disarm_active:
+                        logger.info("Auto-arm enabled and no manual disarm - triggering auto-arm")
+                        # Commit current state before auto-arm (connection status update)
+                        await db.commit()
+                        # Auto-arm is async and may take time, do it outside the db session
+                        asyncio.create_task(self._auto_arm_relay())
+                    elif config.auto_arm_relay_on_connect and state.manual_disarm_active:
+                        logger.info(
+                            "Auto-arm enabled but manual_disarm_active is set - "
+                            "skipping auto-arm (respecting user's manual disarm)"
+                        )
+
                     relay_status = "ENABLED" if state.slave_relay_armed else "DISABLED"
                     relay_warning = "" if state.slave_relay_armed else "WARNING: Generator relay is currently disabled."
                     await self._trigger_system_notification(

@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     slave_api_url: str = "http://genslave:8001"
     slave_api_secret: str = "change-me"
     genslave_ip: Optional[str] = None
+    auto_arm_relay_on_connect: bool = False
 
     # Heartbeat Settings
     heartbeat_interval_seconds: int = 60
