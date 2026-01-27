@@ -37,6 +37,66 @@ def _set_cached(key: str, data: Any) -> None:
     """Set cached value with current timestamp."""
     _cache[key] = {"data": data, "time": time.time()}
 
+
+# Container name for the host-tools sidecar
+HOST_TOOLS_CONTAINER = "genmaster_host_tools"
+
+
+def _exec_host_command(command: str, timeout: int = 10) -> tuple[bool, str]:
+    """
+    Execute a command in the host-tools sidecar container.
+
+    Uses docker exec for instant execution (no container startup overhead).
+    The host-tools container has network tools pre-installed and runs with
+    host network access and privileged mode.
+
+    Args:
+        command: Shell command to execute
+        timeout: Timeout in seconds (default 10)
+
+    Returns:
+        Tuple of (success, output_or_error)
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        import docker
+        client = docker.from_env()
+
+        # Get the host-tools container
+        try:
+            container = client.containers.get(HOST_TOOLS_CONTAINER)
+        except docker.errors.NotFound:
+            logger.warning(f"Host-tools container '{HOST_TOOLS_CONTAINER}' not found")
+            return False, f"Container '{HOST_TOOLS_CONTAINER}' not running"
+
+        # Check if container is running
+        if container.status != "running":
+            logger.warning(f"Host-tools container is not running (status: {container.status})")
+            return False, f"Container not running (status: {container.status})"
+
+        # Execute command in the container
+        exit_code, output = container.exec_run(
+            cmd=["sh", "-c", command],
+            demux=False,
+        )
+
+        output_str = output.decode("utf-8").strip() if output else ""
+
+        if exit_code != 0:
+            logger.debug(f"Host command failed (exit {exit_code}): {command[:50]}...")
+            return False, output_str or f"Command failed with exit code {exit_code}"
+
+        return True, output_str
+
+    except ImportError:
+        return False, "Docker SDK not installed"
+    except Exception as e:
+        logger.warning(f"Failed to exec host command: {e}")
+        return False, str(e)
+
+
 from app.config import settings
 from app.schemas import (
     ArmRequest,
@@ -1081,7 +1141,7 @@ async def get_host_wifi_info() -> dict:
     """
     Get WiFi information for the Docker host.
 
-    Runs commands through a privileged container to access host WiFi info.
+    Uses the host-tools sidecar container for instant execution.
     Results are cached for 30 seconds.
     """
     # Check cache first
@@ -1090,8 +1150,6 @@ async def get_host_wifi_info() -> dict:
         return cached
 
     import logging
-    import re
-
     logger = logging.getLogger(__name__)
 
     result = {
@@ -1104,84 +1162,57 @@ async def get_host_wifi_info() -> dict:
         "ip_address": None,
     }
 
-    try:
-        import docker
-        client = docker.from_env()
+    # Script to get WiFi info (tools are pre-installed in host-tools container)
+    script = """
+        WLAN=$(ls /sys/class/net/ 2>/dev/null | grep -E "^wlan|^wlp" | head -1)
+        if [ -z "$WLAN" ]; then
+            echo "NO_WIFI"
+            exit 0
+        fi
+        echo "IFACE:$WLAN"
+        IP=$(ip addr show "$WLAN" 2>/dev/null | grep "inet " | awk '{print $2}' | cut -d/ -f1)
+        [ -n "$IP" ] && echo "IP:$IP"
+        SSID=$(iwgetid "$WLAN" -r 2>/dev/null)
+        [ -n "$SSID" ] && echo "SSID:$SSID"
+        if [ -f /proc/net/wireless ]; then
+            SIGNAL=$(grep "$WLAN" /proc/net/wireless 2>/dev/null | awk '{print $4}' | tr -d '.')
+            [ -n "$SIGNAL" ] && echo "SIGNAL:$SIGNAL"
+        fi
+    """
 
-        # Run a container with host network to get WiFi info
-        # First check if wlan0 exists and get its info
-        script = """
-            #!/bin/sh
-            # Check for wlan interface
-            WLAN=$(ls /sys/class/net/ 2>/dev/null | grep -E "^wlan|^wlp" | head -1)
-            if [ -z "$WLAN" ]; then
-                echo "NO_WIFI"
-                exit 0
-            fi
-            echo "IFACE:$WLAN"
+    success, output_str = _exec_host_command(script)
 
-            # Get IP address
-            IP=$(ip addr show "$WLAN" 2>/dev/null | grep "inet " | awk '{print $2}' | cut -d/ -f1)
-            [ -n "$IP" ] && echo "IP:$IP"
+    if not success:
+        result["error"] = output_str
+        return result
 
-            # Get SSID using iwgetid
-            SSID=$(iwgetid "$WLAN" -r 2>/dev/null)
-            [ -n "$SSID" ] && echo "SSID:$SSID"
+    if "NO_WIFI" not in output_str:
+        result["available"] = True
 
-            # Get signal from /proc/net/wireless
-            if [ -f /proc/net/wireless ]; then
-                SIGNAL=$(grep "$WLAN" /proc/net/wireless 2>/dev/null | awk '{print $4}' | tr -d '.')
-                [ -n "$SIGNAL" ] && echo "SIGNAL:$SIGNAL"
-            fi
-        """
+        for line in output_str.split("\n"):
+            if line.startswith("IFACE:"):
+                result["interface"] = line.split(":", 1)[1].strip()
+            elif line.startswith("IP:"):
+                result["ip_address"] = line.split(":", 1)[1].strip()
+                result["connected"] = True
+            elif line.startswith("SSID:"):
+                result["ssid"] = line.split(":", 1)[1].strip()
+                result["connected"] = True
+            elif line.startswith("SIGNAL:"):
+                try:
+                    signal_val = int(line.split(":", 1)[1].strip())
+                    # Convert to dBm if needed
+                    if signal_val > 0:
+                        signal_dbm = signal_val - 256 if signal_val > 63 else signal_val - 100
+                    else:
+                        signal_dbm = signal_val
+                    result["signal_dbm"] = signal_dbm
+                    result["signal_percent"] = max(0, min(100, int((signal_dbm + 90) * 100 / 60)))
+                except ValueError:
+                    pass
 
-        try:
-            output = client.containers.run(
-                "alpine:latest",
-                command=["sh", "-c", "apk add --no-cache wireless-tools iproute2 >/dev/null 2>&1; " + script],
-                network_mode="host",
-                privileged=True,
-                remove=True,
-            )
-            output_str = output.decode("utf-8").strip()
-
-            if "NO_WIFI" not in output_str:
-                result["available"] = True
-
-                for line in output_str.split("\n"):
-                    if line.startswith("IFACE:"):
-                        result["interface"] = line.split(":", 1)[1].strip()
-                    elif line.startswith("IP:"):
-                        result["ip_address"] = line.split(":", 1)[1].strip()
-                        result["connected"] = True
-                    elif line.startswith("SSID:"):
-                        result["ssid"] = line.split(":", 1)[1].strip()
-                        result["connected"] = True
-                    elif line.startswith("SIGNAL:"):
-                        try:
-                            signal_val = int(line.split(":", 1)[1].strip())
-                            # Convert to dBm if needed
-                            if signal_val > 0:
-                                signal_dbm = signal_val - 256 if signal_val > 63 else signal_val - 100
-                            else:
-                                signal_dbm = signal_val
-                            result["signal_dbm"] = signal_dbm
-                            result["signal_percent"] = max(0, min(100, int((signal_dbm + 90) * 100 / 60)))
-                        except ValueError:
-                            pass
-
-        except Exception as e:
-            logger.debug(f"Failed to get host WiFi info: {e}")
-
-    except ImportError:
-        result["error"] = "Docker SDK not installed"
-    except Exception as e:
-        logger.warning(f"Failed to get host WiFi info: {e}")
-        result["error"] = str(e)
-
-    # Only cache if we got valid data
-    if result.get("connected"):
-        _set_cached("host_wifi", result)
+    # Cache results (even if no WiFi - avoids repeated checks)
+    _set_cached("host_wifi", result)
 
     return result
 
@@ -1191,12 +1222,10 @@ async def scan_host_wifi_networks() -> dict:
     """
     Scan for available WiFi networks on the Docker host.
 
-    Runs nmcli through a privileged container to access host WiFi scanning.
+    Uses the host-tools sidecar container for instant execution.
     Returns list of networks with SSID, signal strength, and security type.
     """
     import logging
-    import re
-
     logger = logging.getLogger(__name__)
 
     result = {
@@ -1205,79 +1234,56 @@ async def scan_host_wifi_networks() -> dict:
         "error": None,
     }
 
-    try:
-        import docker
-        client = docker.from_env()
+    # nmcli is pre-installed in host-tools container
+    script = 'nmcli -t -f SSID,SIGNAL,SECURITY device wifi list 2>/dev/null || echo "SCAN_FAILED"'
 
-        # Run nmcli to scan for WiFi networks
-        # Using alpine with networkmanager installed
-        script = """
-            apk add --no-cache networkmanager >/dev/null 2>&1
-            nmcli -t -f SSID,SIGNAL,SECURITY device wifi list 2>/dev/null || echo "SCAN_FAILED"
-        """
+    success, output_str = _exec_host_command(script)
 
-        try:
-            output = client.containers.run(
-                "alpine:latest",
-                command=["sh", "-c", script],
-                network_mode="host",
-                privileged=True,
-                remove=True,
-                volumes={"/var/run/dbus": {"bind": "/var/run/dbus", "mode": "rw"}},
-            )
-            output_str = output.decode("utf-8").strip()
+    if not success:
+        result["error"] = output_str
+        return result
 
-            if "SCAN_FAILED" in output_str or not output_str:
-                result["error"] = "WiFi scan failed - no wireless interface available"
-                return result
+    if "SCAN_FAILED" in output_str or not output_str:
+        result["error"] = "WiFi scan failed - no wireless interface available"
+        return result
 
-            # Parse nmcli output: SSID:SIGNAL:SECURITY
-            networks = []
-            seen_ssids = set()
+    # Parse nmcli output: SSID:SIGNAL:SECURITY
+    networks = []
+    seen_ssids = set()
 
-            for line in output_str.split("\n"):
-                if not line.strip() or line.startswith("SCAN_FAILED"):
-                    continue
+    for line in output_str.split("\n"):
+        if not line.strip() or line.startswith("SCAN_FAILED"):
+            continue
 
-                parts = line.split(":")
-                if len(parts) >= 2:
-                    ssid = parts[0].strip()
-                    # Skip empty SSIDs (hidden networks) and duplicates
-                    if not ssid or ssid in seen_ssids:
-                        continue
+        parts = line.split(":")
+        if len(parts) >= 2:
+            ssid = parts[0].strip()
+            # Skip empty SSIDs (hidden networks) and duplicates
+            if not ssid or ssid in seen_ssids:
+                continue
 
-                    seen_ssids.add(ssid)
+            seen_ssids.add(ssid)
 
-                    try:
-                        signal = int(parts[1]) if parts[1] else 0
-                    except ValueError:
-                        signal = 0
+            try:
+                signal = int(parts[1]) if parts[1] else 0
+            except ValueError:
+                signal = 0
 
-                    security = parts[2].strip() if len(parts) > 2 else ""
-                    # Normalize security display
-                    if not security or security == "--":
-                        security = "Open"
+            security = parts[2].strip() if len(parts) > 2 else ""
+            # Normalize security display
+            if not security or security == "--":
+                security = "Open"
 
-                    networks.append({
-                        "ssid": ssid,
-                        "signal_percent": signal,
-                        "security": security,
-                    })
+            networks.append({
+                "ssid": ssid,
+                "signal_percent": signal,
+                "security": security,
+            })
 
-            # Sort by signal strength (strongest first)
-            networks.sort(key=lambda x: x["signal_percent"], reverse=True)
-            result["networks"] = networks
-            result["success"] = True
-
-        except Exception as e:
-            logger.warning(f"Failed to scan WiFi networks: {e}")
-            result["error"] = str(e)
-
-    except ImportError:
-        result["error"] = "Docker SDK not installed"
-    except Exception as e:
-        logger.warning(f"Failed to scan WiFi networks: {e}")
-        result["error"] = str(e)
+    # Sort by signal strength (strongest first)
+    networks.sort(key=lambda x: x["signal_percent"], reverse=True)
+    result["networks"] = networks
+    result["success"] = True
 
     return result
 
@@ -1294,7 +1300,7 @@ async def connect_host_wifi(request: WifiConnectRequest) -> dict:
     """
     Connect the Docker host to a WiFi network.
 
-    Runs nmcli through a privileged container to connect the host to WiFi.
+    Uses the host-tools sidecar container for instant execution.
     Requires the SSID and optionally a password for secured networks.
     """
     import logging
@@ -1317,73 +1323,43 @@ async def connect_host_wifi(request: WifiConnectRequest) -> dict:
     # Log the connection attempt (without password)
     logger.info(f"Attempting to connect host WiFi to SSID: {ssid}")
 
-    try:
-        import docker
-        client = docker.from_env()
+    # Build nmcli command - use shlex.quote for safe escaping
+    safe_ssid = shlex.quote(ssid)
 
-        # Build nmcli command - use shlex.quote for safe escaping
-        safe_ssid = shlex.quote(ssid)
+    if request.password:
+        # For secured networks
+        safe_password = shlex.quote(request.password)
+        script = f"nmcli device wifi connect {safe_ssid} password {safe_password} 2>&1"
+    else:
+        # For open networks
+        script = f"nmcli device wifi connect {safe_ssid} 2>&1"
 
-        if request.password:
-            # For secured networks
-            safe_password = shlex.quote(request.password)
-            nmcli_cmd = f"nmcli device wifi connect {safe_ssid} password {safe_password}"
+    success, output_str = _exec_host_command(script, timeout=30)
+
+    if not success:
+        # Parse common nmcli errors
+        if "secrets were required" in output_str.lower() or "no secrets" in output_str.lower():
+            result["error"] = "Password required for this network"
+        elif "not found" in output_str.lower():
+            result["error"] = f"Network '{ssid}' not found"
+        elif "invalid" in output_str.lower():
+            result["error"] = "Invalid password"
         else:
-            # For open networks
-            nmcli_cmd = f"nmcli device wifi connect {safe_ssid}"
+            result["error"] = output_str
+        return result
 
-        script = f"""
-            apk add --no-cache networkmanager >/dev/null 2>&1
-            {nmcli_cmd} 2>&1
-        """
-
-        try:
-            output = client.containers.run(
-                "alpine:latest",
-                command=["sh", "-c", script],
-                network_mode="host",
-                privileged=True,
-                remove=True,
-                volumes={"/var/run/dbus": {"bind": "/var/run/dbus", "mode": "rw"}},
-            )
-            output_str = output.decode("utf-8").strip()
-
-            # Check for success indicators
-            if "successfully activated" in output_str.lower() or "connection successfully activated" in output_str.lower():
-                result["success"] = True
-                result["message"] = f"Successfully connected to {ssid}"
-                logger.info(f"Successfully connected host WiFi to: {ssid}")
-            elif "error" in output_str.lower():
-                result["error"] = output_str
-                logger.warning(f"WiFi connection failed: {output_str}")
-            else:
-                # Assume success if no explicit error
-                result["success"] = True
-                result["message"] = f"Connection initiated to {ssid}"
-
-        except docker.errors.ContainerError as e:
-            error_output = e.stderr.decode("utf-8") if e.stderr else str(e)
-            logger.warning(f"WiFi connection container error: {error_output}")
-
-            # Parse common nmcli errors
-            if "secrets were required" in error_output.lower() or "no secrets" in error_output.lower():
-                result["error"] = "Password required for this network"
-            elif "not found" in error_output.lower():
-                result["error"] = f"Network '{ssid}' not found"
-            elif "invalid" in error_output.lower():
-                result["error"] = "Invalid password"
-            else:
-                result["error"] = error_output
-
-        except Exception as e:
-            logger.warning(f"Failed to connect to WiFi: {e}")
-            result["error"] = str(e)
-
-    except ImportError:
-        result["error"] = "Docker SDK not installed"
-    except Exception as e:
-        logger.warning(f"Failed to connect to WiFi: {e}")
-        result["error"] = str(e)
+    # Check for success indicators
+    if "successfully activated" in output_str.lower() or "connection successfully activated" in output_str.lower():
+        result["success"] = True
+        result["message"] = f"Successfully connected to {ssid}"
+        logger.info(f"Successfully connected host WiFi to: {ssid}")
+    elif "error" in output_str.lower():
+        result["error"] = output_str
+        logger.warning(f"WiFi connection failed: {output_str}")
+    else:
+        # Assume success if no explicit error
+        result["success"] = True
+        result["message"] = f"Connection initiated to {ssid}"
 
     return result
 
@@ -1401,67 +1377,41 @@ async def list_host_saved_wifi() -> dict:
     """
     List saved WiFi network profiles on the Docker host.
 
-    Runs nmcli through a privileged container to list saved connections.
+    Uses the host-tools sidecar container for instant execution.
     """
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     result = {
         "success": False,
         "networks": [],
         "error": None,
     }
 
-    try:
-        import docker
-        client = docker.from_env()
+    script = 'nmcli -t -f NAME,TYPE,AUTOCONNECT connection show 2>/dev/null || echo "LIST_FAILED"'
 
-        script = """
-            apk add --no-cache networkmanager >/dev/null 2>&1
-            nmcli -t -f NAME,TYPE,AUTOCONNECT connection show 2>/dev/null || echo "LIST_FAILED"
-        """
+    success, output_str = _exec_host_command(script)
 
-        try:
-            output = client.containers.run(
-                "alpine:latest",
-                command=["sh", "-c", script],
-                network_mode="host",
-                privileged=True,
-                remove=True,
-                volumes={"/var/run/dbus": {"bind": "/var/run/dbus", "mode": "rw"}},
-            )
-            output_str = output.decode("utf-8").strip()
+    if not success:
+        result["error"] = output_str
+        return result
 
-            if "LIST_FAILED" in output_str:
-                result["error"] = "Failed to list saved networks"
-                return result
+    if "LIST_FAILED" in output_str:
+        result["error"] = "Failed to list saved networks"
+        return result
 
-            networks = []
-            for line in output_str.split("\n"):
-                if not line.strip() or "LIST_FAILED" in line:
-                    continue
+    networks = []
+    for line in output_str.split("\n"):
+        if not line.strip() or "LIST_FAILED" in line:
+            continue
 
-                parts = line.split(":")
-                if len(parts) >= 3 and parts[1] == "802-11-wireless":
-                    networks.append({
-                        "name": parts[0],
-                        "ssid": parts[0],
-                        "auto_connect": parts[2].lower() == "yes",
-                    })
+        parts = line.split(":")
+        if len(parts) >= 3 and parts[1] == "802-11-wireless":
+            networks.append({
+                "name": parts[0],
+                "ssid": parts[0],
+                "auto_connect": parts[2].lower() == "yes",
+            })
 
-            result["networks"] = networks
-            result["success"] = True
-
-        except Exception as e:
-            logger.warning(f"Failed to list saved WiFi networks: {e}")
-            result["error"] = str(e)
-
-    except ImportError:
-        result["error"] = "Docker SDK not installed"
-    except Exception as e:
-        logger.warning(f"Failed to list saved WiFi networks: {e}")
-        result["error"] = str(e)
+    result["networks"] = networks
+    result["success"] = True
 
     return result
 
@@ -1471,6 +1421,7 @@ async def add_host_wifi(request: WifiAddRequest) -> dict:
     """
     Add a known WiFi network to the Docker host for auto-connect.
 
+    Uses the host-tools sidecar container for instant execution.
     Creates a saved WiFi connection profile that will automatically
     connect when the network becomes available.
     """
@@ -1492,59 +1443,34 @@ async def add_host_wifi(request: WifiAddRequest) -> dict:
 
     logger.info(f"Adding known WiFi network to host: {ssid}")
 
-    try:
-        import docker
-        client = docker.from_env()
+    safe_ssid = shlex.quote(ssid)
+    safe_password = shlex.quote(request.password)
+    auto_connect = "yes" if request.auto_connect else "no"
 
-        safe_ssid = shlex.quote(ssid)
-        safe_password = shlex.quote(request.password)
-        auto_connect = "yes" if request.auto_connect else "no"
+    script = (
+        f"nmcli connection add type wifi con-name {safe_ssid} ssid {safe_ssid} "
+        f"wifi-sec.key-mgmt wpa-psk wifi-sec.psk {safe_password} "
+        f"connection.autoconnect {auto_connect} 2>&1"
+    )
 
-        script = f"""
-            apk add --no-cache networkmanager >/dev/null 2>&1
-            nmcli connection add type wifi con-name {safe_ssid} ssid {safe_ssid} \\
-                wifi-sec.key-mgmt wpa-psk wifi-sec.psk {safe_password} \\
-                connection.autoconnect {auto_connect} 2>&1
-        """
+    success, output_str = _exec_host_command(script)
 
-        try:
-            output = client.containers.run(
-                "alpine:latest",
-                command=["sh", "-c", script],
-                network_mode="host",
-                privileged=True,
-                remove=True,
-                volumes={"/var/run/dbus": {"bind": "/var/run/dbus", "mode": "rw"}},
-            )
-            output_str = output.decode("utf-8").strip()
+    if not success:
+        if "already exists" in output_str.lower():
+            result["error"] = f"Network '{ssid}' already exists. Delete it first to update."
+        else:
+            result["error"] = output_str
+        return result
 
-            if "successfully added" in output_str.lower() or "connection" in output_str.lower():
-                result["success"] = True
-                result["message"] = f"WiFi network '{ssid}' added successfully. It will auto-connect when available."
-                logger.info(f"Successfully added WiFi network to host: {ssid}")
-            elif "already exists" in output_str.lower():
-                result["error"] = f"Network '{ssid}' already exists. Delete it first to update."
-            else:
-                result["error"] = output_str or "Failed to add network"
-                logger.warning(f"Failed to add WiFi network: {output_str}")
-
-        except docker.errors.ContainerError as e:
-            error_output = e.stderr.decode("utf-8") if e.stderr else str(e)
-            logger.warning(f"WiFi add container error: {error_output}")
-            if "already exists" in error_output.lower():
-                result["error"] = f"Network '{ssid}' already exists. Delete it first to update."
-            else:
-                result["error"] = error_output
-
-        except Exception as e:
-            logger.warning(f"Failed to add WiFi network: {e}")
-            result["error"] = str(e)
-
-    except ImportError:
-        result["error"] = "Docker SDK not installed"
-    except Exception as e:
-        logger.warning(f"Failed to add WiFi network: {e}")
-        result["error"] = str(e)
+    if "successfully added" in output_str.lower() or "connection" in output_str.lower():
+        result["success"] = True
+        result["message"] = f"WiFi network '{ssid}' added successfully. It will auto-connect when available."
+        logger.info(f"Successfully added WiFi network to host: {ssid}")
+    elif "already exists" in output_str.lower():
+        result["error"] = f"Network '{ssid}' already exists. Delete it first to update."
+    else:
+        result["error"] = output_str or "Failed to add network"
+        logger.warning(f"Failed to add WiFi network: {output_str}")
 
     return result
 
@@ -1560,6 +1486,7 @@ async def delete_host_wifi(request: WifiDeleteRequest) -> dict:
     """
     Delete a saved WiFi network from the Docker host.
 
+    Uses the host-tools sidecar container for instant execution.
     Removes a previously saved WiFi connection profile.
     """
     import logging
@@ -1580,55 +1507,27 @@ async def delete_host_wifi(request: WifiDeleteRequest) -> dict:
 
     logger.info(f"Deleting WiFi network from host: {name}")
 
-    try:
-        import docker
-        client = docker.from_env()
+    safe_name = shlex.quote(name)
+    script = f"nmcli connection delete {safe_name} 2>&1"
 
-        safe_name = shlex.quote(name)
+    success, output_str = _exec_host_command(script)
 
-        script = f"""
-            apk add --no-cache networkmanager >/dev/null 2>&1
-            nmcli connection delete {safe_name} 2>&1
-        """
+    if not success:
+        if "not found" in output_str.lower():
+            result["error"] = f"Network '{name}' not found"
+        else:
+            result["error"] = output_str
+        return result
 
-        try:
-            output = client.containers.run(
-                "alpine:latest",
-                command=["sh", "-c", script],
-                network_mode="host",
-                privileged=True,
-                remove=True,
-                volumes={"/var/run/dbus": {"bind": "/var/run/dbus", "mode": "rw"}},
-            )
-            output_str = output.decode("utf-8").strip()
-
-            if "successfully deleted" in output_str.lower() or "deleted" in output_str.lower():
-                result["success"] = True
-                result["message"] = f"WiFi network '{name}' deleted successfully."
-                logger.info(f"Successfully deleted WiFi network from host: {name}")
-            elif "not found" in output_str.lower():
-                result["error"] = f"Network '{name}' not found"
-            else:
-                result["error"] = output_str or "Failed to delete network"
-                logger.warning(f"Failed to delete WiFi network: {output_str}")
-
-        except docker.errors.ContainerError as e:
-            error_output = e.stderr.decode("utf-8") if e.stderr else str(e)
-            logger.warning(f"WiFi delete container error: {error_output}")
-            if "not found" in error_output.lower():
-                result["error"] = f"Network '{name}' not found"
-            else:
-                result["error"] = error_output
-
-        except Exception as e:
-            logger.warning(f"Failed to delete WiFi network: {e}")
-            result["error"] = str(e)
-
-    except ImportError:
-        result["error"] = "Docker SDK not installed"
-    except Exception as e:
-        logger.warning(f"Failed to delete WiFi network: {e}")
-        result["error"] = str(e)
+    if "successfully deleted" in output_str.lower() or "deleted" in output_str.lower():
+        result["success"] = True
+        result["message"] = f"WiFi network '{name}' deleted successfully."
+        logger.info(f"Successfully deleted WiFi network from host: {name}")
+    elif "not found" in output_str.lower():
+        result["error"] = f"Network '{name}' not found"
+    else:
+        result["error"] = output_str or "Failed to delete network"
+        logger.warning(f"Failed to delete WiFi network: {output_str}")
 
     return result
 

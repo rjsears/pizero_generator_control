@@ -141,6 +141,24 @@ services:
       - genmaster
 
   # ===========================================================================
+  # Host Tools Sidecar (for accessing host network info)
+  # ===========================================================================
+  # Persistent container with network tools pre-installed.
+  # Used by GenMaster for WiFi status, network scanning, etc.
+  # Much faster than spinning up a new container for each command.
+  host-tools:
+    build:
+      context: ./host-tools
+      dockerfile: Dockerfile
+    container_name: genmaster_host_tools
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    # Keep container tiny - it just sleeps waiting for exec commands
+    mem_limit: 32m
+    memswap_limit: 32m
+
+  # ===========================================================================
   # Certbot (Let's Encrypt SSL)
   # ===========================================================================
   certbot:
