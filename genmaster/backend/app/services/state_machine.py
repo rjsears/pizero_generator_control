@@ -248,6 +248,39 @@ class StateMachine:
                 f"slave armed: {result['slave_armed']}"
             )
 
+            # Check if auto-arm should trigger on startup
+            async with AsyncSessionLocal() as db:
+                config = await self._get_config(db)
+                state = await self._get_state(db)
+
+                if config.auto_arm_relay_on_connect:
+                    if state.manual_disarm_active:
+                        logger.info(
+                            "Auto-arm enabled but manual_disarm_active is set - "
+                            "skipping auto-arm on startup (respecting user's manual disarm)"
+                        )
+                    elif result["slave_armed"]:
+                        logger.info("Auto-arm enabled but relay already armed - no action needed")
+                    else:
+                        logger.info("Auto-arm enabled on startup - arming relay")
+                        arm_response = await slave_client.arm_relay()
+                        if arm_response.success:
+                            state.slave_relay_armed = True
+                            await db.commit()
+                            logger.info("Auto-armed relay on startup")
+                            await self.log_event(
+                                "RELAY_AUTO_ARMED",
+                                {"reason": "startup"},
+                            )
+                            result["slave_armed"] = True
+                        else:
+                            logger.warning(f"Auto-arm on startup failed: {arm_response.error}")
+                            await self.log_event(
+                                "RELAY_AUTO_ARM_FAILED",
+                                {"error": arm_response.error, "reason": "startup"},
+                                severity="WARNING",
+                            )
+
         except Exception as e:
             result["message"] = f"Reconciliation error: {e}"
             logger.error(f"Reconciliation failed: {e}")
