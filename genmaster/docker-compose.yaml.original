@@ -103,6 +103,7 @@ services:
       - genmaster_logs:/app/logs
       - genmaster_data:/app/data
       - ./nginx:/app/nginx
+      - ./.env:/config/.env:rw  # Mount .env for UI editing
     extra_hosts:
       - "${GENSLAVE_HOSTNAME:-genslave}:${GENSLAVE_IP:-127.0.0.1}"
     networks:
