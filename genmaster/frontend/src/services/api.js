@@ -154,8 +154,9 @@ export const genslaveApi = {
   // Test connection
   testConnection: () => api.post('/health/test-slave'),
   // Relay arm/disarm control (proxied through GenMaster to GenSlave)
-  arm: () => api.post('/health/relay/arm'),
-  disarm: () => api.post('/health/relay/disarm'),
+  // Longer timeout for arm/disarm since it goes through GenSlave
+  arm: () => api.post('/health/relay/arm', null, { timeout: 15000 }),
+  disarm: () => api.post('/health/relay/disarm', null, { timeout: 15000 }),
   getRelayState: () => api.get('/health/relay/state'),
   // Cached status endpoints (instant response from background polling)
   getStatusCached: () => api.get('/health/slave/cached'),
