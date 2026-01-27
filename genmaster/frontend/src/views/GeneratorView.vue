@@ -1709,30 +1709,41 @@ watch(() => generatorStore.isRunning, (isRunning) => {
 
 // Lifecycle
 onMounted(async () => {
-  // Fetch relay state and generator state immediately using cached endpoints
+  // =========================================================================
+  // PHASE 1: Critical data only (cached endpoints - instant response)
+  // =========================================================================
   fetchRelayState()
   generatorStore.fetchState()
-  systemStore.fetchSlaveStatusCached()  // Start with cached status
-  fetchHostWifi()  // Get initial WiFi signal
+  systemStore.fetchSlaveStatusCached()
 
+  // =========================================================================
+  // PHASE 2: Essential data (staggered to avoid connection saturation)
+  // Browser limits to ~6 concurrent connections - don't overwhelm it
+  // =========================================================================
   try {
+    // First batch: Generator-critical data (max 3 concurrent)
     await Promise.all([
       generatorStore.fetchStats(),
-      systemStore.fetchHealth(),
-      systemStore.fetchSlaveHealth(),
-      systemStore.fetchVictronStatus(),
       fetchFuelUsage(),
       fetchGeneratorInfo(),
-      fetchExerciseSchedule(),
     ])
     stats.value = generatorStore.stats
-
-    // Initialize runtime timer if generator is already running
     updateRuntimeTimer()
   } catch (err) {
-    console.error('Failed to load data:', err)
+    console.error('Failed to load generator data:', err)
   } finally {
     loading.value = false
+  }
+
+  // Second batch: System health (after generator data loads)
+  try {
+    await Promise.all([
+      systemStore.fetchHealth(),
+      fetchExerciseSchedule(),
+      fetchRuntimeLimitsStatus(),
+    ])
+  } catch (err) {
+    console.error('Failed to load system health:', err)
   }
 
   // Load override state
@@ -1757,8 +1768,21 @@ onMounted(async () => {
     // Use defaults
   }
 
-  // Load runtime limits status (lockout/cooldown state)
-  await fetchRuntimeLimitsStatus()
+  // =========================================================================
+  // PHASE 3: Non-critical/slow data (deferred - these can spawn containers)
+  // Load after 3 seconds to avoid blocking critical UI
+  // =========================================================================
+  setTimeout(() => {
+    // These endpoints may spawn Docker containers and take 5+ seconds
+    // Don't await - fire and forget
+    systemStore.fetchSlaveHealth().catch(() => {})
+    systemStore.fetchVictronStatus().catch(() => {})
+    fetchHostWifi()
+  }, 3000)
+
+  // =========================================================================
+  // Polling intervals
+  // =========================================================================
 
   // Fast refresh every 5 seconds using cached endpoints (matches backend polling)
   // Fire-and-forget with overlap protection - keeps UI responsive
@@ -1777,19 +1801,24 @@ onMounted(async () => {
   }, 5000)
 
   // Slow refresh every 30 seconds for less critical data
-  // Fire-and-forget with overlap protection
+  // Staggered to avoid connection saturation
   slowRefreshInterval = setInterval(() => {
     if (slowPollInProgress) return  // Skip if previous poll still running
     slowPollInProgress = true
 
+    // Batch 1: Fast endpoints
     Promise.all([
       generatorStore.fetchStats(),
-      systemStore.fetchHealth(),
-      systemStore.fetchVictronStatus(),
       fetchFuelUsage(),
       fetchRuntimeLimitsStatus(),
-      fetchHostWifi(),
-    ]).finally(() => {
+    ]).then(() => {
+      // Batch 2: Potentially slow endpoints (after fast ones complete)
+      return Promise.all([
+        systemStore.fetchHealth(),
+        systemStore.fetchVictronStatus(),
+        fetchHostWifi(),
+      ])
+    }).finally(() => {
       slowPollInProgress = false
     })
   }, 30000)
