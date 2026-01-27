@@ -2823,6 +2823,7 @@ EOF
       - genmaster_data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
       - ./nginx:/app/nginx
+      - ./.env:/config/.env:rw
     depends_on:
       db:
         condition: service_healthy
