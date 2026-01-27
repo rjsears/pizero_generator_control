@@ -59,7 +59,9 @@ def _find_env_file() -> Path:
     return Path("/config/.env")
 
 ENV_FILE_PATH = _find_env_file()
-ENV_BACKUP_DIR = ENV_FILE_PATH.parent / "env_backups"
+# Store backups in /app/data (a mounted volume) rather than next to the .env file
+# This allows backups to work even when .env is mounted as a single file
+ENV_BACKUP_DIR = Path("/app/data/env_backups")
 
 
 # ============================================================================
