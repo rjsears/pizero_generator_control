@@ -90,6 +90,15 @@ services:
       - TZ=${TIMEZONE:-America/Los_Angeles}
       - GENSLAVE_IP=${GENSLAVE_IP:-}
       - GENSLAVE_HOSTNAME=${GENSLAVE_HOSTNAME:-genslave}
+      - AUTO_ARM_RELAY_ON_CONNECT=${AUTO_ARM_RELAY_ON_CONNECT:-false}
+      # Generator Info (optional - can be configured via web UI)
+      - GEN_INFO_MANUFACTURER=${GEN_INFO_MANUFACTURER:-}
+      - GEN_INFO_MODEL_NUMBER=${GEN_INFO_MODEL_NUMBER:-}
+      - GEN_INFO_SERIAL_NUMBER=${GEN_INFO_SERIAL_NUMBER:-}
+      - GEN_INFO_FUEL_TYPE=${GEN_INFO_FUEL_TYPE:-}
+      - GEN_INFO_LOAD_EXPECTED=${GEN_INFO_LOAD_EXPECTED:-}
+      - GEN_INFO_FUEL_CONSUMPTION_50=${GEN_INFO_FUEL_CONSUMPTION_50:-}
+      - GEN_INFO_FUEL_CONSUMPTION_100=${GEN_INFO_FUEL_CONSUMPTION_100:-}
     volumes:
       - genmaster_logs:/app/logs
       - genmaster_data:/app/data
