@@ -813,14 +813,20 @@ class StateMachine:
                             state.slave_relay_armed = True
                         # else: states match, no update needed
 
-                # Check if connection was restored
-                if state.slave_connection_status == "disconnected":
+                # Check if connection was restored or established for the first time
+                if state.slave_connection_status in ("disconnected", "unknown"):
+                    was_disconnected = state.slave_connection_status == "disconnected"
                     state.slave_connection_status = "connected"
-                    logger.info("GenSlave connection restored")
-                    await self.log_event("COMMUNICATION_RESTORED", {"latency_ms": latency_ms})
-                    await self._send_webhook("communication.restored", {})
 
-                    # Check if auto-arm should trigger
+                    if was_disconnected:
+                        logger.info("GenSlave connection restored")
+                        await self.log_event("COMMUNICATION_RESTORED", {"latency_ms": latency_ms})
+                        await self._send_webhook("communication.restored", {})
+                    else:
+                        logger.info("GenSlave connection established (first connect)")
+                        await self.log_event("COMMUNICATION_ESTABLISHED", {"latency_ms": latency_ms})
+
+                    # Check if auto-arm should trigger (on restore OR initial connect)
                     if config.auto_arm_relay_on_connect and not state.manual_disarm_active:
                         logger.info("Auto-arm enabled and no manual disarm - triggering auto-arm")
                         # Commit current state before auto-arm (connection status update)
@@ -833,18 +839,17 @@ class StateMachine:
                             "skipping auto-arm (respecting user's manual disarm)"
                         )
 
-                    relay_status = "ENABLED" if state.slave_relay_armed else "DISABLED"
-                    relay_warning = "" if state.slave_relay_armed else "WARNING: Generator relay is currently disabled."
-                    await self._trigger_system_notification(
-                        "genslave_comm_restored",
-                        {
-                            "latency_ms": latency_ms,
-                            "relay_status": relay_status,
-                            "relay_warning": relay_warning,
-                        },
-                    )
-                elif state.slave_connection_status == "unknown":
-                    state.slave_connection_status = "connected"
+                    if was_disconnected:
+                        relay_status = "ENABLED" if state.slave_relay_armed else "DISABLED"
+                        relay_warning = "" if state.slave_relay_armed else "WARNING: Generator relay is currently disabled."
+                        await self._trigger_system_notification(
+                            "genslave_comm_restored",
+                            {
+                                "latency_ms": latency_ms,
+                                "relay_status": relay_status,
+                                "relay_warning": relay_warning,
+                            },
+                        )
 
             else:
                 state.missed_heartbeat_count += 1
