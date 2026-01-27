@@ -198,13 +198,14 @@ export const scheduleApi = {
 export const containersApi = {
   list: (all = true) => api.get('/containers/', { params: { all } }),
   get: (name) => api.get(`/containers/${name}`),
-  stats: () => api.get('/containers/stats'),
+  // Stats endpoint queries Docker for each container - can be slow with many containers
+  stats: () => api.get('/containers/stats', { timeout: 30000 }),
   health: () => api.get('/containers/health'),
-  start: (name) => api.post(`/containers/${name}/start`),
-  stop: (name) => api.post(`/containers/${name}/stop`),
-  restart: (name) => api.post(`/containers/${name}/restart`),
-  recreate: (name, pull = false) => api.post(`/containers/${name}/recreate`, null, { params: { pull } }),
-  logs: (name, params) => api.get(`/containers/${name}/logs`, { params }),
+  start: (name) => api.post(`/containers/${name}/start`, null, { timeout: 30000 }),
+  stop: (name) => api.post(`/containers/${name}/stop`, null, { timeout: 30000 }),
+  restart: (name) => api.post(`/containers/${name}/restart`, null, { timeout: 30000 }),
+  recreate: (name, pull = false) => api.post(`/containers/${name}/recreate`, null, { params: { pull }, timeout: 60000 }),
+  logs: (name, params) => api.get(`/containers/${name}/logs`, { params, timeout: 15000 }),
 }
 
 export const notificationsApi = {
