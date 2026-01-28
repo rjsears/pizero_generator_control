@@ -13,7 +13,7 @@ https://github.com/rjsears
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import api from '../services/api'
+import api, { containersApi } from '../services/api'
 
 export const useContainerStore = defineStore('containers', () => {
   // State
@@ -66,7 +66,7 @@ export const useContainerStore = defineStore('containers', () => {
 
   async function fetchStats() {
     try {
-      const response = await api.get('/containers/stats')
+      const response = await containersApi.stats()
       stats.value = response.data
     } catch (err) {
       console.error('Failed to fetch container stats:', err)
@@ -75,7 +75,7 @@ export const useContainerStore = defineStore('containers', () => {
 
   async function startContainer(name) {
     try {
-      await api.post(`/containers/${name}/start`)
+      await containersApi.start(name)
       await fetchContainers()
       return true
     } catch (err) {
@@ -86,7 +86,7 @@ export const useContainerStore = defineStore('containers', () => {
 
   async function stopContainer(name) {
     try {
-      await api.post(`/containers/${name}/stop`)
+      await containersApi.stop(name)
       await fetchContainers()
       return true
     } catch (err) {
@@ -97,7 +97,7 @@ export const useContainerStore = defineStore('containers', () => {
 
   async function restartContainer(name) {
     try {
-      await api.post(`/containers/${name}/restart`)
+      await containersApi.restart(name)
       await fetchContainers()
       return true
     } catch (err) {
@@ -121,9 +121,7 @@ export const useContainerStore = defineStore('containers', () => {
 
   async function recreateContainer(name, pullImage = false) {
     try {
-      const response = await api.post(`/containers/${name}/recreate`, null, {
-        params: { pull_image: pullImage }
-      })
+      const response = await containersApi.recreate(name, pullImage)
       await fetchContainers()
       return response.data
     } catch (err) {
@@ -147,7 +145,7 @@ export const useContainerStore = defineStore('containers', () => {
       if (options.since) {
         params.since = options.since
       }
-      const response = await api.get(`/containers/${name}/logs`, { params })
+      const response = await containersApi.logs(name, params)
       return response.data.logs
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to fetch logs'
