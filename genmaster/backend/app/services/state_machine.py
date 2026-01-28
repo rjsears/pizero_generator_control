@@ -862,7 +862,10 @@ class StateMachine:
                         await self.log_event("COMMUNICATION_ESTABLISHED", {"latency_ms": latency_ms})
 
                     # Check if auto-arm should trigger (on restore OR initial connect)
-                    if config.auto_arm_relay_on_connect and not state.manual_disarm_active:
+                    auto_arm_will_trigger = (
+                        config.auto_arm_relay_on_connect and not state.manual_disarm_active
+                    )
+                    if auto_arm_will_trigger:
                         logger.info("Auto-arm enabled and no manual disarm - triggering auto-arm")
                         # Commit current state before auto-arm (connection status update)
                         await db.commit()
@@ -875,8 +878,17 @@ class StateMachine:
                         )
 
                     if was_disconnected:
-                        relay_status = "ENABLED" if state.slave_relay_armed else "DISABLED"
-                        relay_warning = "" if state.slave_relay_armed else "WARNING: Generator relay is currently disabled."
+                        # Determine relay status for notification
+                        # If auto-arm is triggering, report as ENABLED (it will be armed momentarily)
+                        if auto_arm_will_trigger:
+                            relay_status = "ENABLED"
+                            relay_warning = "Relay has been automatically re-armed."
+                        elif state.slave_relay_armed:
+                            relay_status = "ENABLED"
+                            relay_warning = ""
+                        else:
+                            relay_status = "DISABLED"
+                            relay_warning = "WARNING: Generator relay is currently disabled."
                         await self._trigger_system_notification(
                             "genslave_comm_restored",
                             {
