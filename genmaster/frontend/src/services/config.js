@@ -34,7 +34,7 @@ export default {
    * @returns {Promise<Object>}
    */
   getOverride() {
-    return api.get('/override')
+    return api.get('/override/status')
   },
 
   /**

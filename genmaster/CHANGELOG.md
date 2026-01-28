@@ -5,6 +5,27 @@ All notable changes to the GenMaster project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-01-27
+
+### Added
+
+#### Override Notification Events
+- New system notification events for manual override enable/disable
+- `override_enabled`: Triggered when Victron override is enabled
+- `override_disabled`: Triggered when Victron override is disabled
+- Configurable in Settings → Notifications → System Notifications
+
+### Fixed
+
+- Fixed Victron override not persisting on page refresh (wrong API endpoint)
+- Fixed Victron override 422 error (missing `override_type` parameter)
+- Fixed notification target add/remove endpoints returning 405 error
+- Fixed container stats/logs timeout errors (store now uses extended timeouts)
+- Fixed env-config backup directory (now uses `/app/data/env_backups`)
+- Added `.env` mount to setup.sh generated docker-compose
+
+---
+
 ## [1.1.0] - 2026-01-26
 
 ### Added
