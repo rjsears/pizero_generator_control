@@ -1749,8 +1749,8 @@ onMounted(async () => {
 
   // Load override state
   try {
-    const override = await configService.getOverride()
-    overrideEnabled.value = override.enabled
+    const response = await configService.getOverride()
+    overrideEnabled.value = response.data?.enabled || false
   } catch {
     // Ignore errors
   }

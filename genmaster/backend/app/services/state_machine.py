@@ -674,6 +674,7 @@ class StateMachine:
 
             await self.log_event("OVERRIDE_ENABLED", {"type": override_type})
             await self._send_webhook("override.enabled", {"type": override_type})
+            await self._trigger_system_notification("override_enabled", {"type": override_type})
 
     async def disable_override(self) -> str:
         """
@@ -694,6 +695,7 @@ class StateMachine:
 
             await self.log_event("OVERRIDE_DISABLED", {"previous_type": previous_type})
             await self._send_webhook("override.disabled", {"previous_type": previous_type})
+            await self._trigger_system_notification("override_disabled", {"previous_type": previous_type})
 
             return previous_type
 
