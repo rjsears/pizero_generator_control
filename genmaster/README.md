@@ -119,6 +119,39 @@ Enable via environment variable:
 AUTO_ARM_RELAY_ON_CONNECT=true
 ```
 
+## Victron Override
+
+The Victron Override feature allows you to temporarily ignore the Victron Cerbo GX relay signal:
+
+- **Force Stop**: Prevents the generator from auto-starting even if Victron requests it
+- Toggle via the Generator page in the web UI
+- State persists across page refreshes and container restarts
+
+When override is enabled/disabled, system notifications can be sent to configured channels.
+
+## System Notifications
+
+GenMaster includes a comprehensive event-driven notification system. Configure notifications in **Settings → Notifications → System Notifications**.
+
+### Available Event Categories
+
+| Category | Events |
+|----------|--------|
+| Generator | Started, stopped, runtime limits, lockout |
+| GenSlave | Communication lost/restored, high CPU/memory/temperature |
+| Override | Override enabled, override disabled |
+| Container | Unhealthy, stopped, restarted, high CPU/memory |
+| SSL | Certificate expiring, expired, renewed |
+
+### Notification Channels
+
+Supports multiple notification services via Apprise:
+- Pushover, Telegram, Discord, Slack
+- Email (SMTP)
+- Webhooks (for n8n, Home Assistant, etc.)
+
+Configure channels in **Settings → Notifications → Channels**, then assign them to events.
+
 ## Environment Variables
 
 | Variable | Description | Default |
