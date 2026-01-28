@@ -1616,7 +1616,8 @@ async function executeExerciseRunNow() {
 async function handleOverrideToggle(enabled) {
   try {
     if (enabled) {
-      await configService.enableOverride()
+      // force_stop prevents auto-start from Victron signal
+      await configService.enableOverride({ override_type: 'force_stop' })
     } else {
       await configService.disableOverride()
     }
