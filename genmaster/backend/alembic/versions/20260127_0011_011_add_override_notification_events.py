@@ -1,7 +1,7 @@
 """Add override notification events.
 
-Revision ID: 20260127_0011
-Revises: 20260126_0010
+Revision ID: 011
+Revises: 010
 Create Date: 2026-01-27
 
 """
@@ -10,8 +10,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers
-revision = "20260127_0011"
-down_revision = "20260126_0010"
+revision = "011"
+down_revision = "010"
 branch_labels = None
 depends_on = None
 
