@@ -276,6 +276,66 @@ async def update_event(
     return await get_event(event_id, db)
 
 
+@router.post("/events/{event_id}/targets", response_model=NotificationTargetResponse)
+async def add_event_target(
+    event_id: int,
+    data: NotificationTargetCreate,
+    db: DbSession,
+    admin: AdminUser,
+) -> NotificationTargetResponse:
+    """Add a notification target to an event."""
+    event = await SystemNotificationEvent.get_by_id(db, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Create the target
+    target = SystemNotificationTarget(
+        event_id=event.id,
+        target_type=data.target_type.value if hasattr(data.target_type, 'value') else data.target_type,
+        channel_id=data.channel_id,
+        group_id=data.group_id,
+        escalation_level=data.escalation_level,
+        escalation_timeout_minutes=data.escalation_timeout_minutes,
+    )
+    db.add(target)
+    await db.commit()
+    await db.refresh(target)
+
+    return NotificationTargetResponse(
+        id=target.id,
+        target_type=target.target_type,
+        channel_id=target.channel_id,
+        group_id=target.group_id,
+        escalation_level=target.escalation_level,
+        escalation_timeout_minutes=target.escalation_timeout_minutes,
+        target_name=target.target_name,
+    )
+
+
+@router.delete("/events/{event_id}/targets/{target_id}")
+async def remove_event_target(
+    event_id: int,
+    target_id: int,
+    db: DbSession,
+    admin: AdminUser,
+) -> dict:
+    """Remove a notification target from an event."""
+    result = await db.execute(
+        select(SystemNotificationTarget).where(
+            SystemNotificationTarget.id == target_id,
+            SystemNotificationTarget.event_id == event_id,
+        )
+    )
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="Target not found")
+
+    await db.delete(target)
+    await db.commit()
+
+    return {"success": True, "message": "Target removed"}
+
+
 @router.post("/events/{event_id}/reset-template")
 async def reset_event_template(
     event_id: int,
