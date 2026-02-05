@@ -341,19 +341,26 @@ class StateMachine:
                         await self.log_event("COOLDOWN_CLEARED_MANUAL_START", {})
 
                 # Validate state transition
-                if not state.can_start_generator():
-                    if state.generator_running:
-                        raise ValueError("Generator is already running")
-                    if state.override_enabled and state.override_type == "force_stop":
+                # Note: force_stop override only blocks victron-triggered auto-starts,
+                # not manual/scheduled/exercise starts
+                is_auto_start = trigger == "victron"
+
+                # Check each condition individually for clearer error messages
+                if state.generator_running:
+                    raise ValueError("Generator is already running")
+                if state.slave_connection_status == "disconnected":
+                    raise ValueError("Cannot start - GenSlave is disconnected")
+                if state.runtime_lockout_active:
+                    raise ValueError(
+                        "Cannot start - runtime lockout is active. "
+                        "Clear the lockout first."
+                    )
+                # force_stop override only blocks automatic victron-triggered starts
+                if state.override_enabled and state.override_type == "force_stop":
+                    if is_auto_start:
                         raise ValueError("Cannot start - force_stop override is active")
-                    if state.slave_connection_status == "disconnected":
-                        raise ValueError("Cannot start - GenSlave is disconnected")
-                    if state.runtime_lockout_active:
-                        raise ValueError(
-                            "Cannot start - runtime lockout is active. "
-                            "Clear the lockout first."
-                        )
-                    raise ValueError("Generator cannot be started in current state")
+                    # Allow manual/scheduled/exercise starts even with force_stop
+                    logger.info(f"Allowing {trigger} start despite force_stop override")
 
                 # Turn on the relay via GenSlave
                 # GenSlave will reject if relay is not armed
