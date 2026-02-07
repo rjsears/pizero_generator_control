@@ -22,8 +22,8 @@ export default [
       },
     },
     rules: {
-      // Allow unused vars that start with underscore
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      // Warn on unused vars (not error) - existing codebase has many
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       // Vue specific
       'vue/multi-word-component-names': 'off',
       'vue/no-reserved-component-names': 'warn',
