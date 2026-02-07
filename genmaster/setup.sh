@@ -2785,6 +2785,8 @@ EOF
     cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
     container_name: ${GENMASTER_CONTAINER:-genmaster}
     restart: unless-stopped
+    privileged: true
+    user: root
     networks:
       - genmaster-internal
       - genmaster-external
@@ -2899,52 +2901,33 @@ EOF
         cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
 
   # ===========================================================================
-  # Tailscale VPN with HTTPS Support
+  # Tailscale VPN
   # ===========================================================================
-  # Provides private access via Tailscale network with automatic HTTPS certs.
-  # After startup:
-  #   1. Approve machine at: https://login.tailscale.com/admin/machines
-  #   2. Enable HTTPS at: https://login.tailscale.com/admin/dns
+  # Provides private access via Tailscale network.
+  # After startup, approve machine at: https://login.tailscale.com/admin/machines
   tailscale:
     image: tailscale/tailscale:latest
     container_name: genmaster_tailscale
     restart: always
     hostname: genmaster-tailscale
+    network_mode: host
     environment:
       - TS_AUTHKEY=${TAILSCALE_AUTH_KEY}
       - TS_HOSTNAME=${TAILSCALE_HOSTNAME}
       - TS_STATE_DIR=/var/lib/tailscale
-      - TS_USERSPACE=true
+      - TS_USERSPACE=false
       - TS_EXTRA_ARGS=--accept-routes
       - TS_ROUTES=${TAILSCALE_ROUTES}
       - TS_AUTH_ONCE=true
-      - TS_SERVE_CONFIG=/config/tailscale-serve.json
     volumes:
       - tailscale_state:/var/lib/tailscale
-      - ./tailscale-serve.json:/config/tailscale-serve.json:ro
     cap_add:
       - NET_ADMIN
-    networks:
-      - genmaster-external
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
 
 EOF
-
-        # Create Tailscale Serve configuration
-        # ${TS_CERT_DOMAIN} is expanded by Tailscale automatically
-        # Proxy to the actual HTTPS domain (not internal docker)
-        cat > "${SCRIPT_DIR}/tailscale-serve.json" << EOF
-{
-  "TCP": { "443": { "HTTPS": true } },
-  "Web": {
-    "\${TS_CERT_DOMAIN}:443": {
-      "Handlers": {
-        "/": { "Proxy": "https://${DOMAIN}:443" }
-      }
-    }
-  }
-}
-EOF
-        print_info "Created tailscale-serve.json (proxy to https://${DOMAIN}:443)"
     fi
 
     # Add Portainer if enabled

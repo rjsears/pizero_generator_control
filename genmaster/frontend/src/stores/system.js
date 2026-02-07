@@ -53,7 +53,7 @@ export const useSystemStore = defineStore('system', () => {
   const isSlaveStale = computed(() => slaveStale.value)
   const slaveError = computed(() => slaveLastError.value)
 
-  const victronInputActive = computed(() => victronStatus.value?.input_active || false)
+  const victronInputActive = computed(() => victronStatus.value?.signal_state || false)
   const victronLastChange = computed(() => victronStatus.value?.last_change || null)
 
   const overallHealth = computed(() => {
