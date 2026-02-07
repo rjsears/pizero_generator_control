@@ -20,7 +20,7 @@ Provides endpoints for:
 """
 
 import math
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy.future import select
@@ -511,7 +511,7 @@ async def discover_containers(db: DbSession) -> ContainerDiscoveryResponse:
                     configured=config is not None,
                 )
             )
-    except Exception as e:
+    except Exception:
         # Docker not available or error
         pass
 

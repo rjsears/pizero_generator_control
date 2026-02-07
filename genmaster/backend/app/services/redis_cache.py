@@ -414,9 +414,10 @@ async def get_cached_config() -> Optional[dict[str, Any]]:
     Returns:
         Config dictionary or None
     """
+    from sqlalchemy.future import select
+
     from app.database import AsyncSessionLocal
     from app.models import Config
-    from sqlalchemy.future import select
 
     cache = get_redis_cache()
 
@@ -477,9 +478,10 @@ async def get_cached_generator_info() -> Optional[dict[str, Any]]:
     Returns:
         GeneratorInfo dictionary or None
     """
+    from sqlalchemy.future import select
+
     from app.database import AsyncSessionLocal
     from app.models import GeneratorInfo
-    from sqlalchemy.future import select
 
     cache = get_redis_cache()
 
@@ -535,10 +537,12 @@ async def get_cached_session(token: str) -> Optional[dict[str, Any]]:
     Returns:
         Session dictionary with user_id, or None if not found/expired
     """
+    from datetime import datetime, timezone
+
+    from sqlalchemy.future import select
+
     from app.database import AsyncSessionLocal
     from app.models import Session
-    from sqlalchemy.future import select
-    from datetime import datetime, timezone
 
     cache = get_redis_cache()
 

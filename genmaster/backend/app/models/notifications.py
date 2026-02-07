@@ -23,7 +23,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
-
 # Association table for many-to-many relationship between groups and channels
 notification_group_channels = Table(
     "notification_group_channels",

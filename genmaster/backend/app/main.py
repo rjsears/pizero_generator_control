@@ -63,17 +63,19 @@ from app.routers import (
     notifications,
     override,
     schedule,
-    settings as settings_router,
     system,
     system_notifications,
     terminal,
 )
+from app.routers import (
+    settings as settings_router,
+)
 from app.services.exercise_scheduler import ExerciseSchedulerService
 from app.services.gpio_monitor import GPIOMonitor
 from app.services.metrics_service import get_metrics_service
+from app.services.redis_cache import get_redis_cache
 from app.services.scheduler import SchedulerService
 from app.services.slave_client import SlaveClient
-from app.services.redis_cache import get_redis_cache
 from app.services.slave_status_service import get_slave_status_service
 from app.services.state_machine import StateMachine
 from app.services.webhook import WebhookService
@@ -149,6 +151,7 @@ async def sync_generator_info_to_database() -> None:
     Only updates values that are explicitly set in the environment.
     """
     import os
+
     from app.database import AsyncSessionLocal
     from app.models import GeneratorInfo
 

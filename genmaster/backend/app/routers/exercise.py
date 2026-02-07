@@ -15,7 +15,6 @@ from fastapi import APIRouter, HTTPException
 
 from app.dependencies import AdminUser, DbSession
 from app.models import ExerciseSchedule
-
 from app.schemas import (
     ExerciseRunNowResponse,
     ExerciseScheduleResponse,

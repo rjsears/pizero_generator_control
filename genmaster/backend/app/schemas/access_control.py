@@ -11,11 +11,11 @@
 
 """Pydantic schemas for access control management."""
 
+import ipaddress
 from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
-import ipaddress
 
 
 class IPRange(BaseModel):
