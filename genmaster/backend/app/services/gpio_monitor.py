@@ -52,6 +52,7 @@ class GPIOMonitor:
         self._button = None
         self._current_state = False
         self._mock_signal_callback: Optional[Callable[[bool], None]] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     def _is_raspberry_pi(self) -> bool:
         """Check if running on a Raspberry Pi."""
@@ -68,6 +69,12 @@ class GPIOMonitor:
             return
 
         self._running = True
+
+        # Store event loop reference for thread-safe callbacks
+        try:
+            self._loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._loop = asyncio.get_event_loop()
 
         if self.mock_mode:
             logger.info(
@@ -125,8 +132,9 @@ class GPIOMonitor:
         self._current_state = True
         logger.info("Victron signal ACTIVE - generator wanted")
 
-        # Notify state machine asynchronously
-        asyncio.create_task(self._notify_state_change(True))
+        # Notify state machine asynchronously (thread-safe for GPIO callbacks)
+        if self._loop is not None:
+            asyncio.run_coroutine_threadsafe(self._notify_state_change(True), self._loop)
 
     def _on_signal_inactive(self) -> None:
         """Handle relay signal becoming inactive (generator not wanted)."""
@@ -136,8 +144,9 @@ class GPIOMonitor:
         self._current_state = False
         logger.info("Victron signal INACTIVE - generator not wanted")
 
-        # Notify state machine asynchronously
-        asyncio.create_task(self._notify_state_change(False))
+        # Notify state machine asynchronously (thread-safe for GPIO callbacks)
+        if self._loop is not None:
+            asyncio.run_coroutine_threadsafe(self._notify_state_change(False), self._loop)
 
     async def _notify_state_change(self, active: bool) -> None:
         """Notify state machine of signal change."""

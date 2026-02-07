@@ -147,6 +147,7 @@ services:
     image: rjsears/pizero_generator_control:genslave
     container_name: genslave
     restart: unless-stopped
+    env_file: .env
 
     # Privileged mode required for GPIO access
     # Alternatively, use device mappings below
