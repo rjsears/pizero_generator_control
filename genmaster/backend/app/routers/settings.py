@@ -32,7 +32,6 @@ from app.schemas.access_control import (
 )
 from app.services.access_control import (
     NGINX_CONFIG_PATH,
-    generate_nginx_geo_block,
     get_config_last_modified,
     get_default_ip_ranges,
     is_protected_range,

@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.database import AsyncSessionLocal
-from app.models import Session, User
+from app.models import User
 from app.utils.auth import decode_access_token
 
 # Security scheme for JWT bearer tokens

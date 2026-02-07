@@ -534,7 +534,6 @@ class StateMachine:
                 )
 
                 # Trigger system notification
-                from datetime import datetime
                 reason_map = {
                     "victron": "Victron signal off",
                     "manual": "Manual stop",

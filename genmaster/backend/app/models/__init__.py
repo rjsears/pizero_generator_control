@@ -23,6 +23,8 @@ from app.models.notifications import (
     NotificationHistory,
 )
 from app.models.scheduled_runs import ScheduledRun
+from app.models.session import Session
+from app.models.settings import Settings
 from app.models.system_notifications import (
     SystemNotificationContainerConfig,
     SystemNotificationEvent,
@@ -31,8 +33,6 @@ from app.models.system_notifications import (
     SystemNotificationState,
     SystemNotificationTarget,
 )
-from app.models.session import Session
-from app.models.settings import Settings
 from app.models.system_state import SystemState
 from app.models.user import User
 

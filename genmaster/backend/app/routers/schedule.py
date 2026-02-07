@@ -11,7 +11,7 @@
 
 """Schedule management API endpoints."""
 
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.future import select

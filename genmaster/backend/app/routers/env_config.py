@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.dependencies import AdminUser
 
@@ -802,7 +802,6 @@ async def run_health_check(
     db_url = variables.get("DATABASE_URL", "")
     if db_url:
         try:
-            import asyncpg
             # Parse connection params from URL
             # This is a simplified check
             checks.append({

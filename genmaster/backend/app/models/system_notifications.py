@@ -18,7 +18,7 @@ that mirrors the n8n_nginx implementation.
 """
 
 from datetime import datetime
-from typing import Any, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -811,6 +811,7 @@ class SystemNotificationHistory(Base):
     async def cleanup_old_records(cls, db: AsyncSession, days: int = 60) -> int:
         """Delete notification history records older than specified days."""
         from datetime import timedelta
+
         from sqlalchemy import delete
         cutoff = datetime.utcnow() - timedelta(days=days)
         result = await db.execute(

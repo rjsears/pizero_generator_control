@@ -11,7 +11,6 @@
 
 """Authentication API endpoints."""
 
-from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.future import select

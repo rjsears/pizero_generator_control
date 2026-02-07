@@ -45,10 +45,11 @@ async def get_slave_client():
 
     Uses yield pattern to ensure proper cleanup of HTTP connections.
     """
+    from sqlalchemy.future import select
+
     from app.database import AsyncSessionLocal
     from app.models import Config
     from app.services.slave_client import SlaveClient
-    from sqlalchemy.future import select
 
     # Load config from database to get current URL and secret
     async with AsyncSessionLocal() as db:
@@ -432,9 +433,10 @@ async def rotate_api_key(
         )
 
     # Step 2: Update GenMaster's database with the new key
+    from sqlalchemy.future import select
+
     from app.database import AsyncSessionLocal
     from app.models import Config
-    from sqlalchemy.future import select
 
     try:
         async with AsyncSessionLocal() as db:

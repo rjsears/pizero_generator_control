@@ -99,8 +99,6 @@ def _exec_host_command(command: str, timeout: int = 10) -> tuple[bool, str]:
 
 from app.config import settings
 from app.schemas import (
-    ArmRequest,
-    ArmResponse,
     AutomationArmStatus,
     CombinedSystemHealth,
     FullSystemStatus,
@@ -1538,7 +1536,8 @@ async def get_timezone_info() -> dict:
     Get system timezone information.
     """
     import subprocess
-    from datetime import datetime, timezone as tz
+    from datetime import datetime
+    from datetime import timezone as tz
 
     result = {
         "timezone": None,
@@ -1666,6 +1665,7 @@ async def shutdown_host():
     WARNING: This will make GenMaster unreachable until manually powered on.
     """
     import logging
+
     import docker
 
     logger = logging.getLogger(__name__)
@@ -1713,6 +1713,7 @@ async def reboot_host():
     again (typically within 60-90 seconds).
     """
     import logging
+
     import docker
 
     logger = logging.getLogger(__name__)

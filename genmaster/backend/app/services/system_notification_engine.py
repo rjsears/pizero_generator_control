@@ -25,21 +25,19 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
-from app.models.notifications import NotificationChannel, NotificationGroup
+from app.models.notifications import NotificationChannel
 from app.models.system_notifications import (
-    SystemNotificationContainerConfig,
     SystemNotificationEvent,
     SystemNotificationGlobalSettings,
     SystemNotificationHistory,
     SystemNotificationState,
     SystemNotificationTarget,
 )
-from app.services.notification_service import notification_service, SendResult
+from app.services.notification_service import SendResult, notification_service
 
 logger = logging.getLogger(__name__)
 
