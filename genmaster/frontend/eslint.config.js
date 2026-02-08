@@ -30,7 +30,7 @@ export default [
       // Disable no-undef - Vue's compiler handles this and auto-imports cause false positives
       'no-undef': 'off',
       // Warn on unused vars (not error) - existing codebase has many
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
       // Disable constant binary expression check - causes false positives
       'no-constant-binary-expression': 'off',
       // Vue specific
