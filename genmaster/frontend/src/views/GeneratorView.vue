@@ -1794,6 +1794,7 @@ onMounted(async () => {
     Promise.all([
       generatorStore.fetchStatus(),
       systemStore.fetchSlaveStatusCached(),  // Use cached endpoint for instant response
+      systemStore.fetchVictronStatus(),  // Victron/GPIO17 status for responsive UI
       fetchRelayState(),  // Uses cached endpoint
     ]).finally(() => {
       fastPollInProgress = false
@@ -1816,7 +1817,6 @@ onMounted(async () => {
       // Batch 2: Potentially slow endpoints (after fast ones complete)
       return Promise.all([
         systemStore.fetchHealth(),
-        systemStore.fetchVictronStatus(),
         fetchHostWifi(),
       ])
     }).finally(() => {
