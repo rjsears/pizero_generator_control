@@ -287,9 +287,6 @@ async def add_event_target(
     admin: AdminUser,
 ) -> NotificationTargetResponse:
     """Add a notification target to an event."""
-    from sqlalchemy.exc import IntegrityError
-    from app.models.notification import NotificationChannel, NotificationGroup
-
     event = await SystemNotificationEvent.get_by_id(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")

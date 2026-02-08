@@ -11,7 +11,7 @@
   -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useNotificationStore } from '@/stores/notifications'
 import notificationsService from '@/services/notifications'
 import Card from '@/components/common/Card.vue'
@@ -28,7 +28,6 @@ import {
   ClockIcon,
   MoonIcon,
   ShieldCheckIcon,
-  ExclamationTriangleIcon,
   PlayIcon,
   StopIcon,
   SignalIcon,
