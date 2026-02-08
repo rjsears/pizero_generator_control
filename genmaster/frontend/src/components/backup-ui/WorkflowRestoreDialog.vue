@@ -12,14 +12,12 @@ https://github.com/rjsears
 -->
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useBackupStore } from '../../stores/backups'
 import { useNotificationStore } from '../../stores/notifications'
 import LoadingSpinner from '../common/LoadingSpinner.vue'
 import {
   XMarkIcon,
   ArrowPathIcon,
   ArrowDownTrayIcon,
-  DocumentTextIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/vue/24/outline'
@@ -32,7 +30,6 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'restored'])
 
-const backupStore = useBackupStore()
 const notificationStore = useNotificationStore()
 
 const restoreMode = ref('n8n') // 'n8n' or 'download'
@@ -77,7 +74,6 @@ async function handleRestore() {
   try {
     if (restoreMode.value === 'n8n') {
       // Restore to n8n
-      const format = useCustomName.value ? customName.value : renameFormat.value
       const response = await fetch(`/api/backups/${props.backup.id}/restore/workflow`, {
         method: 'POST',
         headers: {
@@ -276,7 +272,7 @@ function close() {
                   <select v-model="renameFormat" class="select-field">
                     <option value="{name}_backup_{date}">{name}_backup_{date}</option>
                     <option value="{name}_restored">{name}_restored</option>
-                    <option value="Restored_{name}"">Restored_{name}</option>
+                    <option value="Restored_{name}">Restored_{name}</option>
                     <option value="{name}_{id}">{name}_{id}</option>
                   </select>
                 </div>
