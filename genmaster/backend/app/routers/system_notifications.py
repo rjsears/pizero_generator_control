@@ -20,7 +20,7 @@ Provides endpoints for:
 """
 
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -441,6 +441,13 @@ async def bulk_update_events(
 # ============================================================================
 
 
+def _add_utc_timezone(dt: Optional[datetime]) -> Optional[datetime]:
+    """Add UTC timezone to naive datetime (stored as UTC in DB)."""
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 @router.get("/settings", response_model=GlobalSettingsResponse)
 async def get_global_settings(db: DbSession) -> GlobalSettingsResponse:
     """Get global notification settings."""
@@ -449,7 +456,7 @@ async def get_global_settings(db: DbSession) -> GlobalSettingsResponse:
     return GlobalSettingsResponse(
         id=settings.id,
         maintenance_mode=settings.maintenance_mode,
-        maintenance_until=settings.maintenance_until,
+        maintenance_until=_add_utc_timezone(settings.maintenance_until),
         maintenance_reason=settings.maintenance_reason,
         quiet_hours_enabled=settings.quiet_hours_enabled,
         quiet_hours_start=settings.quiet_hours_start,
@@ -477,8 +484,6 @@ async def update_global_settings(
     admin: AdminUser,
 ) -> GlobalSettingsResponse:
     """Update global notification settings."""
-    from sqlalchemy.exc import IntegrityError
-    from datetime import datetime, timezone
 
     settings = await SystemNotificationGlobalSettings.get_instance(db)
 
