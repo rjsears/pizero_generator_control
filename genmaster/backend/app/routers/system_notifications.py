@@ -284,22 +284,61 @@ async def add_event_target(
     admin: AdminUser,
 ) -> NotificationTargetResponse:
     """Add a notification target to an event."""
+    from sqlalchemy.exc import IntegrityError
+    from app.models.notification import NotificationChannel, NotificationGroup
+
     event = await SystemNotificationEvent.get_by_id(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    target_type = data.target_type.value if hasattr(data.target_type, 'value') else data.target_type
+
+    # Validate that the referenced channel/group exists
+    if target_type == "channel":
+        if not data.channel_id:
+            raise HTTPException(status_code=400, detail="channel_id is required for channel targets")
+        channel = await db.execute(
+            select(NotificationChannel).where(NotificationChannel.id == data.channel_id)
+        )
+        if not channel.scalar_one_or_none():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Notification channel with ID {data.channel_id} not found. Please create a channel first."
+            )
+    elif target_type == "group":
+        if not data.group_id:
+            raise HTTPException(status_code=400, detail="group_id is required for group targets")
+        group = await db.execute(
+            select(NotificationGroup).where(NotificationGroup.id == data.group_id)
+        )
+        if not group.scalar_one_or_none():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Notification group with ID {data.group_id} not found. Please create a group first."
+            )
+
     # Create the target
     target = SystemNotificationTarget(
         event_id=event.id,
-        target_type=data.target_type.value if hasattr(data.target_type, 'value') else data.target_type,
+        target_type=target_type,
         channel_id=data.channel_id,
         group_id=data.group_id,
         escalation_level=data.escalation_level,
         escalation_timeout_minutes=data.escalation_timeout_minutes,
     )
-    db.add(target)
-    await db.commit()
-    await db.refresh(target)
+
+    try:
+        db.add(target)
+        await db.commit()
+        await db.refresh(target)
+    except IntegrityError as e:
+        await db.rollback()
+        if "uq_snt_event_target_level" in str(e):
+            raise HTTPException(
+                status_code=409,
+                detail="This target is already configured for this event at this escalation level"
+            )
+        raise HTTPException(status_code=400, detail=f"Failed to add target: {str(e)}")
 
     return NotificationTargetResponse(
         id=target.id,
@@ -435,6 +474,9 @@ async def update_global_settings(
     admin: AdminUser,
 ) -> GlobalSettingsResponse:
     """Update global notification settings."""
+    from sqlalchemy.exc import IntegrityError
+    from datetime import datetime, timezone
+
     settings = await SystemNotificationGlobalSettings.get_instance(db)
 
     # Update fields
@@ -449,10 +491,20 @@ async def update_global_settings(
     for field in update_fields:
         value = getattr(data, field, None)
         if value is not None:
+            # Strip timezone from datetime fields (DB uses TIMESTAMP WITHOUT TIME ZONE)
+            if isinstance(value, datetime) and value.tzinfo is not None:
+                value = value.replace(tzinfo=None)
             setattr(settings, field, value)
 
-    await db.commit()
-    await db.refresh(settings)
+    try:
+        await db.commit()
+        await db.refresh(settings)
+    except IntegrityError as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=f"Failed to update settings: {str(e)}")
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
 
     return await get_global_settings(db)
 
