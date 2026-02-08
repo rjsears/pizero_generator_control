@@ -27,7 +27,7 @@ import BackupScanLoader from '../common/BackupScanLoader.vue'
 import { formatBytes } from '../../utils/formatters'
 import { getConfigFileIcon } from '../../utils/helpers'
 
-const props = defineProps({
+defineProps({
   backup: {
     type: Object,
     required: true

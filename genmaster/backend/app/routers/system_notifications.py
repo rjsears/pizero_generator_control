@@ -20,13 +20,16 @@ Provides endpoints for:
 """
 
 import math
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from app.dependencies import AdminUser, DbSession
+from app.models.notification import NotificationChannel, NotificationGroup
 from app.models.system_notifications import (
     SystemNotificationContainerConfig,
     SystemNotificationEvent,
@@ -284,9 +287,6 @@ async def add_event_target(
     admin: AdminUser,
 ) -> NotificationTargetResponse:
     """Add a notification target to an event."""
-    from sqlalchemy.exc import IntegrityError
-    from app.models.notification import NotificationChannel, NotificationGroup
-
     event = await SystemNotificationEvent.get_by_id(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -474,9 +474,6 @@ async def update_global_settings(
     admin: AdminUser,
 ) -> GlobalSettingsResponse:
     """Update global notification settings."""
-    from sqlalchemy.exc import IntegrityError
-    from datetime import datetime, timezone
-
     settings = await SystemNotificationGlobalSettings.get_instance(db)
 
     # Update fields
