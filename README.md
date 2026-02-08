@@ -67,8 +67,8 @@ The RPi Generator Control system automates generator management for off-grid sol
 │                          (Raspberry Pi Zero 2W)                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  • Automation Hat Mini (Relay + LCD Display)                                │
-│  • FastAPI Backend (Native Python - No Docker)                              │
-│  • SQLite Database                                                          │
+│  • FastAPI Backend (Docker Container)                                       │
+│  • In-Memory State (no database)                                            │
 │  • Independent Failsafe Monitor                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
@@ -189,7 +189,7 @@ flowchart TB
 | **Database** | PostgreSQL 16 | State persistence, run history, configuration |
 | **Cache** | Redis | Session storage, real-time data |
 | **Reverse Proxy** | Nginx | HTTPS termination, rate limiting, security headers |
-| **GenSlave Backend** | FastAPI (native) | Relay control, heartbeat responder |
+| **GenSlave Backend** | FastAPI (Docker) | Relay control, heartbeat responder |
 | **HAT** | Pimoroni Automation Hat Mini | Physical relay + LCD status display |
 
 ---
@@ -329,37 +329,40 @@ docker compose logs -f genmaster
 
 ### GenSlave Installation (Pi Zero 2W)
 
-GenSlave runs as a native Python service (no Docker) on the Pi Zero 2W:
+GenSlave runs as a Docker container on the Pi Zero 2W:
 
 ```bash
-# Clone repository on the Pi Zero 2W
-git clone https://github.com/rjsears/pizero_generator_control.git
-cd pizero_generator_control/genslave
+# SSH into your Pi Zero
+ssh pi@genslave.local
 
-# Run interactive setup
+# Download and run the setup script
+curl -fsSL https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/genslave/setup.sh -o setup.sh
+chmod +x setup.sh
 sudo ./setup.sh
 ```
 
 The GenSlave setup will:
-1. **Check I2C/SPI** - Verify hardware interfaces are enabled
-2. **Install dependencies** - Python, system libraries, Automation Hat Mini
-3. **Create virtual environment** - Isolated Python environment
-4. **Deploy application** - Copy app code to /opt/genslave/
-5. **Configure Tailscale** - Optional VPN for GenMaster connectivity
-6. **Create systemd service** - Auto-start on boot
-7. **Start service** - Begin listening on port 8001
+1. **Install Docker** - From Debian repositories (optimized for Pi Zero)
+2. **Install Docker Compose** - For container orchestration
+3. **Prompt for API secret** - Must match GenMaster's `SLAVE_API_SECRET`
+4. **Configure notifications** - Optional Apprise URLs for failsafe alerts
+5. **Pull Docker image** - Pre-built ARM image from Docker Hub
+6. **Create systemd service** - Auto-start container on boot
+7. **Configure Tailscale** - Optional VPN for GenMaster connectivity
+8. **Start container** - Begin listening on port 8001
 
 ### Verify GenSlave
 
 ```bash
-# Check service status
-sudo systemctl status genslave
+# Check container status
+cd /opt/genslave
+docker-compose ps
 
 # View logs
-sudo journalctl -u genslave -f
+docker-compose logs -f
 
-# Test API
-curl http://localhost:8001/api/health
+# Test API (requires API key)
+curl -H "X-API-Key: your-api-secret" http://localhost:8001/api/health
 ```
 
 ---
@@ -711,6 +714,34 @@ curl -X POST https://genmaster.example.com/api/system/arm \
   "warnings": []
 }
 ```
+
+---
+
+## 🔄 CI/CD & Docker Images
+
+### Automated Docker Builds
+
+Docker images are automatically built and pushed to Docker Hub when code is merged to `main`:
+
+| Image | Platforms | Trigger Path |
+|-------|-----------|--------------|
+| `rjsears/genmaster:latest` | amd64, arm64 | `genmaster/**` |
+| `rjsears/pizero_generator_control:genslave` | arm/v6 | `genslave/**` |
+
+Manual builds can be triggered from the GitHub Actions tab with target selection.
+
+### Raspberry Pi 5 GPIO Access
+
+GenMaster requires privileged container access for GPIO on Raspberry Pi 5:
+
+```yaml
+# In docker-compose.yaml
+genmaster:
+  privileged: true
+  user: root
+```
+
+This is required because Pi 5 uses a different GPIO architecture (`/dev/gpiochip0`, `/dev/gpiomem4`) than earlier models.
 
 ---
 

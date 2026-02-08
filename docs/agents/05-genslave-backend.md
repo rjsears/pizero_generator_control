@@ -74,26 +74,26 @@ GenSlave is the secondary controller that:
 
 ## Deployment Architecture
 
-**IMPORTANT**: GenSlave runs **natively** (no Docker) on a Pi Zero 2W to maximize available RAM.
+**UPDATE (2026-02)**: GenSlave now runs as a **Docker container** on Pi Zero 2W. Pre-built images avoid slow on-device compilation.
 
 | Aspect | Decision | Rationale |
 |--------|----------|-----------|
-| Deployment | Native Python | 512MB RAM constraint |
-| Database | SQLite | ~0MB overhead vs 80-150MB for MariaDB |
+| Deployment | Docker container | Pre-built ARM images, easy updates |
+| Database | In-memory state | No persistence needed, syncs from GenMaster |
 | Web Server | Uvicorn direct | No nginx reverse proxy needed |
-| Process Manager | systemd | Built-in, minimal overhead |
-| Python | 3.11+ via pyenv | Latest features, consistent version |
+| Process Manager | systemd (for container) | Auto-start container on boot |
+| Image | `rjsears/pizero_generator_control:genslave` | Built for `linux/arm/v6` |
 
 ### Memory Budget (Pi Zero 2W - 512MB)
 
 | Component | Memory |
 |-----------|--------|
 | OS + System | ~100MB |
-| Python + FastAPI + Uvicorn | ~50-80MB |
-| SQLite (file-based) | ~0MB |
+| Docker daemon | ~30-50MB |
+| GenSlave container | ~50-80MB |
 | Automation HAT libraries | ~10MB |
-| **Total Used** | **~160-190MB** |
-| **Available for Operations** | **~320-350MB** |
+| **Total Used** | **~190-240MB** |
+| **Available for Operations** | **~270-320MB** |
 
 ---
 
