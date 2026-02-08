@@ -143,8 +143,9 @@ class StateMachine:
                         )
                     )
                     run = result.scalar_one_or_none()
-                    if run and not run.end_time:
-                        run.end_time = int(time.time())
+                    if run and not run.stop_time:
+                        run.stop_time = int(time.time())
+                        run.duration_seconds = run.stop_time - run.start_time
                         run.stop_reason = "power_loss"
                         run.notes = (run.notes or "") + " [Ended due to power loss/reboot]"
                         logger.info(f"Closed orphaned run {run.id} due to power loss")
