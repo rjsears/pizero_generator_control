@@ -174,8 +174,9 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
+        continue-on-error: true
         with:
           sarif_file: 'trivy-results-genmaster.sarif'
 
@@ -250,6 +251,7 @@ jobs:
 
   # ==========================================================================
   # Security Scanning for GenSlave
+  # Note: Uses filesystem scan because arm/v6 images can't be pulled on amd64 runners
   # ==========================================================================
   security-scan-genslave:
     needs: build-genslave
@@ -260,16 +262,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy vulnerability scanner (filesystem)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/rjsears/pizero_generator_control:genslave
+          scan-type: 'fs'
+          scan-ref: './genslave'
           format: 'sarif'
           output: 'trivy-results-genslave.sarif'
           severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
+        continue-on-error: true
         with:
           sarif_file: 'trivy-results-genslave.sarif'
