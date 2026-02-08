@@ -215,12 +215,31 @@ genmaster:
 
 ## Docker Images
 
-Pre-built images are available on Docker Hub:
+Pre-built images are available on Docker Hub and are automatically built via GitHub Actions:
 
-| Image | Description |
-|-------|-------------|
-| `rjsears/genmaster:latest` | Main application (amd64 + arm64) |
-| `rjsears/genmaster-host-tools:latest` | Host tools sidecar (amd64 + arm64) |
+| Image | Description | Platforms |
+|-------|-------------|-----------|
+| `rjsears/genmaster:latest` | Main application | amd64, arm64 |
+| `rjsears/genmaster-host-tools:latest` | Host tools sidecar | amd64, arm64 |
+| `rjsears/pizero_generator_control:genslave` | GenSlave relay controller | arm/v6 |
+
+### Automated Builds
+
+Images are automatically built and pushed when code is merged to `main`:
+- GenMaster: triggered by changes to `genmaster/**`
+- GenSlave: triggered by changes to `genslave/**`
+
+### Raspberry Pi 5 GPIO Access
+
+For GPIO access on Raspberry Pi 5, the container must run in privileged mode:
+
+```yaml
+genmaster:
+  privileged: true
+  user: root
+```
+
+This is required because Pi 5 uses a different GPIO architecture than earlier models.
 
 ## Documentation
 

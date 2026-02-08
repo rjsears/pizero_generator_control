@@ -65,19 +65,19 @@ GenSlave is designed to be deployed as a Docker container on a headless Raspberr
 
 3. **Run the setup script**:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/genslave/setup-docker.sh -o setup-docker.sh
-   chmod +x setup-docker.sh
-   sudo ./setup-docker.sh
+   curl -fsSL https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/genslave/setup.sh -o setup.sh
+   chmod +x setup.sh
+   sudo ./setup.sh
    ```
 
    If the repository is private, SCP the script instead:
    ```bash
    # From your local machine:
-   scp setup-docker.sh pi@genslave.local:~/
+   scp genslave/setup.sh pi@genslave.local:~/
 
    # Then on the Pi:
-   chmod +x setup-docker.sh
-   sudo ./setup-docker.sh
+   chmod +x setup.sh
+   sudo ./setup.sh
    ```
 
 4. **Configure the API secret** (see [Configuration](#configuration))
@@ -811,6 +811,8 @@ genslave/
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0.3 | 2026-02-07 | Fixed comm restored notification timing (5s delay for auto-arm); Added to automated CI/CD builds |
+| 1.0.2 | 2026-02-07 | Fixed `.env` not being read on system reboot (explicit `env_file:` directive) |
 | 1.0.1 | 2026-01-19 | Changed notification terminology from "Automation" to "Relay"; Added heartbeat restored notification |
 | 1.0.0 | 2026-01-18 | Initial release with API authentication, LCD display |
 

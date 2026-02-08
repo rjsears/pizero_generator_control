@@ -12,11 +12,12 @@ This document provides specifications for the installation scripts that configur
 | Aspect | GenMaster | GenSlave |
 |--------|-----------|----------|
 | **Hardware** | Raspberry Pi 5 8GB + NVMe | Raspberry Pi Zero 2W |
-| **Deployment** | Docker containers | Native Python + systemd |
-| **Database** | PostgreSQL (Docker) | SQLite (file-based) |
+| **Deployment** | Docker containers | Docker container |
+| **Database** | PostgreSQL (Docker) | In-memory state |
 | **Web Server** | Nginx (Docker) | Uvicorn only |
 | **Setup Script** | `genmaster/setup.sh` | `genslave/setup.sh` |
-| **Networking** | Docker Tailscale profile | Native Tailscale |
+| **Networking** | Docker Tailscale profile | Host network + optional Tailscale |
+| **Image** | `rjsears/genmaster` | `rjsears/pizero_generator_control:genslave` |
 
 ### Setup Scripts
 
@@ -26,11 +27,11 @@ This document provides specifications for the installation scripts that configur
    - Optional Tailscale/Cloudflare profiles
    - Let's Encrypt SSL support
 
-2. **`genslave/setup.sh`** - Lightweight native deployment
-   - Python virtualenv setup
-   - SQLite database
-   - Native Tailscale installation
-   - systemd service configuration
+2. **`genslave/setup.sh`** - Docker deployment for Pi Zero
+   - Installs Docker and Docker Compose
+   - Pulls pre-built ARM image from Docker Hub
+   - Optional Tailscale installation
+   - systemd service for container auto-start
 
 ---
 
@@ -77,45 +78,45 @@ genmaster/setup.sh (Docker deployment)
 ### GenSlave (genslave/setup.sh)
 
 **Key Features:**
-- **Auto-deploy**: Automatically copies application code from genslave/app/ to /opt/genslave/app/
-- **User detection**: Auto-detects service user (SUDO_USER > pi > root)
+- **Docker deployment**: Uses pre-built ARM image from Docker Hub
+- **Embedded compose file**: No external downloads required
+- **API secret prompt**: Interactive setup for GenMaster communication
 - **Port 8001**: GenSlave API runs on port 8001 (GenMaster uses 8000)
 
 ```
-genslave/setup.sh (Native Python deployment)
+genslave/setup.sh (Docker deployment)
 ├── Phase 1: System Preparation
-│   ├── Update system packages
-│   ├── Install Python 3.11+ and pip
-│   ├── Enable I2C and SPI interfaces
-│   └── Configure system for SD/SSD longevity
+│   ├── Check for Raspberry Pi
+│   ├── Install Docker from Debian repos
+│   └── Install Docker Compose
 │
-├── Phase 2: Hardware Validation
-│   ├── Test Automation Hat Mini relay (actual relay toggle test)
-│   ├── Test LCD display (ST7735)
-│   └── Verify I2C/SPI communication
+├── Phase 2: Directory Setup
+│   └── Create /opt/genslave directory
 │
-├── Phase 3: Application Setup
-│   ├── Create /opt/genslave directory structure
-│   ├── Auto-deploy application code from genslave/app/
-│   ├── Create virtualenv
-│   ├── Install Python dependencies
-│   ├── Initialize SQLite database
-│   └── Configure .env file
+├── Phase 3: Configuration
+│   ├── Create embedded docker-compose.yaml
+│   ├── Prompt for API secret (required)
+│   ├── Prompt for Apprise notification URLs (optional)
+│   └── Generate .env file
 │
-├── Phase 4: Tailscale Setup
-│   ├── Install Tailscale natively
-│   ├── Authenticate with auth key
-│   └── Test connectivity
+├── Phase 4: Docker Setup
+│   ├── Pull GenSlave image from Docker Hub
+│   ├── Start container
+│   └── Verify container health
 │
 ├── Phase 5: Service Setup
-│   ├── Create systemd service (port 8001)
-│   ├── Configure log rotation
-│   └── Enable auto-start
+│   ├── Create systemd service for container
+│   └── Enable auto-start on boot
 │
-└── Phase 6: Validation
-    ├── Health checks
-    ├── Test relay operation
-    └── Display Tailscale IP
+├── Phase 6: Tailscale Setup (optional)
+│   ├── Install Tailscale if not present
+│   ├── Prompt for auth key
+│   └── Connect to Tailscale network
+│
+└── Phase 7: Summary
+    ├── Display useful commands
+    ├── Show API endpoint URLs
+    └── Display Tailscale IP if connected
 ```
 
 ---

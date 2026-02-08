@@ -5,6 +5,36 @@ All notable changes to the GenMaster project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-07
+
+### Added
+
+#### Automated Docker Builds
+- GitHub Actions workflow now builds both GenMaster and GenSlave images automatically
+- Triggers on push to main when `genmaster/**` or `genslave/**` paths change
+- GenSlave builds for `linux/arm/v6` (Pi Zero compatible)
+- Manual dispatch option to build specific images (both/genmaster/genslave)
+- Path-based filtering to only build changed images
+
+#### GPIO Support for Raspberry Pi 5
+- GenMaster container now runs with `privileged: true` and `user: root` for GPIO access
+- Enables proper GPIO17 Victron signal detection on Pi 5 hardware
+- Required because Pi 5 uses different GPIO architecture (`/dev/gpiochip0`, `/dev/gpiomem4`)
+
+### Changed
+
+- Victron status now uses fast polling (5 seconds) for responsive UI updates
+- Previously was in slow polling cycle (30 seconds)
+
+### Fixed
+
+- Fixed GPIO callbacks not triggering state machine (coroutine not awaited in threaded callback)
+- Fixed comm restored notification showing "not armed" when auto-arm was triggered
+- Added 5-second delay before sending notification to allow auto-arm to complete
+- Fixed GenSlave not reading `.env` file on system reboot (added explicit `env_file:` directive)
+
+---
+
 ## [1.1.1] - 2026-01-27
 
 ### Added

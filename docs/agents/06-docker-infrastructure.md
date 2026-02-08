@@ -1,26 +1,26 @@
 # Agent Handoff: Docker Infrastructure
 
 ## Purpose
-This document provides complete specifications for containerizing **GenMaster only**, including Dockerfile, docker-compose configuration, nginx setup, and container orchestration.
-
-**Note**: GenSlave runs as a native Python application (not Docker) to conserve RAM on the Pi Zero 2W. See `05-genslave-backend.md` for GenSlave deployment details.
+This document provides complete specifications for containerizing both **GenMaster** and **GenSlave**, including Dockerfile, docker-compose configuration, nginx setup, and container orchestration.
 
 ---
 
 ## Overview
 
 **GenMaster** (Raspberry Pi 5 8GB + NVMe) runs as a containerized application with:
-- FastAPI application container
+- FastAPI application container (privileged mode for GPIO access)
 - PostgreSQL 16 database container
 - Nginx reverse proxy
+- Host-tools sidecar container
 - Optional Tailscale container (--profile tailscale)
 - Optional Cloudflare Tunnel (--profile cloudflare)
 
-**GenSlave** (Raspberry Pi Zero 2W) runs natively without Docker:
-- Native Python with virtualenv
-- SQLite database (file-based)
-- systemd service management
-- Native Tailscale installation
+**GenSlave** (Raspberry Pi Zero 2W) also runs in Docker:
+- Pre-built ARM image from Docker Hub (`rjsears/pizero_generator_control:genslave`)
+- Privileged mode for GPIO/relay access
+- In-memory state (no database)
+- systemd service for container auto-start
+- Optional native Tailscale installation
 
 ---
 
@@ -279,27 +279,28 @@ services:
 
 ---
 
-## GenSlave Deployment (Native - No Docker)
+## GenSlave Deployment (Docker)
 
-GenSlave runs as a **native Python application** on Raspberry Pi Zero 2W to conserve the limited 512MB RAM.
+GenSlave runs as a **Docker container** on Raspberry Pi Zero 2W. The pre-built image is optimized for the limited 512MB RAM.
 
-**Why Native instead of Docker?**
-- Docker daemon overhead: ~50-100MB RAM
-- Container images: additional storage requirements
-- Limited benefit on single-application device
-- Native systemd provides reliable service management
+**Why Docker on Pi Zero?**
+- Consistent deployment across environments
+- Pre-built images avoid slow on-device compilation
+- Easy updates via `docker-compose pull`
+- Automated CI/CD builds for `linux/arm/v6`
 
 For complete GenSlave deployment instructions, see:
 - `05-genslave-backend.md` - Application implementation
 - `08-setup-scripts.md` - Installation script (genslave/setup.sh)
 
 **Key differences from GenMaster:**
-| Aspect | GenMaster (Docker) | GenSlave (Native) |
+| Aspect | GenMaster (Docker) | GenSlave (Docker) |
 |--------|-------------------|-------------------|
 | Hardware | Pi 5 8GB + NVMe | Pi Zero 2W 512MB |
-| Database | PostgreSQL 16 | SQLite |
-| Deployment | Docker Compose | systemd service |
-| Networking | Docker container | Native Tailscale |
+| Database | PostgreSQL 16 | In-memory state |
+| Image | `rjsears/genmaster` | `rjsears/pizero_generator_control:genslave` |
+| Platform | amd64, arm64 | arm/v6 |
+| Networking | Bridge + optional Tailscale | Host network + optional Tailscale |
 
 ---
 
