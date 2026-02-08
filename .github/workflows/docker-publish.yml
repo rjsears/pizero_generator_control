@@ -1,35 +1,42 @@
-# GenMaster Docker Hub Publishing Workflow
+# Docker Hub Publishing Workflow for GenMaster and GenSlave
 #
 # This workflow builds and publishes multi-architecture Docker images to Docker Hub.
 #
-# Triggers:
-# - Manual workflow dispatch only (automatic triggers disabled until source code exists)
+# Images:
+# - GenMaster: rjsears/genmaster (amd64, arm64)
+# - GenSlave: rjsears/pizero_generator_control:genslave (arm/v6 for Pi Zero)
 #
-# To re-enable automatic builds, uncomment the push/pull_request sections below.
+# Triggers:
+# - Push to main (genmaster/** or genslave/** paths)
+# - Manual workflow dispatch
 #
 # Required Secrets:
 # - DOCKERHUB_USERNAME: Docker Hub username
 # - DOCKERHUB_TOKEN: Docker Hub access token
 
-name: Build and Publish Docker Image
+name: Build and Publish Docker Images
 
 on:
-  # Automatic triggers disabled until backend/frontend source code exists
-  # push:
-  #   branches:
-  #     - main
-  #   tags:
-  #     - 'v*.*.*'
-  #   paths:
-  #     - 'genmaster/**'
-  #     - '.github/workflows/docker-publish.yml'
-  # pull_request:
-  #   branches:
-  #     - main
-  #   paths:
-  #     - 'genmaster/**'
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+    paths:
+      - 'genmaster/**'
+      - 'genslave/**'
+      - '.github/workflows/docker-publish.yml'
   workflow_dispatch:
     inputs:
+      target:
+        description: 'Which image to build'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - genmaster
+          - genslave
       tag:
         description: 'Tag to build (e.g., v1.0.0 or latest)'
         required: false
@@ -37,14 +44,43 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: rjsears/genmaster
 
 jobs:
-  build-and-push:
+  # ==========================================================================
+  # Determine which images to build based on changed files
+  # ==========================================================================
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      genmaster: ${{ steps.filter.outputs.genmaster }}
+      genslave: ${{ steps.filter.outputs.genslave }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            genmaster:
+              - 'genmaster/**'
+              - '.github/workflows/docker-publish.yml'
+            genslave:
+              - 'genslave/**'
+              - '.github/workflows/docker-publish.yml'
+
+  # ==========================================================================
+  # Build and Push GenMaster (amd64, arm64)
+  # ==========================================================================
+  build-genmaster:
+    needs: changes
+    if: |
+      needs.changes.outputs.genmaster == 'true' ||
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.target == 'both' || github.event.inputs.target == 'genmaster')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    env:
+      IMAGE_NAME: rjsears/genmaster
 
     steps:
       - name: Checkout repository
@@ -69,7 +105,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/rjsears/genmaster
           tags: |
             # Set 'latest' tag for main branch
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
@@ -118,12 +154,12 @@ jobs:
         run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
 
   # ==========================================================================
-  # Security Scanning
+  # Security Scanning for GenMaster
   # ==========================================================================
-  security-scan:
-    needs: build-and-push
+  security-scan-genmaster:
+    needs: build-genmaster
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && needs.build-genmaster.result == 'success'
 
     steps:
       - name: Checkout repository
@@ -132,13 +168,108 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          image-ref: ${{ env.REGISTRY }}/rjsears/genmaster:latest
           format: 'sarif'
-          output: 'trivy-results.sarif'
+          output: 'trivy-results-genmaster.sarif'
           severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: 'trivy-results-genmaster.sarif'
+
+  # ==========================================================================
+  # Build and Push GenSlave (arm/v6 for Pi Zero)
+  # ==========================================================================
+  build-genslave:
+    needs: changes
+    if: |
+      needs.changes.outputs.genslave == 'true' ||
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.target == 'both' || github.event.inputs.target == 'genslave')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm/v6,linux/arm/v7,linux/arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/rjsears/pizero_generator_control
+          tags: |
+            # Always use 'genslave' tag
+            type=raw,value=genslave,enable=true
+            # Add version tag if pushing a tag
+            type=raw,value=genslave-${{ github.ref_name }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # Add git SHA for traceability
+            type=sha,prefix=genslave-sha-
+          labels: |
+            org.opencontainers.image.title=GenSlave
+            org.opencontainers.image.description=Generator Control System - Slave Relay Controller for Pi Zero
+            org.opencontainers.image.vendor=rjsears
+            maintainer=rjsears
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./genslave
+          file: ./genslave/Dockerfile
+          platforms: linux/arm/v6
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Image digest
+        if: github.event_name != 'pull_request'
+        run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
+
+  # ==========================================================================
+  # Security Scanning for GenSlave
+  # ==========================================================================
+  security-scan-genslave:
+    needs: build-genslave
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && needs.build-genslave.result == 'success'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/rjsears/pizero_generator_control:genslave
+          format: 'sarif'
+          output: 'trivy-results-genslave.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results-genslave.sarif'
