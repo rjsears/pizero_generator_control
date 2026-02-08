@@ -29,7 +29,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from app.dependencies import AdminUser, DbSession
-from app.models.notification import NotificationChannel, NotificationGroup
+from app.models.notifications import NotificationChannel, NotificationGroup
 from app.models.system_notifications import (
     SystemNotificationContainerConfig,
     SystemNotificationEvent,
