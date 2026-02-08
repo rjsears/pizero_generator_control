@@ -26,9 +26,7 @@ import {
   MagnifyingGlassIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ArrowDownTrayIcon,
   ArrowPathIcon,
-  ShieldCheckIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -69,7 +67,7 @@ async function loadContents() {
   loading.value = true
   try {
     contents.value = await backupStore.fetchBackupContents(props.backup.id)
-  } catch (err) {
+  } catch (_err) {
     notificationStore.error('Failed to load backup contents')
     emit('close')
   } finally {

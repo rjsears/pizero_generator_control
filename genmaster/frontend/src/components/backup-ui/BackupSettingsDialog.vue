@@ -113,7 +113,7 @@ async function loadConfiguration() {
         form.value.nfs_storage_path = nfsMount.path
       }
     }
-  } catch (err) {
+  } catch (_err) {
     notificationStore.error('Failed to load configuration')
   } finally {
     loading.value = false
@@ -124,7 +124,7 @@ async function detectStorage() {
   detectingStorage.value = true
   try {
     storageDetection.value = await backupStore.detectStorageLocations()
-  } catch (err) {
+  } catch (_err) {
     notificationStore.error('Failed to detect storage locations')
   } finally {
     detectingStorage.value = false
@@ -149,7 +149,7 @@ async function validatePath(path) {
   validatingPath.value = true
   try {
     pathValidation.value = await backupStore.validateStoragePath(path)
-  } catch (err) {
+  } catch (_err) {
     pathValidation.value = { error: true, message: 'Failed to validate path' }
   } finally {
     validatingPath.value = false
@@ -163,7 +163,7 @@ async function save() {
     notificationStore.success('Backup configuration saved')
     emit('saved')
     emit('close')
-  } catch (err) {
+  } catch (_err) {
     notificationStore.error('Failed to save configuration')
   } finally {
     saving.value = false

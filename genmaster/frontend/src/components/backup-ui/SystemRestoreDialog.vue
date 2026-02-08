@@ -70,7 +70,7 @@ watch(() => props.open, async (isOpen) => {
       if (preview.value.config_files) {
         restoreOptions.value.selectedConfigs = preview.value.config_files.map(c => c.name)
       }
-    } catch (err) {
+    } catch (_err) {
       notificationStore.error('Failed to load restore preview')
       emit('close')
     } finally {

@@ -152,12 +152,6 @@ function getIndicatorColor(stageIndex) {
   }
   return 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
 }
-
-const statusColor = computed(() => {
-  if (props.status === 'success') return 'emerald'
-  if (props.status === 'failed') return 'red'
-  return props.type === 'backup' ? 'blue' : 'teal'
-})
 </script>
 
 <template>
