@@ -11,10 +11,9 @@ https://github.com/rjsears
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
 <script setup>
-import { ref, watch } from 'vue'
 import { ExclamationTriangleIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 
-const props = defineProps({
+defineProps({
   open: Boolean,
   title: {
     type: String,

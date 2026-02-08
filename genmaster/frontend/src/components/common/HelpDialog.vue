@@ -11,9 +11,9 @@ https://github.com/rjsears
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
 <script setup>
-import { XMarkIcon, QuestionMarkCircleIcon, ArrowTopRightOnSquareIcon, BookOpenIcon, DocumentTextIcon, CodeBracketIcon, CpuChipIcon, BoltIcon } from '@heroicons/vue/24/outline'
+import { XMarkIcon, QuestionMarkCircleIcon, ArrowTopRightOnSquareIcon, DocumentTextIcon, CodeBracketIcon, CpuChipIcon, BoltIcon } from '@heroicons/vue/24/outline'
 
-const props = defineProps({
+defineProps({
   open: {
     type: Boolean,
     default: false,

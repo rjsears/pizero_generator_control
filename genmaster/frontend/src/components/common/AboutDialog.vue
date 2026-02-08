@@ -13,7 +13,7 @@ https://github.com/rjsears
 <script setup>
 import { XMarkIcon, InformationCircleIcon, ArrowTopRightOnSquareIcon } from '@heroicons/vue/24/outline'
 
-const props = defineProps({
+defineProps({
   open: {
     type: Boolean,
     default: false,

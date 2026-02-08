@@ -16,7 +16,7 @@ import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import Modal from '@/components/common/Modal.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
-import { ExclamationTriangleIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
 import 'xterm/css/xterm.css'
 
 const props = defineProps({
