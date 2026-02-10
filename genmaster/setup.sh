@@ -3010,16 +3010,17 @@ http {
     default_type application/octet-stream;
 
     # ==========================================================================
-    # Real IP Configuration for Proxied Traffic
+    # Real IP Configuration for Cloudflare Tunnel
     # ==========================================================================
-    # Trust these networks as reverse proxies (cloudflared, tailscale containers)
+    # Trust Docker/internal networks as proxies (cloudflared connects from here)
+    # This allows nginx to extract the real client IP from X-Forwarded-For header
     set_real_ip_from 172.16.0.0/12;
     set_real_ip_from 10.0.0.0/8;
     set_real_ip_from 192.168.0.0/16;
     set_real_ip_from 100.64.0.0/10;
     set_real_ip_from 127.0.0.1;
 
-    # Use X-Forwarded-For header (set by both Cloudflare and Tailscale Serve)
+    # Cloudflare sets X-Forwarded-For with the real client IP
     real_ip_header X-Forwarded-For;
 
     # Enable recursive lookup (use rightmost untrusted IP)
