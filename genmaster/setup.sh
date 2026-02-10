@@ -3009,9 +3009,24 @@ http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
 
+    # ==========================================================================
+    # Real IP Configuration for Cloudflare Tunnel
+    # ==========================================================================
+    # Trust Docker network ranges (cloudflared container connects from here)
+    set_real_ip_from 172.16.0.0/12;
+    set_real_ip_from 10.0.0.0/8;
+    set_real_ip_from 192.168.0.0/16;
+    set_real_ip_from 127.0.0.1;
+
+    # Use CF-Connecting-IP header from Cloudflare (contains real client IP)
+    real_ip_header CF-Connecting-IP;
+
+    # Enable recursive lookup (use rightmost untrusted IP)
+    real_ip_recursive on;
+
     log_format main '\$remote_addr - \$remote_user [\$time_local] "\$request" '
                     '\$status \$body_bytes_sent "\$http_referer" '
-                    '"\$http_user_agent"';
+                    '"\$http_user_agent" access=\$access_level';
 
     access_log /var/log/nginx/access.log main;
 
@@ -3020,10 +3035,10 @@ http {
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml;
 
-    # Rate limiting
+    # Rate limiting (uses real client IP after real_ip processing)
     limit_req_zone \$binary_remote_addr zone=api:10m rate=30r/s;
 
-    # IP-based access control
+    # IP-based access control (uses real client IP after real_ip processing)
     geo \$access_level {
         default external;
 $(echo -e "$internal_ips")
