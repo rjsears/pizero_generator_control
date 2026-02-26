@@ -146,3 +146,36 @@ class ArmResponse(BaseModel):
     warnings: list[str] = Field(
         default_factory=list, description="Any warnings during the operation"
     )
+
+
+class WifiWatchdogStatus(BaseModel):
+    """WiFi watchdog service status."""
+
+    installed: bool = Field(description="Whether watchdog script is installed on host")
+    enabled: bool = Field(description="Whether systemd service is enabled")
+    running: bool = Field(description="Whether service is currently active")
+    failure_count: int = Field(default=0, description="Consecutive connectivity failures")
+    last_recovery: Optional[str] = Field(
+        default=None, description="Timestamp of last recovery"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "installed": True,
+                "enabled": True,
+                "running": True,
+                "failure_count": 0,
+                "last_recovery": None,
+            }
+        }
+
+
+class WifiWatchdogActionResponse(BaseModel):
+    """Response from WiFi watchdog actions (install/enable/disable)."""
+
+    success: bool = Field(description="Whether the action succeeded")
+    message: str = Field(description="Human-readable status message")
+    status: Optional[WifiWatchdogStatus] = Field(
+        default=None, description="Current watchdog status after action"
+    )
