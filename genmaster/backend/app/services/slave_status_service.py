@@ -601,3 +601,17 @@ def get_slave_status_service() -> SlaveStatusService:
     if _service_instance is None:
         _service_instance = SlaveStatusService()
     return _service_instance
+
+
+async def reset_slave_client() -> None:
+    """
+    Reset the shared SlaveClient to pick up new config.
+
+    Call this after updating genslave_ip or slave_api_url in the config.
+    This forces the SlaveStatusService to create a new client with the
+    updated config on the next request.
+    """
+    global _service_instance
+    if _service_instance is not None:
+        await _service_instance._reset_shared_client()
+        logger.info("SlaveClient reset due to config change - will use new config on next request")
