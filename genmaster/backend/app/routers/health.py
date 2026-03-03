@@ -41,38 +41,13 @@ def get_webhook_service():
 
 
 async def get_slave_client():
-    """Create a SlaveClient with config from database.
+    """Create a SlaveClient with config from database/Redis cache.
 
     Uses yield pattern to ensure proper cleanup of HTTP connections.
     """
-    from sqlalchemy.future import select
+    from app.services.slave_status_service import create_slave_client
 
-    from app.database import AsyncSessionLocal
-    from app.models import Config
-    from app.services.slave_client import SlaveClient
-
-    # Load config from database to get current URL and secret
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Config).where(Config.id == 1))
-        config = result.scalar_one_or_none()
-
-    if config:
-        # Use IP directly in URL if available (no /etc/hosts needed, no restart required)
-        if config.genslave_ip:
-            base_url = f"http://{config.genslave_ip}:8001"
-        else:
-            base_url = config.slave_api_url
-        client = SlaveClient(
-            base_url=base_url,
-            secret=config.slave_api_secret,
-        )
-    else:
-        # Fallback to settings if no config in database
-        from app.config import settings
-        client = SlaveClient(
-            base_url=settings.slave_api_url,
-            secret=settings.slave_api_secret,
-        )
+    client = await create_slave_client()
 
     # Yield client and ensure cleanup
     try:

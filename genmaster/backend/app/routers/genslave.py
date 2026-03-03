@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.dependencies import get_current_user
-from app.services.slave_client import SlaveClient
+from app.services.slave_status_service import create_slave_client
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +132,7 @@ async def get_genslave_notifications():
     Returns the configured Apprise URLs (masked for security),
     whether notifications are configured, and whether they are enabled.
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.get_notifications()
 
@@ -167,7 +167,7 @@ async def update_genslave_notifications(request: NotificationUpdateRequest):
     - Email: mailto://user:pass@gmail.com
     - And many more: https://github.com/caronc/apprise/wiki
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.set_notifications(request.apprise_urls)
 
@@ -200,7 +200,7 @@ async def get_genslave_notification_settings():
     Returns the cooldown configuration for failsafe and restored
     notifications, including timestamps of last notifications sent.
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.get_notification_settings()
 
@@ -234,7 +234,7 @@ async def update_genslave_notification_settings(
     - failsafe_cooldown_minutes: How long to wait between failsafe notifications
     - restored_cooldown_minutes: How long to wait between restored notifications
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.set_notification_settings(
             failsafe_cooldown_minutes=request.failsafe_cooldown_minutes,
@@ -270,7 +270,7 @@ async def test_genslave_notifications():
     This sends a test message to all configured notification services
     on GenSlave. Use this to verify the notification configuration is working.
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.test_notifications()
 
@@ -304,7 +304,7 @@ async def set_genslave_notifications_enabled(request: NotificationEnableRequest)
     (except test notifications). This allows temporarily muting
     notifications without removing the configuration.
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.set_notifications_enabled(request.enabled)
 
@@ -341,7 +341,7 @@ async def clear_genslave_notification_cooldown(request: NotificationClearCooldow
 
     - event_type: "failsafe", "restored", or null/omit for both
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         event_type = request.event_type
         if event_type and event_type not in ("failsafe", "restored"):
@@ -418,7 +418,7 @@ async def get_genslave_wifi_networks():
     Proxies the request to GenSlave and returns a list of
     available networks with SSID, signal strength, and security type.
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.scan_wifi_networks()
 
@@ -447,7 +447,7 @@ async def connect_genslave_wifi(request: WifiConnectRequest):
     Proxies the connection request to GenSlave.
     Requires the SSID and optionally a password for secured networks.
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.connect_wifi(
             ssid=request.ssid,
@@ -525,7 +525,7 @@ async def list_genslave_saved_wifi():
     Returns all WiFi connection profiles that have been configured,
     including those added for auto-connect.
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.list_saved_wifi_networks()
 
@@ -554,7 +554,7 @@ async def add_genslave_wifi(request: WifiAddRequest):
     Creates a saved WiFi connection profile that will automatically
     connect when the network becomes available.
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.add_wifi_network(
             ssid=request.ssid,
@@ -586,7 +586,7 @@ async def delete_genslave_wifi(request: WifiDeleteRequest):
 
     Removes a previously saved WiFi connection profile.
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.delete_wifi_network(name=request.name)
 
@@ -648,7 +648,7 @@ async def shutdown_genslave():
 
     WARNING: This will make GenSlave unreachable until manually powered on.
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.shutdown()
 
@@ -687,7 +687,7 @@ async def reboot_genslave():
     The system will suppress "GenSlave down" warnings for 2 minutes after
     an intentional reboot to prevent unnecessary alerts.
     """
-    client = SlaveClient()
+    client = await create_slave_client()
     try:
         response = await client.reboot()
 

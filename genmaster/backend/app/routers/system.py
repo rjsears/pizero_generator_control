@@ -148,9 +148,9 @@ async def get_combined_system_info(
     # Try to get GenSlave health
     slave_health = None
     try:
-        from app.services.slave_client import SlaveClient
+        from app.services.slave_status_service import create_slave_client
 
-        client = SlaveClient()
+        client = await create_slave_client()
         response = await client.get_system_health()
         await client.close()
 
@@ -526,11 +526,11 @@ async def test_slave_connection() -> dict:
 
     Returns success status and latency.
     """
-    from app.services.slave_client import SlaveClient
+    from app.services.slave_status_service import create_slave_client
 
     start_time = time.time()
     try:
-        client = SlaveClient()
+        client = await create_slave_client()
         response = await client.health_check()
         await client.close()
 
