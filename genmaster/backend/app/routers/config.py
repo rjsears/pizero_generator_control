@@ -11,13 +11,18 @@
 
 """System configuration API endpoints."""
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 from sqlalchemy.future import select
 
 from app.dependencies import AdminUser, DbSession
 from app.models import Config, SystemState
+from app.routers.env_config import read_env_file, write_env_file
 from app.schemas import ConfigResponse, ConfigUpdateRequest
 from app.services.redis_cache import invalidate_config_cache
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -88,6 +93,12 @@ async def update_config(
     # Update only provided fields
     update_data = request.model_dump(exclude_unset=True)
 
+    # If genslave_ip is being updated, also update slave_api_url to match
+    if "genslave_ip" in update_data and update_data["genslave_ip"]:
+        new_ip = update_data["genslave_ip"]
+        update_data["slave_api_url"] = f"http://{new_ip}:8001"
+        logger.info(f"Syncing genslave_ip to slave_api_url: http://{new_ip}:8001")
+
     # Validate max_run_minutes > min_run_minutes
     new_min = update_data.get("min_run_minutes", config.min_run_minutes)
     new_max = update_data.get("max_run_minutes", config.max_run_minutes)
@@ -119,6 +130,23 @@ async def update_config(
 
     await db.commit()
     await db.refresh(config)
+
+    # Sync genslave config to .env file for persistence across container restarts
+    if "genslave_ip" in update_data or "slave_api_url" in update_data:
+        try:
+            env_vars = read_env_file()
+            if config.genslave_ip:
+                env_vars["GENSLAVE_IP"] = config.genslave_ip
+            if config.slave_api_url:
+                env_vars["SLAVE_API_URL"] = config.slave_api_url
+            write_env_file(env_vars)
+            logger.info(
+                f"Synced genslave config to .env: "
+                f"GENSLAVE_IP={config.genslave_ip}, SLAVE_API_URL={config.slave_api_url}"
+            )
+        except Exception as e:
+            # Log but don't fail the request - database update succeeded
+            logger.error(f"Failed to sync config to .env file: {e}")
 
     # Invalidate Redis cache so services pick up new config
     await invalidate_config_cache()
