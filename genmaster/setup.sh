@@ -2888,9 +2888,7 @@ EOF
   # Persistent container with tools pre-installed for running host commands.
   # Used for WiFi status, watchdog installation, etc.
   host-tools:
-    build:
-      context: ./host-tools
-      dockerfile: Dockerfile
+    image: rjsears/genmaster-host-tools:latest
     container_name: genmaster_host_tools
     restart: unless-stopped
     privileged: true
