@@ -146,9 +146,9 @@ class StateMachine:
                     if run and not run.stop_time:
                         run.stop_time = int(time.time())
                         run.duration_seconds = run.stop_time - run.start_time
-                        run.stop_reason = "power_loss"
+                        run.stop_reason = "error"
                         run.notes = (run.notes or "") + " [Ended due to power loss/reboot]"
-                        logger.info(f"Closed orphaned run {run.id} due to power loss")
+                        logger.info(f"Closed orphaned run {run.id} due to power loss/reboot")
                 state.current_run_id = None
 
             await db.commit()
