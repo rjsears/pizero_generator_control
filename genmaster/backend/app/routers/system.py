@@ -1887,16 +1887,14 @@ async def get_wifi_watchdog_status():
     return await asyncio.to_thread(_get_wifi_watchdog_status)
 
 
-@router.post("/wifi-watchdog/install", response_model=WifiWatchdogActionResponse)
-async def install_wifi_watchdog():
+def _copy_file_to_host_sync(src_path: str, dest_path: str, make_executable: bool = False) -> tuple[bool, str]:
     """
-    Install the WiFi watchdog service on the host.
+    Copy a file from host-tools container's mounted /scripts to the host filesystem.
 
-    Copies the watchdog script and systemd service file from the container
-    to the host, then enables and starts the service.
+    Uses cat to read from container, pipes through nsenter to write to host.
+    This avoids command-line length limits from base64 encoding.
     """
     import logging
-    import os
 
     import docker
 
@@ -1905,45 +1903,58 @@ async def install_wifi_watchdog():
     try:
         client = docker.from_env()
 
-        # Check if script files exist in container
-        script_path = "/app/scripts/wifi-watchdog.sh"
-        service_path = "/app/scripts/wifi-watchdog.service"
+        try:
+            container = client.containers.get(HOST_TOOLS_CONTAINER)
+        except docker.errors.NotFound:
+            return False, f"Container '{HOST_TOOLS_CONTAINER}' not running"
 
-        if not os.path.exists(script_path):
-            return WifiWatchdogActionResponse(
-                success=False,
-                message=f"Script file not found at {script_path}. Ensure scripts directory is mounted.",
-                status=None,
-            )
+        if container.status != "running":
+            return False, f"Container not running (status: {container.status})"
 
-        if not os.path.exists(service_path):
-            return WifiWatchdogActionResponse(
-                success=False,
-                message=f"Service file not found at {service_path}. Ensure scripts directory is mounted.",
-                status=None,
-            )
+        # Build command: cat file | nsenter ... -- sh -c 'cat > dest && chmod +x dest'
+        chmod_cmd = " && chmod +x " + dest_path if make_executable else ""
+        cmd = f"cat {src_path} | nsenter -t 1 -m -u -n -i -- sh -c 'cat > {dest_path}{chmod_cmd}'"
 
-        # Read script and service file contents
-        with open(script_path, "r") as f:
-            script_content = f.read()
-
-        with open(service_path, "r") as f:
-            service_content = f.read()
-
-        # Install script to host
-        # Using base64 to safely transfer content through shell
-        import base64
-
-        script_b64 = base64.b64encode(script_content.encode()).decode()
-        service_b64 = base64.b64encode(service_content.encode()).decode()
-
-        # Copy script to host
-        logger.info("Installing wifi-watchdog.sh to host")
-        install_script_cmd = (
-            f"echo '{script_b64}' | base64 -d > /usr/local/bin/wifi-watchdog.sh && "
-            "chmod +x /usr/local/bin/wifi-watchdog.sh"
+        exit_code, output = container.exec_run(
+            cmd=["sh", "-c", cmd],
+            demux=False,
         )
-        ok, output = await asyncio.to_thread(_run_host_command_sync, install_script_cmd)
+
+        output_str = output.decode("utf-8").strip() if output else ""
+
+        if exit_code != 0:
+            logger.debug(f"Copy to host failed (exit {exit_code}): {src_path} -> {dest_path}")
+            return False, output_str or f"Command failed with exit code {exit_code}"
+
+        return True, output_str
+
+    except Exception as e:
+        logger.error(f"Error copying file to host: {e}")
+        return False, str(e)
+
+
+@router.post("/wifi-watchdog/install", response_model=WifiWatchdogActionResponse)
+async def install_wifi_watchdog():
+    """
+    Install the WiFi watchdog service on the host.
+
+    Copies the watchdog script and systemd service file from the host-tools
+    container's mounted /scripts directory to the host, then enables and
+    starts the service.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Copy script to host (from host-tools container's /scripts mount)
+        logger.info("Installing wifi-watchdog.sh to host")
+        ok, output = await asyncio.to_thread(
+            _copy_file_to_host_sync,
+            "/scripts/wifi-watchdog.sh",
+            "/usr/local/bin/wifi-watchdog.sh",
+            True  # make executable
+        )
         if not ok:
             return WifiWatchdogActionResponse(
                 success=False,
@@ -1953,10 +1964,12 @@ async def install_wifi_watchdog():
 
         # Copy service file to host
         logger.info("Installing wifi-watchdog.service to host")
-        install_service_cmd = (
-            f"echo '{service_b64}' | base64 -d > /etc/systemd/system/wifi-watchdog.service"
+        ok, output = await asyncio.to_thread(
+            _copy_file_to_host_sync,
+            "/scripts/wifi-watchdog.service",
+            "/etc/systemd/system/wifi-watchdog.service",
+            False
         )
-        ok, output = await asyncio.to_thread(_run_host_command_sync, install_service_cmd)
         if not ok:
             return WifiWatchdogActionResponse(
                 success=False,

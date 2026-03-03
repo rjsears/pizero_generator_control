@@ -2893,8 +2893,8 @@ EOF
     restart: unless-stopped
     privileged: true
     pid: host
-    mem_limit: 32m
-    memswap_limit: 32m
+    volumes:
+      - ../scripts:/scripts:ro
 
   # ===========================================================================
   # Certbot (Let's Encrypt SSL)
