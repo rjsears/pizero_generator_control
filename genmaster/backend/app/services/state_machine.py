@@ -73,11 +73,16 @@ class StateMachine:
         """Set the webhook service for notifications."""
         self._webhook_service = webhook_service
 
-    async def _get_slave_client(self):
-        """Get a SlaveClient instance with current config from Redis cache."""
+    async def _get_slave_client(self, timeout: float = 3.0):
+        """Get a SlaveClient instance with current config from Redis cache.
+
+        Args:
+            timeout: Request timeout in seconds. Use longer timeouts for critical
+                     operations like relay control (default 3.0, use 10.0 for relay).
+        """
         from app.services.slave_status_service import create_slave_client
 
-        return await create_slave_client()
+        return await create_slave_client(timeout=timeout)
 
     async def initialize(self) -> None:
         """
@@ -203,21 +208,78 @@ class StateMachine:
                 state.slave_relay_armed = result["slave_armed"]
 
                 # If slave's relay is ON but we think generator is stopped,
-                # we have a mismatch - log it but don't auto-start
+                # we have a mismatch - GenSlave is the source of truth for relay state
                 if result["relay_state"] and not state.generator_running:
                     logger.warning(
                         "Reconciliation: GenSlave relay is ON but GenMaster "
-                        "shows generator stopped - relay may have been left on"
+                        "shows generator stopped - syncing GenMaster to match reality"
                     )
+
+                    # Create a generator run record since generator is actually running
+                    start_time = int(time.time())
+                    run = GeneratorRun(
+                        start_time=start_time,
+                        trigger="reconciliation",
+                        notes="Run detected during state reconciliation - relay was on",
+                    )
+                    db.add(run)
+                    await db.flush()
+
+                    # Update state to match reality - GenSlave relay is the truth
+                    state.generator_running = True
+                    state.generator_start_time = start_time
+                    state.current_run_id = run.id
+                    state.run_trigger = "reconciliation"
+
                     result["message"] = (
-                        "WARNING: GenSlave relay is ON but no active run in GenMaster. "
-                        "Manual intervention may be required."
+                        "GenSlave relay was ON - synced GenMaster state to match. "
+                        f"Created run record #{run.id}"
                     )
                     await self.log_event(
-                        "RECONCILIATION_MISMATCH",
+                        "RECONCILIATION_SYNC",
                         {
                             "slave_relay": result["relay_state"],
-                            "master_generator_running": state.generator_running,
+                            "created_run_id": run.id,
+                            "action": "synced_genmaster_to_match_genslave",
+                        },
+                        severity="WARNING",
+                    )
+
+                # If slave's relay is OFF but we think generator is running,
+                # also sync - the physical relay state is the truth
+                elif not result["relay_state"] and state.generator_running:
+                    logger.warning(
+                        "Reconciliation: GenSlave relay is OFF but GenMaster "
+                        "shows generator running - syncing GenMaster to match reality"
+                    )
+
+                    # Close any active run since generator is actually stopped
+                    if state.current_run_id:
+                        run_result = await db.execute(
+                            select(GeneratorRun).where(
+                                GeneratorRun.id == state.current_run_id
+                            )
+                        )
+                        run = run_result.scalar_one_or_none()
+                        if run and run.end_time is None:
+                            run.end_time = int(time.time())
+                            run.stop_reason = "reconciliation"
+                            run.notes = (run.notes or "") + " [Closed during reconciliation - relay was off]"
+
+                    # Update state to match reality
+                    state.generator_running = False
+                    state.generator_start_time = None
+                    state.current_run_id = None
+                    state.run_trigger = "idle"
+
+                    result["message"] = (
+                        "GenSlave relay was OFF - synced GenMaster state to match."
+                    )
+                    await self.log_event(
+                        "RECONCILIATION_SYNC",
+                        {
+                            "slave_relay": result["relay_state"],
+                            "action": "synced_genmaster_to_match_genslave",
                         },
                         severity="WARNING",
                     )
@@ -352,7 +414,8 @@ class StateMachine:
 
                 # Turn on the relay via GenSlave
                 # GenSlave will reject if relay is not armed
-                slave_client = await self._get_slave_client()
+                # Use longer timeout (10s) for critical relay operations
+                slave_client = await self._get_slave_client(timeout=10.0)
                 try:
                     relay_response = await slave_client.relay_on()
                 finally:
@@ -456,7 +519,8 @@ class StateMachine:
                     return None
 
                 # Turn off the relay via GenSlave
-                slave_client = await self._get_slave_client()
+                # Use longer timeout (10s) for critical relay operations
+                slave_client = await self._get_slave_client(timeout=10.0)
                 try:
                     relay_response = await slave_client.relay_off()
                     if not relay_response.success:
