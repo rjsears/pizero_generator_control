@@ -33,8 +33,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def _create_slave_client(timeout: float = 3.0) -> SlaveClient:
+async def create_slave_client(timeout: float = 3.0) -> SlaveClient:
     """Create a SlaveClient with config from Redis cache (or database fallback).
+
+    This function should be used by ALL code that needs to communicate with GenSlave.
+    It reads the current config from Redis/database, ensuring that IP changes made
+    via the UI take effect immediately without requiring a restart.
 
     Args:
         timeout: Total request timeout in seconds. Default reduced from 5.0 to 3.0
@@ -215,7 +219,7 @@ class SlaveStatusService:
         """
         async with self._client_lock:
             if self._shared_client is None:
-                self._shared_client = await _create_slave_client(timeout=3.0)
+                self._shared_client = await create_slave_client(timeout=3.0)
                 logger.debug("Created shared SlaveClient")
             return self._shared_client
 

@@ -74,23 +74,10 @@ class StateMachine:
         self._webhook_service = webhook_service
 
     async def _get_slave_client(self):
-        """Get a SlaveClient instance with current config."""
-        from app.models import Config
-        from app.services.slave_client import SlaveClient
+        """Get a SlaveClient instance with current config from Redis cache."""
+        from app.services.slave_status_service import create_slave_client
 
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(Config).where(Config.id == 1))
-            config = result.scalar_one_or_none()
-
-        if config:
-            if config.genslave_ip:
-                base_url = f"http://{config.genslave_ip}:8001"
-            else:
-                base_url = config.slave_api_url
-            return SlaveClient(base_url=base_url, secret=config.slave_api_secret)
-        else:
-            from app.config import settings
-            return SlaveClient(base_url=settings.slave_api_url, secret=settings.slave_api_secret)
+        return await create_slave_client()
 
     async def initialize(self) -> None:
         """

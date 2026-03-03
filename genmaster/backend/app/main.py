@@ -75,8 +75,7 @@ from app.services.gpio_monitor import GPIOMonitor
 from app.services.metrics_service import get_metrics_service
 from app.services.redis_cache import get_redis_cache
 from app.services.scheduler import SchedulerService
-from app.services.slave_client import SlaveClient
-from app.services.slave_status_service import get_slave_status_service
+from app.services.slave_status_service import create_slave_client, get_slave_status_service
 from app.services.state_machine import StateMachine
 from app.services.webhook import WebhookService
 
@@ -278,7 +277,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         # Attempt to reconcile state with GenSlave
         logger.info("Attempting state reconciliation with GenSlave...")
-        slave_client = SlaveClient()
+        slave_client = await create_slave_client()
         try:
             reconcile_result = await state_machine.reconcile_with_slave(slave_client)
             if reconcile_result["success"]:
