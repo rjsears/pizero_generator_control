@@ -73,11 +73,16 @@ class StateMachine:
         """Set the webhook service for notifications."""
         self._webhook_service = webhook_service
 
-    async def _get_slave_client(self):
-        """Get a SlaveClient instance with current config from Redis cache."""
+    async def _get_slave_client(self, timeout: float = 3.0):
+        """Get a SlaveClient instance with current config from Redis cache.
+
+        Args:
+            timeout: Request timeout in seconds. Use longer timeouts for critical
+                     operations like relay control (default 3.0, use 10.0 for relay).
+        """
         from app.services.slave_status_service import create_slave_client
 
-        return await create_slave_client()
+        return await create_slave_client(timeout=timeout)
 
     async def initialize(self) -> None:
         """
@@ -202,22 +207,65 @@ class StateMachine:
                 state.slave_relay_state = result["relay_state"]
                 state.slave_relay_armed = result["slave_armed"]
 
-                # If slave's relay is ON but we think generator is stopped,
-                # we have a mismatch - log it but don't auto-start
+                # GenMaster is the source of truth - if there's a mismatch,
+                # send commands to GenSlave to match GenMaster's state
                 if result["relay_state"] and not state.generator_running:
+                    # GenSlave relay ON but GenMaster says stopped - turn OFF GenSlave
                     logger.warning(
                         "Reconciliation: GenSlave relay is ON but GenMaster "
-                        "shows generator stopped - relay may have been left on"
+                        "shows generator stopped - sending relay OFF to GenSlave"
                     )
-                    result["message"] = (
-                        "WARNING: GenSlave relay is ON but no active run in GenMaster. "
-                        "Manual intervention may be required."
-                    )
+                    try:
+                        off_response = await slave_client.relay_off()
+                        if off_response.success:
+                            result["message"] = "Mismatch fixed: sent relay OFF to GenSlave"
+                            logger.info("Reconciliation: relay OFF sent successfully")
+                        else:
+                            result["message"] = f"Mismatch: relay OFF failed: {off_response.error}"
+                            logger.error(f"Reconciliation: relay OFF failed: {off_response.error}")
+                    except Exception as e:
+                        result["message"] = f"Mismatch: relay OFF error: {e}"
+                        logger.error(f"Reconciliation: error sending relay OFF: {e}")
+
                     await self.log_event(
-                        "RECONCILIATION_MISMATCH",
+                        "RECONCILIATION_MISMATCH_FIXED",
                         {
                             "slave_relay": result["relay_state"],
-                            "master_generator_running": state.generator_running,
+                            "master_running": state.generator_running,
+                            "action": "sent_relay_off_to_genslave",
+                        },
+                        severity="WARNING",
+                    )
+
+                elif not result["relay_state"] and state.generator_running:
+                    # GenSlave relay OFF but GenMaster says running - turn ON GenSlave (if armed)
+                    logger.warning(
+                        "Reconciliation: GenSlave relay is OFF but GenMaster "
+                        "shows generator running - sending relay ON to GenSlave"
+                    )
+                    if result["slave_armed"]:
+                        try:
+                            on_response = await slave_client.relay_on()
+                            if on_response.success:
+                                result["message"] = "Mismatch fixed: sent relay ON to GenSlave"
+                                logger.info("Reconciliation: relay ON sent successfully")
+                            else:
+                                result["message"] = f"Mismatch: relay ON failed: {on_response.error}"
+                                logger.error(f"Reconciliation: relay ON failed: {on_response.error}")
+                        except Exception as e:
+                            result["message"] = f"Mismatch: relay ON error: {e}"
+                            logger.error(f"Reconciliation: error sending relay ON: {e}")
+                    else:
+                        result["message"] = "Mismatch: GenSlave not armed, cannot turn ON"
+                        logger.warning("Reconciliation: cannot turn ON relay - GenSlave not armed")
+
+                    await self.log_event(
+                        "RECONCILIATION_MISMATCH_FIXED",
+                        {
+                            "slave_relay": result["relay_state"],
+                            "master_running": state.generator_running,
+                            "slave_armed": result["slave_armed"],
+                            "action": "sent_relay_on_to_genslave" if result["slave_armed"] else "skipped_not_armed",
                         },
                         severity="WARNING",
                     )
@@ -352,7 +400,8 @@ class StateMachine:
 
                 # Turn on the relay via GenSlave
                 # GenSlave will reject if relay is not armed
-                slave_client = await self._get_slave_client()
+                # Use longer timeout (10s) for critical relay operations
+                slave_client = await self._get_slave_client(timeout=10.0)
                 try:
                     relay_response = await slave_client.relay_on()
                 finally:
@@ -456,7 +505,8 @@ class StateMachine:
                     return None
 
                 # Turn off the relay via GenSlave
-                slave_client = await self._get_slave_client()
+                # Use longer timeout (10s) for critical relay operations
+                slave_client = await self._get_slave_client(timeout=10.0)
                 try:
                     relay_response = await slave_client.relay_off()
                     if not relay_response.success:

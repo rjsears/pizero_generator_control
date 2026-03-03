@@ -113,6 +113,30 @@ class FailsafeMonitor:
                 logger.info("Syncing armed state from GenMaster: disarming")
                 self._relay_service.disarm(source="genmaster_sync")
 
+        # Sync relay/generator state from GenMaster (GenMaster is the source of truth)
+        # If GenMaster says generator should be running/stopped, GenSlave must match
+        genmaster_running = data.get("generator_running")
+        if genmaster_running is not None and self._relay_service:
+            current_relay = self._relay_service.get_state()
+
+            if genmaster_running and not current_relay:
+                # GenMaster says running, relay is OFF - turn ON if armed
+                if self._relay_service.is_armed:
+                    logger.warning(
+                        "State mismatch: GenMaster says running but relay is OFF - turning ON"
+                    )
+                    self._relay_service.relay_on()
+                else:
+                    logger.warning(
+                        "State mismatch: GenMaster says running but relay is OFF and not armed - ignoring"
+                    )
+            elif not genmaster_running and current_relay:
+                # GenMaster says stopped, relay is ON - turn OFF (force even if not armed for safety)
+                logger.warning(
+                    "State mismatch: GenMaster says stopped but relay is ON - turning OFF"
+                )
+                self._relay_service.relay_off(force=True)
+
         # After failsafe recovery, send notification with current armed state
         # This tells the user whether they need to re-arm or if it self-healed
         # Use delayed notification to allow auto-arm from GenMaster sync to complete first

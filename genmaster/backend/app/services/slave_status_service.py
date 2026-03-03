@@ -318,8 +318,15 @@ class SlaveStatusService:
             if isinstance(relay_resp, Exception):
                 logger.debug(f"Relay state poll exception: {relay_resp}")
             elif relay_resp.success:
+                old_relay_state = self._cache.relay_state.get("relay_state", None)
+                new_relay_state = (relay_resp.data or {}).get("relay_state", False)
                 self._cache.relay_state = relay_resp.data or {}
                 self._cache.relay_state_updated = now
+
+                # Check for state mismatch and trigger reconciliation if needed
+                # Only check if state_machine is available and relay state just changed
+                if self._state_machine and old_relay_state != new_relay_state:
+                    await self._check_state_mismatch(new_relay_state)
             else:
                 logger.debug(f"Relay state poll failed: {relay_resp.error}")
 
@@ -544,6 +551,38 @@ class SlaveStatusService:
             return True
         age = int(time.time()) - self._cache.last_successful_fetch
         return age > self.STALE_THRESHOLD
+
+    async def _check_state_mismatch(self, genslave_relay_on: bool) -> None:
+        """
+        Check if GenSlave relay state matches GenMaster's belief.
+
+        GenMaster is the source of truth. If there's a mismatch, the next heartbeat
+        will automatically sync GenSlave to match GenMaster (via the sync logic in
+        GenSlave's failsafe.py). This method just logs the mismatch for awareness.
+        """
+        if not self._state_machine:
+            return
+
+        try:
+            generator_status = await self._state_machine.get_generator_status()
+            genmaster_running = generator_status.running
+
+            # Detect mismatch: relay is ON but GenMaster thinks generator is stopped
+            if genslave_relay_on and not genmaster_running:
+                logger.warning(
+                    "State mismatch detected: GenSlave relay ON but GenMaster shows stopped. "
+                    "Next heartbeat will sync GenSlave to match GenMaster."
+                )
+
+            # Detect mismatch: relay is OFF but GenMaster thinks generator is running
+            elif not genslave_relay_on and genmaster_running:
+                logger.warning(
+                    "State mismatch detected: GenSlave relay OFF but GenMaster shows running. "
+                    "Next heartbeat will sync GenSlave to match GenMaster."
+                )
+
+        except Exception as e:
+            logger.error(f"Error during state mismatch check: {e}")
 
     async def update_relay_state(
         self,
