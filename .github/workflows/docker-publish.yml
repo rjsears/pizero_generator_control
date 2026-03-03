@@ -357,3 +357,30 @@ jobs:
       - name: Image digest
         if: github.event_name != 'pull_request'
         run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
+
+  # ==========================================================================
+  # Security Scanning for Host-Tools
+  # ==========================================================================
+  security-scan-host-tools:
+    needs: build-host-tools
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && needs.build-host-tools.result == 'success'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/rjsears/genmaster-host-tools:latest
+          format: 'sarif'
+          output: 'trivy-results-host-tools.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: 'trivy-results-host-tools.sarif'
