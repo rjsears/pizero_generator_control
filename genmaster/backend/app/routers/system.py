@@ -1746,3 +1746,346 @@ async def reboot_host():
             message=f"Failed to initiate reboot: {str(e)}",
             action="reboot",
         )
+
+
+# =============================================================================
+# WiFi Watchdog Management
+# =============================================================================
+
+
+class WifiWatchdogStatus(BaseModel):
+    """WiFi watchdog service status."""
+
+    installed: bool = Field(description="Whether watchdog script is installed on host")
+    enabled: bool = Field(description="Whether systemd service is enabled")
+    running: bool = Field(description="Whether service is currently active")
+    failure_count: int = Field(default=0, description="Consecutive connectivity failures")
+    last_recovery: Optional[str] = Field(
+        default=None, description="Timestamp of last recovery"
+    )
+
+
+class WifiWatchdogActionResponse(BaseModel):
+    """Response from WiFi watchdog actions."""
+
+    success: bool = Field(description="Whether the action succeeded")
+    message: str = Field(description="Human-readable status message")
+    status: Optional[WifiWatchdogStatus] = Field(
+        default=None, description="Current watchdog status after action"
+    )
+
+
+def _run_host_command_sync(cmd: str) -> tuple[bool, str]:
+    """
+    Run a command on the host using nsenter in a privileged container.
+
+    Returns (success, output_or_error).
+    """
+    import logging
+
+    import docker
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        client = docker.from_env()
+
+        # Run command using nsenter to enter host namespaces
+        result = client.containers.run(
+            "alpine:latest",
+            command=["sh", "-c", f"nsenter -t 1 -m -u -n -i -- {cmd}"],
+            privileged=True,
+            pid_mode="host",
+            remove=True,
+            detach=False,
+        )
+
+        output = result.decode("utf-8").strip() if result else ""
+        return True, output
+
+    except docker.errors.ContainerError as e:
+        # Container exited with non-zero code
+        output = e.stderr.decode("utf-8").strip() if e.stderr else str(e)
+        logger.debug(f"Host command failed: {cmd[:50]}... -> {output}")
+        return False, output
+    except Exception as e:
+        logger.error(f"Error running host command: {e}")
+        return False, str(e)
+
+
+def _get_wifi_watchdog_status() -> WifiWatchdogStatus:
+    """Get current WiFi watchdog status from host."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Check if script is installed
+    installed_ok, _ = _run_host_command_sync("test -f /usr/local/bin/wifi-watchdog.sh")
+    installed = installed_ok
+
+    # Check if service is enabled
+    enabled_ok, _ = _run_host_command_sync("systemctl is-enabled wifi-watchdog 2>/dev/null")
+    enabled = enabled_ok
+
+    # Check if service is running
+    running_ok, _ = _run_host_command_sync("systemctl is-active wifi-watchdog 2>/dev/null")
+    running = running_ok
+
+    # Read state file for failure count and last recovery
+    failure_count = 0
+    last_recovery = None
+
+    if running:
+        state_ok, state_output = _run_host_command_sync(
+            "cat /var/run/wifi-watchdog.state 2>/dev/null"
+        )
+        if state_ok and state_output:
+            for line in state_output.split("\n"):
+                if line.startswith("CONSECUTIVE_FAILURES="):
+                    try:
+                        failure_count = int(line.split("=")[1])
+                    except (IndexError, ValueError):
+                        pass
+
+        # Check journal for last recovery message
+        recovery_ok, recovery_output = _run_host_command_sync(
+            "journalctl -u wifi-watchdog --no-pager -n 50 2>/dev/null | grep -i 'restored' | tail -1"
+        )
+        if recovery_ok and recovery_output:
+            # Extract timestamp from journal output
+            parts = recovery_output.split()
+            if len(parts) >= 3:
+                last_recovery = " ".join(parts[:3])
+
+    return WifiWatchdogStatus(
+        installed=installed,
+        enabled=enabled,
+        running=running,
+        failure_count=failure_count,
+        last_recovery=last_recovery,
+    )
+
+
+@router.get("/wifi-watchdog", response_model=WifiWatchdogStatus)
+async def get_wifi_watchdog_status():
+    """
+    Get WiFi watchdog service status.
+
+    Returns installation status, enabled/running state, and failure metrics.
+    """
+    return await asyncio.to_thread(_get_wifi_watchdog_status)
+
+
+@router.post("/wifi-watchdog/install", response_model=WifiWatchdogActionResponse)
+async def install_wifi_watchdog():
+    """
+    Install the WiFi watchdog service on the host.
+
+    Copies the watchdog script and systemd service file from the container
+    to the host, then enables and starts the service.
+    """
+    import logging
+    import os
+
+    import docker
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        client = docker.from_env()
+
+        # Check if script files exist in container
+        script_path = "/app/scripts/wifi-watchdog.sh"
+        service_path = "/app/scripts/wifi-watchdog.service"
+
+        if not os.path.exists(script_path):
+            return WifiWatchdogActionResponse(
+                success=False,
+                message=f"Script file not found at {script_path}. Ensure scripts directory is mounted.",
+                status=None,
+            )
+
+        if not os.path.exists(service_path):
+            return WifiWatchdogActionResponse(
+                success=False,
+                message=f"Service file not found at {service_path}. Ensure scripts directory is mounted.",
+                status=None,
+            )
+
+        # Read script and service file contents
+        with open(script_path, "r") as f:
+            script_content = f.read()
+
+        with open(service_path, "r") as f:
+            service_content = f.read()
+
+        # Install script to host
+        # Using base64 to safely transfer content through shell
+        import base64
+
+        script_b64 = base64.b64encode(script_content.encode()).decode()
+        service_b64 = base64.b64encode(service_content.encode()).decode()
+
+        # Copy script to host
+        logger.info("Installing wifi-watchdog.sh to host")
+        install_script_cmd = (
+            f"echo '{script_b64}' | base64 -d > /usr/local/bin/wifi-watchdog.sh && "
+            "chmod +x /usr/local/bin/wifi-watchdog.sh"
+        )
+        ok, output = await asyncio.to_thread(_run_host_command_sync, install_script_cmd)
+        if not ok:
+            return WifiWatchdogActionResponse(
+                success=False,
+                message=f"Failed to install script: {output}",
+                status=None,
+            )
+
+        # Copy service file to host
+        logger.info("Installing wifi-watchdog.service to host")
+        install_service_cmd = (
+            f"echo '{service_b64}' | base64 -d > /etc/systemd/system/wifi-watchdog.service"
+        )
+        ok, output = await asyncio.to_thread(_run_host_command_sync, install_service_cmd)
+        if not ok:
+            return WifiWatchdogActionResponse(
+                success=False,
+                message=f"Failed to install service file: {output}",
+                status=None,
+            )
+
+        # Reload systemd and enable service
+        logger.info("Enabling wifi-watchdog service")
+        ok, output = await asyncio.to_thread(
+            _run_host_command_sync,
+            "systemctl daemon-reload && systemctl enable --now wifi-watchdog"
+        )
+        if not ok:
+            return WifiWatchdogActionResponse(
+                success=False,
+                message=f"Failed to enable service: {output}",
+                status=None,
+            )
+
+        # Get current status
+        status = await asyncio.to_thread(_get_wifi_watchdog_status)
+
+        logger.info("WiFi watchdog installed and started successfully")
+        return WifiWatchdogActionResponse(
+            success=True,
+            message="WiFi watchdog installed and started successfully",
+            status=status,
+        )
+
+    except Exception as e:
+        logger.error(f"Error installing wifi watchdog: {e}")
+        return WifiWatchdogActionResponse(
+            success=False,
+            message=f"Installation failed: {str(e)}",
+            status=None,
+        )
+
+
+@router.post("/wifi-watchdog/enable", response_model=WifiWatchdogActionResponse)
+async def enable_wifi_watchdog():
+    """
+    Enable and start the WiFi watchdog service.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Check if installed first
+        status = await asyncio.to_thread(_get_wifi_watchdog_status)
+        if not status.installed:
+            return WifiWatchdogActionResponse(
+                success=False,
+                message="WiFi watchdog is not installed. Install it first.",
+                status=status,
+            )
+
+        # Enable and start the service
+        ok, output = await asyncio.to_thread(
+            _run_host_command_sync,
+            "systemctl enable --now wifi-watchdog"
+        )
+
+        if not ok:
+            return WifiWatchdogActionResponse(
+                success=False,
+                message=f"Failed to enable service: {output}",
+                status=status,
+            )
+
+        # Get updated status
+        status = await asyncio.to_thread(_get_wifi_watchdog_status)
+
+        logger.info("WiFi watchdog enabled and started")
+        return WifiWatchdogActionResponse(
+            success=True,
+            message="WiFi watchdog enabled and started",
+            status=status,
+        )
+
+    except Exception as e:
+        logger.error(f"Error enabling wifi watchdog: {e}")
+        return WifiWatchdogActionResponse(
+            success=False,
+            message=f"Failed to enable: {str(e)}",
+            status=None,
+        )
+
+
+@router.post("/wifi-watchdog/disable", response_model=WifiWatchdogActionResponse)
+async def disable_wifi_watchdog():
+    """
+    Disable and stop the WiFi watchdog service.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Disable and stop the service
+        ok, output = await asyncio.to_thread(
+            _run_host_command_sync,
+            "systemctl disable --now wifi-watchdog"
+        )
+
+        if not ok:
+            # If service doesn't exist, that's fine
+            if "not found" in output.lower() or "no such" in output.lower():
+                return WifiWatchdogActionResponse(
+                    success=True,
+                    message="WiFi watchdog is not installed",
+                    status=WifiWatchdogStatus(
+                        installed=False,
+                        enabled=False,
+                        running=False,
+                        failure_count=0,
+                        last_recovery=None,
+                    ),
+                )
+            return WifiWatchdogActionResponse(
+                success=False,
+                message=f"Failed to disable service: {output}",
+                status=None,
+            )
+
+        # Get updated status
+        status = await asyncio.to_thread(_get_wifi_watchdog_status)
+
+        logger.info("WiFi watchdog disabled and stopped")
+        return WifiWatchdogActionResponse(
+            success=True,
+            message="WiFi watchdog disabled and stopped",
+            status=status,
+        )
+
+    except Exception as e:
+        logger.error(f"Error disabling wifi watchdog: {e}")
+        return WifiWatchdogActionResponse(
+            success=False,
+            message=f"Failed to disable: {str(e)}",
+            status=None,
+        )

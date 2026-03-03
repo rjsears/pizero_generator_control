@@ -103,6 +103,11 @@ export const systemApi = {
   // Host power control
   hostShutdown: () => api.post('/system/host/shutdown'),
   hostReboot: () => api.post('/system/host/reboot'),
+  // WiFi watchdog management
+  getWifiWatchdog: () => api.get('/system/wifi-watchdog'),
+  installWifiWatchdog: () => api.post('/system/wifi-watchdog/install', null, { timeout: 30000 }),
+  enableWifiWatchdog: () => api.post('/system/wifi-watchdog/enable', null, { timeout: 15000 }),
+  disableWifiWatchdog: () => api.post('/system/wifi-watchdog/disable', null, { timeout: 15000 }),
   // Automation arm/disarm (GenMaster state machine control)
   getArmStatus: () => api.get('/system/arm'),
   arm: (source = 'web') => api.post('/system/arm', { source }),

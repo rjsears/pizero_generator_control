@@ -95,6 +95,8 @@ from app.schemas.system import (
     FullSystemStatus,
     SystemHealth,
     VictronStatus,
+    WifiWatchdogActionResponse,
+    WifiWatchdogStatus,
 )
 from app.schemas.system_notifications import (
     BulkUpdateRequest,
@@ -177,6 +179,8 @@ __all__ = [
     "AutomationArmStatus",
     "ArmRequest",
     "ArmResponse",
+    "WifiWatchdogStatus",
+    "WifiWatchdogActionResponse",
     # Webhook
     "WebhookPayload",
     "WebhookEvent",

@@ -140,4 +140,36 @@ export default {
   getTimezone() {
     return api.get('/system/timezone')
   },
+
+  /**
+   * Get WiFi watchdog status
+   * @returns {Promise<Object>}
+   */
+  getWifiWatchdog() {
+    return api.get('/system/wifi-watchdog')
+  },
+
+  /**
+   * Install WiFi watchdog service on host
+   * @returns {Promise<Object>}
+   */
+  installWifiWatchdog() {
+    return api.post('/system/wifi-watchdog/install')
+  },
+
+  /**
+   * Enable WiFi watchdog service
+   * @returns {Promise<Object>}
+   */
+  enableWifiWatchdog() {
+    return api.post('/system/wifi-watchdog/enable')
+  },
+
+  /**
+   * Disable WiFi watchdog service
+   * @returns {Promise<Object>}
+   */
+  disableWifiWatchdog() {
+    return api.post('/system/wifi-watchdog/disable')
+  },
 }

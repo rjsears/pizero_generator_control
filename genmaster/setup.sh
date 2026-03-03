@@ -62,6 +62,7 @@ DEFAULT_PORTAINER_PORT="9000"
 INSTALL_CLOUDFLARE_TUNNEL=false
 INSTALL_TAILSCALE=false
 INSTALL_PORTAINER=false
+INSTALL_WIFI_WATCHDOG=false
 
 # GenSlave configuration
 GENSLAVE_ENABLED=true
@@ -591,6 +592,7 @@ SAVED_INSTALL_TAILSCALE="$INSTALL_TAILSCALE"
 SAVED_TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
 SAVED_TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
 SAVED_MOCK_GPIO_MODE="$MOCK_GPIO_MODE"
+SAVED_INSTALL_WIFI_WATCHDOG="$INSTALL_WIFI_WATCHDOG"
 EOF
     chmod 600 "$STATE_FILE"
 }
@@ -622,6 +624,7 @@ load_state() {
         INSTALL_TAILSCALE="${SAVED_INSTALL_TAILSCALE:-false}"
         TAILSCALE_AUTH_KEY="${SAVED_TAILSCALE_AUTH_KEY:-}"
         TAILSCALE_HOSTNAME="${SAVED_TAILSCALE_HOSTNAME:-}"
+        INSTALL_WIFI_WATCHDOG="${SAVED_INSTALL_WIFI_WATCHDOG:-false}"
         MOCK_GPIO_MODE="${SAVED_MOCK_GPIO_MODE:-false}"
         CURRENT_STEP="${SAVED_STEP_NUM:-0}"
         return 0
@@ -2399,6 +2402,23 @@ configure_optional_services() {
         INSTALL_PORTAINER=true
         print_success "Portainer enabled"
     fi
+
+    # WiFi Watchdog
+    echo ""
+    if confirm_prompt "Install WiFi Watchdog for connectivity monitoring?" "y"; then
+        print_subsection
+        echo -e "${WHITE}  WiFi Watchdog Configuration${NC}"
+        echo ""
+        echo -e "  ${GRAY}WiFi Watchdog monitors connectivity and automatically recovers${NC}"
+        echo -e "  ${GRAY}from WiFi failures with escalating recovery actions:${NC}"
+        echo ""
+        echo -e "    • Soft WiFi reset (1-3 failures)"
+        echo -e "    • Hard WiFi reset (4-5 failures)"
+        echo -e "    • System reboot (6+ failures, max once per hour)"
+        echo ""
+        INSTALL_WIFI_WATCHDOG=true
+        print_success "WiFi Watchdog will be installed"
+    fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2439,6 +2459,7 @@ show_configuration_summary() {
 
     echo -e "  ${WHITE}${BOLD}Application${NC}"
     echo -e "    Timezone: ${CYAN}$TIMEZONE${NC}"
+    [ "$INSTALL_WIFI_WATCHDOG" = true ] && echo -e "    WiFi Watchdog: ${GREEN}Enabled${NC}"
     echo ""
 
     if confirm_prompt "Proceed with this configuration?"; then
@@ -2826,6 +2847,7 @@ EOF
       - /var/run/docker.sock:/var/run/docker.sock
       - ./nginx:/app/nginx
       - ./.env:/config/.env:rw
+      - ../scripts:/app/scripts:ro
     depends_on:
       db:
         condition: service_healthy
@@ -3280,6 +3302,87 @@ obtain_ssl_certificate() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# WIFI WATCHDOG INSTALLATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+install_wifi_watchdog() {
+    if [ "$INSTALL_WIFI_WATCHDOG" != true ]; then
+        return 0
+    fi
+
+    print_section "Installing WiFi Watchdog"
+
+    # Get the repository root (parent of genmaster directory)
+    local repo_root
+    repo_root=$(dirname "$SCRIPT_DIR")
+    local watchdog_script="${repo_root}/scripts/wifi-watchdog.sh"
+    local watchdog_service="${repo_root}/scripts/wifi-watchdog.service"
+
+    # Check if scripts exist in repo
+    if [ ! -f "$watchdog_script" ]; then
+        print_error "WiFi watchdog script not found: $watchdog_script"
+        print_info "Skipping WiFi watchdog installation"
+        return 1
+    fi
+
+    if [ ! -f "$watchdog_service" ]; then
+        print_error "WiFi watchdog service file not found: $watchdog_service"
+        print_info "Skipping WiFi watchdog installation"
+        return 1
+    fi
+
+    # Check if WiFi interface exists
+    local wifi_iface=""
+    if command -v iw &>/dev/null; then
+        wifi_iface=$(iw dev 2>/dev/null | grep Interface | awk '{print $2}' | head -1)
+    fi
+    if [ -z "$wifi_iface" ]; then
+        for i in /sys/class/net/*/wireless; do
+            if [ -d "$i" ]; then
+                wifi_iface=$(basename "$(dirname "$i")")
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$wifi_iface" ]; then
+        print_warning "No WiFi interface detected - WiFi watchdog may not function"
+        if ! confirm_prompt "Install anyway?"; then
+            print_info "Skipping WiFi watchdog installation"
+            return 0
+        fi
+    else
+        print_info "Detected WiFi interface: $wifi_iface"
+    fi
+
+    # Copy script to /usr/local/bin
+    print_info "Installing watchdog script..."
+    cp "$watchdog_script" /usr/local/bin/wifi-watchdog.sh
+    chmod +x /usr/local/bin/wifi-watchdog.sh
+    print_success "Installed /usr/local/bin/wifi-watchdog.sh"
+
+    # Copy service file
+    print_info "Installing systemd service..."
+    cp "$watchdog_service" /etc/systemd/system/wifi-watchdog.service
+    print_success "Installed /etc/systemd/system/wifi-watchdog.service"
+
+    # Enable and start service
+    systemctl daemon-reload
+    systemctl enable wifi-watchdog
+    systemctl start wifi-watchdog
+
+    # Verify it's running
+    if systemctl is-active --quiet wifi-watchdog; then
+        print_success "WiFi Watchdog is running"
+    else
+        print_warning "WiFi Watchdog service may not have started properly"
+        print_info "Check status with: systemctl status wifi-watchdog"
+    fi
+
+    return 0
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # DEPLOYMENT
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -3712,6 +3815,10 @@ main() {
             fi
             # Check if portainer is in docker-compose
             grep -q "portainer:" "${SCRIPT_DIR}/docker-compose.yaml" 2>/dev/null && INSTALL_PORTAINER=true
+            # Check WiFi watchdog status from config
+            [ "$WIFI_WATCHDOG_ENABLED" = "true" ] && INSTALL_WIFI_WATCHDOG=true
+            # Check if wifi-watchdog service is installed on host
+            systemctl is-enabled wifi-watchdog 2>/dev/null && INSTALL_WIFI_WATCHDOG=true
             # Set DNS certbot flags based on provider
             case $DNS_PROVIDER_NAME in
                 cloudflare)
@@ -3771,6 +3878,10 @@ main() {
             if confirm_prompt "Redeploy now?"; then
                 deploy_stack
             fi
+            # Install/update WiFi watchdog if enabled
+            if [ "$INSTALL_WIFI_WATCHDOG" = true ]; then
+                install_wifi_watchdog
+            fi
             exit 0
         fi
     fi
@@ -3810,6 +3921,7 @@ MOCK_GPIO_MODE=${MOCK_GPIO_MODE}
 PORTAINER_ENABLED=${INSTALL_PORTAINER}
 CLOUDFLARE_ENABLED=${INSTALL_CLOUDFLARE_TUNNEL}
 TAILSCALE_ENABLED=${INSTALL_TAILSCALE}
+WIFI_WATCHDOG_ENABLED=${INSTALL_WIFI_WATCHDOG}
 USE_DOCKER_HUB_IMAGE=${USE_DOCKER_HUB_IMAGE}
 EOF
         chmod 600 "${CONFIG_FILE}"
@@ -3818,8 +3930,14 @@ EOF
 
         if confirm_prompt "Deploy now?"; then
             deploy_stack
+            # Install WiFi watchdog (runs on host, not in container)
+            install_wifi_watchdog
         else
             print_info "Run 'docker compose up -d' when ready."
+            # Still install WiFi watchdog even if not deploying containers
+            if [ "$INSTALL_WIFI_WATCHDOG" = true ]; then
+                install_wifi_watchdog
+            fi
         fi
     fi
 

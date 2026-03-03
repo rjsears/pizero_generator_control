@@ -126,6 +126,18 @@ const tailscaleInfo = ref({ installed: false, running: false, logged_in: false, 
 const hostWifiInfo = ref({ available: false, connected: false, interface: null, ssid: null, signal_dbm: null, signal_percent: null, ip_address: null })
 const peersExpanded = ref(false)
 
+// WiFi Watchdog state
+const wifiWatchdog = ref({
+  installed: false,
+  enabled: false,
+  running: false,
+  failure_count: 0,
+  last_recovery: null,
+})
+const wifiWatchdogLoading = ref(false)
+const wifiWatchdogInstalling = ref(false)
+const wifiWatchdogToggling = ref(false)
+
 // WiFi configuration modal state
 const showWifiConfigModal = ref(false)
 const wifiNetworks = ref([])
@@ -301,6 +313,76 @@ async function loadHealthData() {
     }
     healthLoading.value = false
     loading.value = false
+  }
+}
+
+// Load WiFi watchdog status
+async function loadWifiWatchdogStatus() {
+  wifiWatchdogLoading.value = true
+  try {
+    const response = await systemApi.getWifiWatchdog()
+    wifiWatchdog.value = {
+      installed: false,
+      enabled: false,
+      running: false,
+      failure_count: 0,
+      last_recovery: null,
+      ...(response.data || {})
+    }
+  } catch (error) {
+    console.error('WiFi watchdog status load failed:', error)
+    // Don't show error notification - watchdog might not be available
+  } finally {
+    wifiWatchdogLoading.value = false
+  }
+}
+
+// Install WiFi watchdog
+async function installWifiWatchdog() {
+  wifiWatchdogInstalling.value = true
+  try {
+    const response = await systemApi.installWifiWatchdog()
+    if (response.data?.success) {
+      notificationStore.success(response.data.message || 'WiFi watchdog installed successfully')
+      if (response.data.status) {
+        wifiWatchdog.value = response.data.status
+      } else {
+        await loadWifiWatchdogStatus()
+      }
+    } else {
+      notificationStore.error(response.data?.message || 'Failed to install WiFi watchdog')
+    }
+  } catch (error) {
+    console.error('WiFi watchdog install failed:', error)
+    notificationStore.error('Failed to install WiFi watchdog')
+  } finally {
+    wifiWatchdogInstalling.value = false
+  }
+}
+
+// Toggle WiFi watchdog enabled state
+async function toggleWifiWatchdog() {
+  wifiWatchdogToggling.value = true
+  try {
+    const response = wifiWatchdog.value.running
+      ? await systemApi.disableWifiWatchdog()
+      : await systemApi.enableWifiWatchdog()
+
+    if (response.data?.success) {
+      notificationStore.success(response.data.message || 'WiFi watchdog toggled successfully')
+      if (response.data.status) {
+        wifiWatchdog.value = response.data.status
+      } else {
+        await loadWifiWatchdogStatus()
+      }
+    } else {
+      notificationStore.error(response.data?.message || 'Failed to toggle WiFi watchdog')
+    }
+  } catch (error) {
+    console.error('WiFi watchdog toggle failed:', error)
+    notificationStore.error('Failed to toggle WiFi watchdog')
+  } finally {
+    wifiWatchdogToggling.value = false
   }
 }
 
@@ -669,6 +751,8 @@ onMounted(async () => {
     activeTab.value = route.query.tab
   }
   await loadHealthData()
+  // Load WiFi watchdog status (don't await - load in background)
+  loadWifiWatchdogStatus()
 
   // Load tab-specific data based on initial tab
   if (activeTab.value === 'network') {
@@ -1151,6 +1235,102 @@ onMounted(async () => {
                   <span class="text-lg text-muted">GB</span>
                 </p>
                 <p class="text-xs text-muted mt-1">Total Docker disk usage</p>
+              </div>
+            </div>
+          </Card>
+
+          <!-- WiFi Watchdog -->
+          <Card :padding="false">
+            <div class="p-4">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="p-2 rounded-lg bg-cyan-100 dark:bg-cyan-500/20">
+                  <WifiIcon class="h-5 w-5 text-cyan-500" />
+                </div>
+                <div class="flex-1">
+                  <h3 class="font-semibold text-primary">WiFi Watchdog</h3>
+                  <p class="text-xs text-muted">Connectivity recovery service</p>
+                </div>
+                <span
+                  v-if="!wifiWatchdogLoading"
+                  :class="[
+                    'px-2 py-1 rounded-full text-xs font-medium',
+                    !wifiWatchdog.installed
+                      ? 'bg-gray-100 dark:bg-gray-500/20 text-gray-700 dark:text-gray-400'
+                      : wifiWatchdog.running
+                        ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
+                  ]"
+                >
+                  {{ !wifiWatchdog.installed ? 'NOT INSTALLED' : wifiWatchdog.running ? 'RUNNING' : 'STOPPED' }}
+                </span>
+                <span v-else class="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-500/20 text-gray-700 dark:text-gray-400">
+                  LOADING...
+                </span>
+              </div>
+
+              <!-- Not installed state -->
+              <div v-if="!wifiWatchdog.installed && !wifiWatchdogLoading" class="text-center py-4">
+                <p class="text-sm text-muted mb-4">WiFi watchdog monitors connectivity and recovers from WiFi failures automatically.</p>
+                <button
+                  @click="installWifiWatchdog"
+                  :disabled="wifiWatchdogInstalling"
+                  class="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  <span v-if="wifiWatchdogInstalling" class="flex items-center gap-2">
+                    <ArrowPathIcon class="h-4 w-4 animate-spin" />
+                    Installing...
+                  </span>
+                  <span v-else>Install Watchdog</span>
+                </button>
+              </div>
+
+              <!-- Installed state -->
+              <div v-else-if="wifiWatchdog.installed" class="space-y-3">
+                <!-- Toggle Switch -->
+                <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                  <span class="text-sm text-secondary">Service Enabled</span>
+                  <button
+                    @click="toggleWifiWatchdog"
+                    :disabled="wifiWatchdogToggling"
+                    :class="[
+                      'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                      wifiWatchdog.running ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600',
+                      wifiWatchdogToggling ? 'opacity-50 cursor-not-allowed' : ''
+                    ]"
+                  >
+                    <span
+                      :class="[
+                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                        wifiWatchdog.running ? 'translate-x-5' : 'translate-x-0'
+                      ]"
+                    />
+                  </button>
+                </div>
+
+                <!-- Failure Count -->
+                <div class="flex justify-between items-center text-sm">
+                  <span class="text-secondary">Consecutive Failures</span>
+                  <span
+                    :class="[
+                      'font-medium',
+                      wifiWatchdog.failure_count > 0 ? 'text-amber-500' : 'text-emerald-500'
+                    ]"
+                  >
+                    {{ wifiWatchdog.failure_count }}
+                  </span>
+                </div>
+
+                <!-- Last Recovery -->
+                <div v-if="wifiWatchdog.last_recovery" class="flex justify-between items-center text-sm">
+                  <span class="text-secondary">Last Recovery</span>
+                  <span class="font-medium text-primary text-xs">{{ wifiWatchdog.last_recovery }}</span>
+                </div>
+              </div>
+
+              <!-- Loading state -->
+              <div v-else class="text-center py-4">
+                <ArrowPathIcon class="h-6 w-6 animate-spin text-cyan-500 mx-auto" />
+                <p class="text-xs text-muted mt-2">Loading status...</p>
               </div>
             </div>
           </Card>
