@@ -21,6 +21,7 @@ from app.models import Config, SystemState
 from app.routers.env_config import read_env_file, write_env_file
 from app.schemas import ConfigResponse, ConfigUpdateRequest
 from app.services.redis_cache import invalidate_config_cache
+from app.services.slave_status_service import reset_slave_client
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,10 @@ async def update_config(
 
     # Invalidate Redis cache so services pick up new config
     await invalidate_config_cache()
+
+    # Reset the shared SlaveClient so it picks up new genslave config immediately
+    if "genslave_ip" in update_data or "slave_api_url" in update_data:
+        await reset_slave_client()
 
     return ConfigResponse(
         heartbeat_interval_seconds=config.heartbeat_interval_seconds,
