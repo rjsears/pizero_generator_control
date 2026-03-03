@@ -2888,6 +2888,7 @@ EOF
   certbot:
     image: ${DNS_CERTBOT_IMAGE:-certbot/certbot:latest}
     container_name: genmaster_certbot
+    restart: unless-stopped
     volumes:
       - letsencrypt:/etc/letsencrypt
       - certbot_data:/var/www/certbot
