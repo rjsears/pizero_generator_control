@@ -1777,7 +1777,10 @@ class WifiWatchdogActionResponse(BaseModel):
 
 def _run_host_command_sync(cmd: str) -> tuple[bool, str]:
     """
-    Run a command on the host using nsenter in a privileged container.
+    Run a command on the host using nsenter via the host-tools container.
+
+    The host-tools container runs with pid:host and has nsenter installed,
+    allowing us to execute commands in the host's namespaces.
 
     Returns (success, output_or_error).
     """
@@ -1790,24 +1793,32 @@ def _run_host_command_sync(cmd: str) -> tuple[bool, str]:
     try:
         client = docker.from_env()
 
-        # Run command using nsenter to enter host namespaces
-        result = client.containers.run(
-            "alpine:latest",
-            command=["sh", "-c", f"nsenter -t 1 -m -u -n -i -- {cmd}"],
-            privileged=True,
-            pid_mode="host",
-            remove=True,
-            detach=False,
+        # Get the host-tools container (has nsenter and pid:host)
+        try:
+            container = client.containers.get(HOST_TOOLS_CONTAINER)
+        except docker.errors.NotFound:
+            logger.warning(f"Host-tools container '{HOST_TOOLS_CONTAINER}' not found")
+            return False, f"Container '{HOST_TOOLS_CONTAINER}' not running. Start it with: docker compose up -d host-tools"
+
+        if container.status != "running":
+            logger.warning(f"Host-tools container is not running (status: {container.status})")
+            return False, f"Container not running (status: {container.status})"
+
+        # Use nsenter to run command in host's namespaces
+        # -t 1 targets PID 1 (host's init), -m -u -n -i enters mount, uts, net, ipc namespaces
+        exit_code, output = container.exec_run(
+            cmd=["nsenter", "-t", "1", "-m", "-u", "-n", "-i", "--", "sh", "-c", cmd],
+            demux=False,
         )
 
-        output = result.decode("utf-8").strip() if result else ""
-        return True, output
+        output_str = output.decode("utf-8").strip() if output else ""
 
-    except docker.errors.ContainerError as e:
-        # Container exited with non-zero code
-        output = e.stderr.decode("utf-8").strip() if e.stderr else str(e)
-        logger.debug(f"Host command failed: {cmd[:50]}... -> {output}")
-        return False, output
+        if exit_code != 0:
+            logger.debug(f"Host command failed (exit {exit_code}): {cmd[:50]}...")
+            return False, output_str or f"Command failed with exit code {exit_code}"
+
+        return True, output_str
+
     except Exception as e:
         logger.error(f"Error running host command: {e}")
         return False, str(e)
