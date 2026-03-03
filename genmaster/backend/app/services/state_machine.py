@@ -207,79 +207,65 @@ class StateMachine:
                 state.slave_relay_state = result["relay_state"]
                 state.slave_relay_armed = result["slave_armed"]
 
-                # If slave's relay is ON but we think generator is stopped,
-                # we have a mismatch - GenSlave is the source of truth for relay state
+                # GenMaster is the source of truth - if there's a mismatch,
+                # send commands to GenSlave to match GenMaster's state
                 if result["relay_state"] and not state.generator_running:
+                    # GenSlave relay ON but GenMaster says stopped - turn OFF GenSlave
                     logger.warning(
                         "Reconciliation: GenSlave relay is ON but GenMaster "
-                        "shows generator stopped - syncing GenMaster to match reality"
+                        "shows generator stopped - sending relay OFF to GenSlave"
                     )
+                    try:
+                        off_response = await slave_client.relay_off()
+                        if off_response.success:
+                            result["message"] = "Mismatch fixed: sent relay OFF to GenSlave"
+                            logger.info("Reconciliation: relay OFF sent successfully")
+                        else:
+                            result["message"] = f"Mismatch: relay OFF failed: {off_response.error}"
+                            logger.error(f"Reconciliation: relay OFF failed: {off_response.error}")
+                    except Exception as e:
+                        result["message"] = f"Mismatch: relay OFF error: {e}"
+                        logger.error(f"Reconciliation: error sending relay OFF: {e}")
 
-                    # Create a generator run record since generator is actually running
-                    start_time = int(time.time())
-                    run = GeneratorRun(
-                        start_time=start_time,
-                        trigger="reconciliation",
-                        notes="Run detected during state reconciliation - relay was on",
-                    )
-                    db.add(run)
-                    await db.flush()
-
-                    # Update state to match reality - GenSlave relay is the truth
-                    state.generator_running = True
-                    state.generator_start_time = start_time
-                    state.current_run_id = run.id
-                    state.run_trigger = "reconciliation"
-
-                    result["message"] = (
-                        "GenSlave relay was ON - synced GenMaster state to match. "
-                        f"Created run record #{run.id}"
-                    )
                     await self.log_event(
-                        "RECONCILIATION_SYNC",
+                        "RECONCILIATION_MISMATCH_FIXED",
                         {
                             "slave_relay": result["relay_state"],
-                            "created_run_id": run.id,
-                            "action": "synced_genmaster_to_match_genslave",
+                            "master_running": state.generator_running,
+                            "action": "sent_relay_off_to_genslave",
                         },
                         severity="WARNING",
                     )
 
-                # If slave's relay is OFF but we think generator is running,
-                # also sync - the physical relay state is the truth
                 elif not result["relay_state"] and state.generator_running:
+                    # GenSlave relay OFF but GenMaster says running - turn ON GenSlave (if armed)
                     logger.warning(
                         "Reconciliation: GenSlave relay is OFF but GenMaster "
-                        "shows generator running - syncing GenMaster to match reality"
+                        "shows generator running - sending relay ON to GenSlave"
                     )
+                    if result["slave_armed"]:
+                        try:
+                            on_response = await slave_client.relay_on()
+                            if on_response.success:
+                                result["message"] = "Mismatch fixed: sent relay ON to GenSlave"
+                                logger.info("Reconciliation: relay ON sent successfully")
+                            else:
+                                result["message"] = f"Mismatch: relay ON failed: {on_response.error}"
+                                logger.error(f"Reconciliation: relay ON failed: {on_response.error}")
+                        except Exception as e:
+                            result["message"] = f"Mismatch: relay ON error: {e}"
+                            logger.error(f"Reconciliation: error sending relay ON: {e}")
+                    else:
+                        result["message"] = "Mismatch: GenSlave not armed, cannot turn ON"
+                        logger.warning("Reconciliation: cannot turn ON relay - GenSlave not armed")
 
-                    # Close any active run since generator is actually stopped
-                    if state.current_run_id:
-                        run_result = await db.execute(
-                            select(GeneratorRun).where(
-                                GeneratorRun.id == state.current_run_id
-                            )
-                        )
-                        run = run_result.scalar_one_or_none()
-                        if run and run.end_time is None:
-                            run.end_time = int(time.time())
-                            run.stop_reason = "reconciliation"
-                            run.notes = (run.notes or "") + " [Closed during reconciliation - relay was off]"
-
-                    # Update state to match reality
-                    state.generator_running = False
-                    state.generator_start_time = None
-                    state.current_run_id = None
-                    state.run_trigger = "idle"
-
-                    result["message"] = (
-                        "GenSlave relay was OFF - synced GenMaster state to match."
-                    )
                     await self.log_event(
-                        "RECONCILIATION_SYNC",
+                        "RECONCILIATION_MISMATCH_FIXED",
                         {
                             "slave_relay": result["relay_state"],
-                            "action": "synced_genmaster_to_match_genslave",
+                            "master_running": state.generator_running,
+                            "slave_armed": result["slave_armed"],
+                            "action": "sent_relay_on_to_genslave" if result["slave_armed"] else "skipped_not_armed",
                         },
                         severity="WARNING",
                     )

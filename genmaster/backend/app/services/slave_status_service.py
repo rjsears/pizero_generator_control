@@ -554,11 +554,11 @@ class SlaveStatusService:
 
     async def _check_state_mismatch(self, genslave_relay_on: bool) -> None:
         """
-        Check if GenSlave relay state matches GenMaster's belief and reconcile if needed.
+        Check if GenSlave relay state matches GenMaster's belief.
 
-        This is called whenever the relay state changes to ensure GenMaster always
-        knows the true state of the generator. GenSlave's relay state is the source
-        of truth since it controls the physical relay.
+        GenMaster is the source of truth. If there's a mismatch, the next heartbeat
+        will automatically sync GenSlave to match GenMaster (via the sync logic in
+        GenSlave's failsafe.py). This method just logs the mismatch for awareness.
         """
         if not self._state_machine:
             return
@@ -571,20 +571,15 @@ class SlaveStatusService:
             if genslave_relay_on and not genmaster_running:
                 logger.warning(
                     "State mismatch detected: GenSlave relay ON but GenMaster shows stopped. "
-                    "Triggering reconciliation..."
+                    "Next heartbeat will sync GenSlave to match GenMaster."
                 )
-                # Get a fresh slave client for reconciliation
-                client = await self._get_shared_client()
-                await self._state_machine.reconcile_with_slave(client)
 
             # Detect mismatch: relay is OFF but GenMaster thinks generator is running
             elif not genslave_relay_on and genmaster_running:
                 logger.warning(
                     "State mismatch detected: GenSlave relay OFF but GenMaster shows running. "
-                    "Triggering reconciliation..."
+                    "Next heartbeat will sync GenSlave to match GenMaster."
                 )
-                client = await self._get_shared_client()
-                await self._state_machine.reconcile_with_slave(client)
 
         except Exception as e:
             logger.error(f"Error during state mismatch check: {e}")
