@@ -3660,13 +3660,21 @@ main() {
                 print_error "URL is required"
             done
 
-            # Update .env file
+            # Extract IP from URL for GENSLAVE_IP
+            local extracted_ip=$(echo "$new_url" | sed -E 's|https?://||' | cut -d':' -f1 | cut -d'/' -f1)
+
+            # Update SLAVE_API_URL in .env file
             if grep -q "^SLAVE_API_URL=" "${SCRIPT_DIR}/.env" 2>/dev/null; then
-                # Update existing line
                 sed -i "s|^SLAVE_API_URL=.*|SLAVE_API_URL=${new_url}|" "${SCRIPT_DIR}/.env"
             else
-                # Add new line
                 echo "SLAVE_API_URL=${new_url}" >> "${SCRIPT_DIR}/.env"
+            fi
+
+            # Update GENSLAVE_IP in .env file (keeps both in sync)
+            if grep -q "^GENSLAVE_IP=" "${SCRIPT_DIR}/.env" 2>/dev/null; then
+                sed -i "s|^GENSLAVE_IP=.*|GENSLAVE_IP=${extracted_ip}|" "${SCRIPT_DIR}/.env"
+            else
+                echo "GENSLAVE_IP=${extracted_ip}" >> "${SCRIPT_DIR}/.env"
             fi
 
             # Also update GENSLAVE_ENABLED if it was disabled
@@ -3676,6 +3684,7 @@ main() {
             fi
 
             print_success "GenSlave URL updated to: $new_url"
+            print_success "GenSlave IP updated to: $extracted_ip"
             echo ""
 
             # Offer to run health checks
@@ -3684,17 +3693,19 @@ main() {
                 validate_genslave
             fi
 
-            # Offer to restart containers
+            # Note: With the new architecture, changes take effect immediately via database/Redis
+            # No restart is required, but we offer it for a clean state
             echo ""
+            print_info "Changes will take effect immediately when updated via the UI."
+            print_info "To also update environment variables, restart the container:"
             if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "genmaster"; then
-                if confirm_prompt "Restart GenMaster container to apply changes?"; then
+                if confirm_prompt "Restart GenMaster container now? (optional)"; then
                     print_info "Restarting GenMaster..."
                     cd "${SCRIPT_DIR}" && docker compose restart genmaster 2>/dev/null || docker-compose restart genmaster 2>/dev/null
                     print_success "GenMaster restarted"
-                else
-                    print_info "Remember to restart GenMaster for changes to take effect:"
-                    echo -e "    ${CYAN}docker compose restart genmaster${NC}"
                 fi
+            else
+                echo -e "    ${CYAN}docker compose restart genmaster${NC}"
             fi
 
             echo ""
