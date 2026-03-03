@@ -2883,6 +2883,22 @@ EOF
       - genmaster
 
   # ===========================================================================
+  # Host Tools Sidecar (for accessing host system)
+  # ===========================================================================
+  # Persistent container with tools pre-installed for running host commands.
+  # Used for WiFi status, watchdog installation, etc.
+  host-tools:
+    build:
+      context: ./host-tools
+      dockerfile: Dockerfile
+    container_name: genmaster_host_tools
+    restart: unless-stopped
+    privileged: true
+    pid: host
+    mem_limit: 32m
+    memswap_limit: 32m
+
+  # ===========================================================================
   # Certbot (Let's Encrypt SSL)
   # ===========================================================================
   certbot:
