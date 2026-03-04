@@ -62,17 +62,24 @@ RUN groupadd --gid 1000 genmaster \
 
 # Install system dependencies
 # Note: GPIO packages (gpiozero, rpi-lgpio) are installed via pip in requirements.txt
-# docker.io provides the Docker CLI for container management (nginx reload, etc.)
+# Docker CLI from official repo for container management (nginx reload, etc.)
 # gcc and python3-dev are needed to compile psutil from source
 # network-manager provides nmcli for WiFi configuration
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     curl \
     iputils-ping \
-    docker.io \
+    ca-certificates \
+    gnupg \
     gcc \
     python3-dev \
     network-manager \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && chmod a+r /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

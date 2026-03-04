@@ -3,3 +3,6 @@ CLAUDE.md
 .env
 .mcp.json
 *.credentials
+
+# Generated nginx config - contains domain-specific settings
+genmaster/nginx/nginx.conf
