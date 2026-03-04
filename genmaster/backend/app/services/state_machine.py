@@ -171,7 +171,11 @@ class StateMachine:
 
         Called during startup to ensure state consistency after reboot.
         This queries GenSlave for its actual relay state and updates
-        our records accordingly.
+        GenMaster's records to match REALITY (what GenSlave reports).
+
+        IMPORTANT: This method does NOT send relay commands. GenSlave's
+        physical relay state is the truth after a reboot. GenMaster
+        updates its database to match.
 
         Args:
             slave_client: SlaveClient instance
@@ -207,70 +211,54 @@ class StateMachine:
                 state.slave_relay_state = result["relay_state"]
                 state.slave_relay_armed = result["slave_armed"]
 
-                # GenMaster is the source of truth - if there's a mismatch,
-                # send commands to GenSlave to match GenMaster's state
+                # On startup, GenSlave's PHYSICAL state is the truth.
+                # Update GenMaster to match reality - do NOT send relay commands.
                 if result["relay_state"] and not state.generator_running:
-                    # GenSlave relay ON but GenMaster says stopped - turn OFF GenSlave
+                    # GenSlave relay is ON - generator is actually running
+                    # Update GenMaster to reflect this reality
                     logger.warning(
                         "Reconciliation: GenSlave relay is ON but GenMaster "
-                        "shows generator stopped - sending relay OFF to GenSlave"
+                        "shows stopped - updating GenMaster to match reality"
                     )
-                    try:
-                        off_response = await slave_client.relay_off()
-                        if off_response.success:
-                            result["message"] = "Mismatch fixed: sent relay OFF to GenSlave"
-                            logger.info("Reconciliation: relay OFF sent successfully")
-                        else:
-                            result["message"] = f"Mismatch: relay OFF failed: {off_response.error}"
-                            logger.error(f"Reconciliation: relay OFF failed: {off_response.error}")
-                    except Exception as e:
-                        result["message"] = f"Mismatch: relay OFF error: {e}"
-                        logger.error(f"Reconciliation: error sending relay OFF: {e}")
+                    state.generator_running = True
+                    state.run_trigger = "manual"  # Unknown trigger, mark as manual
+                    state.generator_start_time = int(time.time())  # Approximate
+                    result["message"] = "Updated GenMaster: generator is running"
 
                     await self.log_event(
-                        "RECONCILIATION_MISMATCH_FIXED",
+                        "RECONCILIATION_STATE_UPDATED",
                         {
-                            "slave_relay": result["relay_state"],
-                            "master_running": state.generator_running,
-                            "action": "sent_relay_off_to_genslave",
+                            "slave_relay": True,
+                            "master_was_running": False,
+                            "action": "set_genmaster_running_true",
                         },
                         severity="WARNING",
                     )
 
                 elif not result["relay_state"] and state.generator_running:
-                    # GenSlave relay OFF but GenMaster says running - turn ON GenSlave (if armed)
+                    # GenSlave relay is OFF - generator is actually stopped
+                    # Update GenMaster to reflect this reality
                     logger.warning(
                         "Reconciliation: GenSlave relay is OFF but GenMaster "
-                        "shows generator running - sending relay ON to GenSlave"
+                        "shows running - updating GenMaster to match reality"
                     )
-                    if result["slave_armed"]:
-                        try:
-                            on_response = await slave_client.relay_on()
-                            if on_response.success:
-                                result["message"] = "Mismatch fixed: sent relay ON to GenSlave"
-                                logger.info("Reconciliation: relay ON sent successfully")
-                            else:
-                                result["message"] = f"Mismatch: relay ON failed: {on_response.error}"
-                                logger.error(f"Reconciliation: relay ON failed: {on_response.error}")
-                        except Exception as e:
-                            result["message"] = f"Mismatch: relay ON error: {e}"
-                            logger.error(f"Reconciliation: error sending relay ON: {e}")
-                    else:
-                        result["message"] = "Mismatch: GenSlave not armed, cannot turn ON"
-                        logger.warning("Reconciliation: cannot turn ON relay - GenSlave not armed")
+                    state.generator_running = False
+                    state.run_trigger = "idle"
+                    state.generator_start_time = None
+                    state.current_run_id = None
+                    result["message"] = "Updated GenMaster: generator is stopped"
 
                     await self.log_event(
-                        "RECONCILIATION_MISMATCH_FIXED",
+                        "RECONCILIATION_STATE_UPDATED",
                         {
-                            "slave_relay": result["relay_state"],
-                            "master_running": state.generator_running,
-                            "slave_armed": result["slave_armed"],
-                            "action": "sent_relay_on_to_genslave" if result["slave_armed"] else "skipped_not_armed",
+                            "slave_relay": False,
+                            "master_was_running": True,
+                            "action": "set_genmaster_running_false",
                         },
                         severity="WARNING",
                     )
                 else:
-                    result["message"] = "State reconciliation complete"
+                    result["message"] = "State reconciliation complete - states match"
 
                 # Update connection status since we successfully reached slave
                 state.slave_connection_status = "connected"
@@ -398,27 +386,6 @@ class StateMachine:
                     # Allow manual/scheduled/exercise starts even with force_stop
                     logger.info(f"Allowing {trigger} start despite force_stop override")
 
-                # Turn on the relay via GenSlave
-                # GenSlave will reject if relay is not armed
-                # Use longer timeout (10s) for critical relay operations
-                slave_client = await self._get_slave_client(timeout=10.0)
-                try:
-                    relay_response = await slave_client.relay_on()
-                finally:
-                    await slave_client.close()
-                if not relay_response.success:
-                    error_msg = relay_response.error or "Unknown error"
-                    # Provide helpful message if GenSlave rejected due to not being armed
-                    if "not armed" in error_msg.lower():
-                        raise ValueError("Cannot start - GenSlave relay is not armed. Arm the relay first.")
-                    raise ValueError(f"Failed to turn on relay: {error_msg}")
-
-                logger.info("GenSlave relay turned ON")
-
-                # Update the slave status cache immediately
-                slave_status_service = get_slave_status_service()
-                await slave_status_service.update_relay_state(relay_on=True)
-
                 # Fetch generator info for fuel tracking
                 gen_info = await GeneratorInfo.get_instance(db)
                 fuel_type = gen_info.fuel_type
@@ -426,6 +393,7 @@ class StateMachine:
                 consumption_rate = gen_info.get_consumption_rate()
 
                 # Create run record with fuel tracking data
+                # DB FIRST - this is the source of truth
                 start_time = int(time.time())
                 run = GeneratorRun(
                     start_time=start_time,
@@ -439,7 +407,8 @@ class StateMachine:
                 db.add(run)
                 await db.flush()
 
-                # Update system state
+                # Update system state - this sets generator_running=True
+                # which is the source of truth that heartbeat sends to GenSlave
                 state.generator_running = True
                 state.generator_start_time = start_time
                 state.current_run_id = run.id
@@ -449,6 +418,33 @@ class StateMachine:
                 await db.refresh(run)
 
                 logger.info(f"Generator started - trigger: {trigger}, run_id: {run.id}")
+
+                # NOW send relay command to GenSlave
+                # Even if this fails/times out, the next heartbeat will sync GenSlave
+                # because generator_running=True is already committed to DB
+                slave_client = await self._get_slave_client(timeout=10.0)
+                try:
+                    relay_response = await slave_client.relay_on()
+                    if relay_response.success:
+                        logger.info("GenSlave relay turned ON")
+                    else:
+                        # Log warning but don't fail - heartbeat will fix it
+                        logger.warning(
+                            f"relay_on command failed: {relay_response.error}. "
+                            "Heartbeat will sync GenSlave to match."
+                        )
+                except Exception as e:
+                    # Log warning but don't fail - heartbeat will fix it
+                    logger.warning(
+                        f"relay_on command error: {e}. "
+                        "Heartbeat will sync GenSlave to match."
+                    )
+                finally:
+                    await slave_client.close()
+
+                # Update the slave status cache
+                slave_status_service = get_slave_status_service()
+                await slave_status_service.update_relay_state(relay_on=True)
 
                 # Log event
                 await self.log_event(
@@ -504,27 +500,11 @@ class StateMachine:
                     logger.warning("Attempted to stop generator that isn't running")
                     return None
 
-                # Turn off the relay via GenSlave
-                # Use longer timeout (10s) for critical relay operations
-                slave_client = await self._get_slave_client(timeout=10.0)
-                try:
-                    relay_response = await slave_client.relay_off()
-                    if not relay_response.success:
-                        logger.error(f"Failed to turn off relay: {relay_response.error}")
-                        # Continue anyway to update state - relay may already be off
-                finally:
-                    await slave_client.close()
-
-                logger.info("GenSlave relay turned OFF")
-
-                # Update the slave status cache immediately
-                slave_status_service = get_slave_status_service()
-                await slave_status_service.update_relay_state(relay_on=False)
-
                 stop_time = int(time.time())
                 run_id = state.current_run_id
 
                 # Update run record if exists
+                # DB FIRST - this is the source of truth
                 run = None
                 if run_id:
                     result = await db.execute(
@@ -541,7 +521,8 @@ class StateMachine:
                                 3
                             )
 
-                # Update system state
+                # Update system state - this sets generator_running=False
+                # which is the source of truth that heartbeat sends to GenSlave
                 state.generator_running = False
                 state.generator_start_time = None
                 state.current_run_id = None
@@ -558,6 +539,31 @@ class StateMachine:
                     )
                 else:
                     logger.info(f"Generator stopped - reason: {reason}")
+
+                # NOW send relay command to GenSlave
+                # Even if this fails/times out, the next heartbeat will sync GenSlave
+                # because generator_running=False is already committed to DB
+                slave_client = await self._get_slave_client(timeout=10.0)
+                try:
+                    relay_response = await slave_client.relay_off()
+                    if relay_response.success:
+                        logger.info("GenSlave relay turned OFF")
+                    else:
+                        logger.warning(
+                            f"relay_off command failed: {relay_response.error}. "
+                            "Heartbeat will sync GenSlave to match."
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"relay_off command error: {e}. "
+                        "Heartbeat will sync GenSlave to match."
+                    )
+                finally:
+                    await slave_client.close()
+
+                # Update the slave status cache
+                slave_status_service = get_slave_status_service()
+                await slave_status_service.update_relay_state(relay_on=False)
 
                 # Log event
                 await self.log_event(

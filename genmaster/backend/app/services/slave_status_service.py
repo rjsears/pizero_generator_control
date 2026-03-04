@@ -554,11 +554,12 @@ class SlaveStatusService:
 
     async def _check_state_mismatch(self, genslave_relay_on: bool) -> None:
         """
-        Check if GenSlave relay state matches GenMaster's belief.
+        Check if GenSlave relay state matches GenMaster's intent and log mismatches.
 
-        GenMaster is the source of truth. If there's a mismatch, the next heartbeat
-        will automatically sync GenSlave to match GenMaster (via the sync logic in
-        GenSlave's failsafe.py). This method just logs the mismatch for awareness.
+        GenMaster is the ABSOLUTE source of truth. Mismatches are logged here
+        for awareness, but the actual fix happens via heartbeat - GenSlave
+        syncs its relay state to match GenMaster's generator_running on every
+        heartbeat.
         """
         if not self._state_machine:
             return
@@ -567,18 +568,18 @@ class SlaveStatusService:
             generator_status = await self._state_machine.get_generator_status()
             genmaster_running = generator_status.running
 
-            # Detect mismatch: relay is ON but GenMaster thinks generator is stopped
+            # Mismatch: relay is ON but GenMaster says stopped
             if genslave_relay_on and not genmaster_running:
                 logger.warning(
-                    "State mismatch detected: GenSlave relay ON but GenMaster shows stopped. "
-                    "Next heartbeat will sync GenSlave to match GenMaster."
+                    "State mismatch detected: GenSlave relay ON but GenMaster says stopped. "
+                    "Next heartbeat will sync GenSlave."
                 )
 
-            # Detect mismatch: relay is OFF but GenMaster thinks generator is running
+            # Mismatch: relay is OFF but GenMaster says running
             elif not genslave_relay_on and genmaster_running:
                 logger.warning(
-                    "State mismatch detected: GenSlave relay OFF but GenMaster shows running. "
-                    "Next heartbeat will sync GenSlave to match GenMaster."
+                    "State mismatch detected: GenSlave relay OFF but GenMaster says running. "
+                    "Next heartbeat will sync GenSlave."
                 )
 
         except Exception as e:
