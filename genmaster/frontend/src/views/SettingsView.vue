@@ -230,14 +230,21 @@ async function addIpRange() {
 
   savingIpRanges.value = true
   try {
-    await settingsApi.addIpRange({
+    const response = await settingsApi.addIpRange({
       cidr: newIpRange.value.cidr,
       description: newIpRange.value.description || '',
       access_level: 'internal'
     })
     await loadIpRanges()
     newIpRange.value = { cidr: '', description: '' }
-    notificationStore.success('IP range added')
+    // Show nginx reload status
+    if (response.data.nginx_reloaded) {
+      notificationStore.success('IP range added - nginx config tested and reloaded')
+    } else if (response.data.nginx_test_passed === false) {
+      notificationStore.warning(`IP range added but nginx test failed: ${response.data.nginx_output || 'Unknown error'}`)
+    } else {
+      notificationStore.success('IP range added')
+    }
   } catch (error) {
     notificationStore.error(error.response?.data?.detail || 'Failed to add IP range')
   } finally {
@@ -255,13 +262,19 @@ async function addCommonNetwork(network) {
 
   savingIpRanges.value = true
   try {
-    await settingsApi.addIpRange({
+    const response = await settingsApi.addIpRange({
       cidr: network.range,
       description: network.description,
       access_level: 'internal'
     })
     await loadIpRanges()
-    notificationStore.success(`${network.name} network added`)
+    if (response.data.nginx_reloaded) {
+      notificationStore.success(`${network.name} network added - nginx reloaded`)
+    } else if (response.data.nginx_test_passed === false) {
+      notificationStore.warning(`${network.name} added but nginx test failed: ${response.data.nginx_output || 'Unknown error'}`)
+    } else {
+      notificationStore.success(`${network.name} network added`)
+    }
   } catch (error) {
     notificationStore.error(error.response?.data?.detail || 'Failed to add network')
   } finally {
@@ -273,9 +286,15 @@ async function addCommonNetwork(network) {
 async function removeIpRange(cidr) {
   savingIpRanges.value = true
   try {
-    await settingsApi.deleteIpRange(cidr)
+    const response = await settingsApi.deleteIpRange(cidr)
     await loadIpRanges()
-    notificationStore.success('IP range removed')
+    if (response.data.nginx_reloaded) {
+      notificationStore.success('IP range removed - nginx reloaded')
+    } else if (response.data.nginx_test_passed === false) {
+      notificationStore.warning(`IP range removed but nginx test failed: ${response.data.nginx_output || 'Unknown error'}`)
+    } else {
+      notificationStore.success('IP range removed')
+    }
   } catch (error) {
     notificationStore.error(error.response?.data?.detail || 'Failed to remove IP range')
   } finally {
@@ -287,9 +306,15 @@ async function removeIpRange(cidr) {
 async function updateIpRangeDescription(range) {
   savingIpRanges.value = true
   try {
-    await settingsApi.updateIpRange(range.cidr, range.description)
+    const response = await settingsApi.updateIpRange(range.cidr, range.description)
     editingIpRange.value = null
-    notificationStore.success('Description updated')
+    if (response.data.nginx_reloaded) {
+      notificationStore.success('Description updated - nginx reloaded')
+    } else if (response.data.nginx_test_passed === false) {
+      notificationStore.warning(`Description updated but nginx test failed: ${response.data.nginx_output || 'Unknown error'}`)
+    } else {
+      notificationStore.success('Description updated')
+    }
   } catch (error) {
     notificationStore.error(error.response?.data?.detail || 'Failed to update description')
   } finally {

@@ -128,6 +128,15 @@ class IPRangeActionResponse(BaseModel):
 
     success: bool
     message: str
+    nginx_test_passed: Optional[bool] = Field(
+        None, description="Whether nginx -t passed"
+    )
+    nginx_reloaded: Optional[bool] = Field(
+        None, description="Whether nginx was successfully reloaded"
+    )
+    nginx_output: Optional[str] = Field(
+        None, description="Nginx test/reload output"
+    )
 
 
 class NginxReloadResponse(BaseModel):
