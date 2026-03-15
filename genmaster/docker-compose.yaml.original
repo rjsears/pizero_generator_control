@@ -139,7 +139,8 @@ services:
       - genmaster-internal
       - genmaster-external
     depends_on:
-      - genmaster
+      genmaster:
+        condition: service_healthy
 
   # ===========================================================================
   # Host Tools Sidecar (for accessing host network info)

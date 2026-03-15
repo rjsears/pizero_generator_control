@@ -2923,7 +2923,7 @@ EOF
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: genmaster_cloudflared
-    restart: always
+    restart: unless-stopped
     command: tunnel run
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
@@ -2945,7 +2945,7 @@ EOF
   tailscale:
     image: tailscale/tailscale:latest
     container_name: genmaster_tailscale
-    restart: always
+    restart: unless-stopped
     hostname: genmaster-tailscale
     network_mode: host
     environment:
