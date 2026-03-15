@@ -57,7 +57,11 @@
       "Bash(docker logs:*)",
       "Bash(npm run lint)",
       "Bash(git diff:*)",
-      "Bash(python3 -m py_compile:*)"
+      "Bash(python3 -m py_compile:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(npm run:*)",
+      "Bash(npx eslint:*)"
     ]
   }
 }
