@@ -392,9 +392,15 @@ async def add_ip_range(
         if not success:
             raise HTTPException(status_code=500, detail=message)
 
+        # Test and reload nginx
+        nginx_success, nginx_msg, nginx_output = reload_nginx()
+
         return IPRangeActionResponse(
             success=True,
             message=f"Added IP range {data.cidr}",
+            nginx_test_passed=nginx_success,
+            nginx_reloaded=nginx_success,
+            nginx_output=nginx_output or nginx_msg,
         )
     except HTTPException:
         raise
@@ -442,9 +448,15 @@ async def update_ip_range(
         if not success:
             raise HTTPException(status_code=500, detail=message)
 
+        # Test and reload nginx
+        nginx_success, nginx_msg, nginx_output = reload_nginx()
+
         return IPRangeActionResponse(
             success=True,
             message=f"Updated IP range {decoded_cidr}",
+            nginx_test_passed=nginx_success,
+            nginx_reloaded=nginx_success,
+            nginx_output=nginx_output or nginx_msg,
         )
     except HTTPException:
         raise
@@ -495,9 +507,15 @@ async def delete_ip_range(
         if not success:
             raise HTTPException(status_code=500, detail=message)
 
+        # Test and reload nginx
+        nginx_success, nginx_msg, nginx_output = reload_nginx()
+
         return IPRangeActionResponse(
             success=True,
             message=f"Deleted IP range {decoded_cidr}",
+            nginx_test_passed=nginx_success,
+            nginx_reloaded=nginx_success,
+            nginx_output=nginx_output or nginx_msg,
         )
     except HTTPException:
         raise
