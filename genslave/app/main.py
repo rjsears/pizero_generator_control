@@ -25,6 +25,7 @@ from app.services.database import db_service
 from app.services.relay import relay_service
 from app.services.failsafe import failsafe_monitor
 from app.services.display import display_service
+from app.services.reboot_scheduler import reboot_scheduler
 
 # Configure logging
 logging.basicConfig(
@@ -62,6 +63,9 @@ async def lifespan(app: FastAPI):
     # Start display service
     await display_service.start()
 
+    # Start reboot scheduler
+    await reboot_scheduler.start(relay_service)
+
     # Check if API secret is configured
     api_secret = db_service.get_api_secret()
     api_status = "configured" if api_secret else "NOT CONFIGURED (API unprotected!)"
@@ -77,6 +81,9 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("GenSlave shutting down...")
+
+    # Stop reboot scheduler
+    await reboot_scheduler.stop()
 
     # Stop display service
     await display_service.stop()

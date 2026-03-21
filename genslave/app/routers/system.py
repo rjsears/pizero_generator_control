@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from app.config import settings
 from app.services.database import db_service
 from app.services.notification import notification_service
+from app.services.reboot_scheduler import reboot_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,47 @@ class SystemActionResponse(BaseModel):
     success: bool = Field(description="Whether the action was initiated")
     message: str = Field(description="Status message")
     action: str = Field(description="The action that was requested")
+
+
+class RebootScheduleConfig(BaseModel):
+    """Reboot schedule configuration."""
+
+    enabled: bool = Field(description="Whether scheduled reboots are enabled")
+    day: str = Field(
+        description="Day of week (monday-sunday) or 'daily'",
+        pattern=r"^(monday|tuesday|wednesday|thursday|friday|saturday|sunday|daily)$",
+    )
+    hour: int = Field(description="Hour (0-23)", ge=0, le=23)
+    minute: int = Field(description="Minute (0-59)", ge=0, le=59)
+
+
+class RebootScheduleStatus(BaseModel):
+    """Reboot schedule status response."""
+
+    enabled: bool = Field(description="Whether scheduled reboots are enabled")
+    day: str = Field(description="Scheduled day")
+    hour: int = Field(description="Scheduled hour")
+    minute: int = Field(description="Scheduled minute")
+    running: bool = Field(description="Whether scheduler is running")
+    last_reboot_date: Optional[str] = Field(
+        None, description="Last reboot date (YYYY-MM-DD)"
+    )
+    next_reboot: Optional[str] = Field(
+        None, description="Next scheduled reboot time (ISO format)"
+    )
+
+
+class RebootScheduleResponse(BaseModel):
+    """Response from reboot schedule operations."""
+
+    success: bool
+    message: str
+
+
+class RebootScheduleEnableRequest(BaseModel):
+    """Request to enable or disable scheduled reboots."""
+
+    enabled: bool = Field(description="True to enable, False to disable")
 
 
 # =========================================================================
@@ -898,6 +940,97 @@ async def clear_notification_cooldown(
     except Exception as e:
         logger.error(f"Error clearing notification cooldown: {e}")
         return NotificationResponse(
+            success=False,
+            message=f"Error: {str(e)}",
+        )
+
+
+# =========================================================================
+# Scheduled Reboot Endpoints
+# =========================================================================
+
+
+@router.get("/reboot-schedule", response_model=RebootScheduleStatus)
+async def get_reboot_schedule() -> RebootScheduleStatus:
+    """
+    Get current reboot schedule configuration.
+
+    Returns the schedule settings including next scheduled reboot time.
+    """
+    status = reboot_scheduler.get_status()
+    return RebootScheduleStatus(**status)
+
+
+@router.post("/reboot-schedule", response_model=RebootScheduleResponse)
+async def update_reboot_schedule(
+    config: RebootScheduleConfig,
+) -> RebootScheduleResponse:
+    """
+    Update reboot schedule configuration.
+
+    Set the day and time for scheduled maintenance reboots.
+    Reboots will only occur if the generator relay is OFF.
+
+    - day: monday, tuesday, ..., sunday, or "daily"
+    - hour: 0-23
+    - minute: 0-59
+    """
+    try:
+        success = reboot_scheduler.set_schedule(
+            enabled=config.enabled,
+            day=config.day,
+            hour=config.hour,
+            minute=config.minute,
+        )
+
+        if success:
+            time_str = f"{config.hour:02d}:{config.minute:02d}"
+            return RebootScheduleResponse(
+                success=True,
+                message=f"Reboot schedule updated: {config.day} at {time_str}",
+            )
+        else:
+            return RebootScheduleResponse(
+                success=False,
+                message="Failed to update reboot schedule",
+            )
+
+    except Exception as e:
+        logger.error(f"Error updating reboot schedule: {e}")
+        return RebootScheduleResponse(
+            success=False,
+            message=f"Error: {str(e)}",
+        )
+
+
+@router.post("/reboot-schedule/enable", response_model=RebootScheduleResponse)
+async def set_reboot_schedule_enabled(
+    request: RebootScheduleEnableRequest,
+) -> RebootScheduleResponse:
+    """
+    Enable or disable scheduled reboots.
+
+    When disabled, no scheduled reboots will occur.
+    The schedule configuration is preserved.
+    """
+    try:
+        success = reboot_scheduler.set_enabled(request.enabled)
+        status = "enabled" if request.enabled else "disabled"
+
+        if success:
+            return RebootScheduleResponse(
+                success=True,
+                message=f"Scheduled reboots {status}",
+            )
+        else:
+            return RebootScheduleResponse(
+                success=False,
+                message=f"Failed to {status[:-1]}e scheduled reboots",
+            )
+
+    except Exception as e:
+        logger.error(f"Error setting reboot schedule state: {e}")
+        return RebootScheduleResponse(
             success=False,
             message=f"Error: {str(e)}",
         )

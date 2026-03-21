@@ -188,6 +188,10 @@ export const genslaveApi = {
   shutdown: () => api.post('/genslave/shutdown'),
   reboot: () => api.post('/genslave/reboot'),
   getRebootStatus: () => api.get('/genslave/reboot-status'),
+  // Scheduled reboot configuration (proxied to GenSlave)
+  getRebootSchedule: () => api.get('/genslave/reboot-schedule'),
+  setRebootSchedule: (data) => api.post('/genslave/reboot-schedule', data),
+  setRebootScheduleEnabled: (enabled) => api.post('/genslave/reboot-schedule/enable', { enabled }),
 }
 
 // GenMaster-specific: Schedule API
