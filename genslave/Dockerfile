@@ -81,9 +81,9 @@ RUN mkdir -p /opt/genslave/data /opt/genslave/logs \
 # Expose the API port
 EXPOSE 8001
 
-# Health check
+# Health check - endpoint is /api/health (public, no auth required)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 -c "import httpx; httpx.get('http://localhost:8001/health', timeout=5)" || exit 1
+    CMD python3 -c "import httpx; httpx.get('http://localhost:8001/api/health', timeout=5)" || exit 1
 
 # Default environment variables
 ENV HOST=0.0.0.0

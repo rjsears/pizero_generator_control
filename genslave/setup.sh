@@ -119,9 +119,83 @@ setup_directories() {
     log_info "Setting up directories..."
 
     mkdir -p "$INSTALL_DIR"
+    mkdir -p "$INSTALL_DIR/scripts"
     cd "$INSTALL_DIR"
 
     log_success "Created $INSTALL_DIR"
+}
+
+# Create safe reboot script for maintenance reboots
+create_safe_reboot_script() {
+    log_info "Creating safe reboot script..."
+
+    cat > "$INSTALL_DIR/scripts/safe_reboot.sh" << 'REBOOT_EOF'
+#!/bin/bash
+# Safe reboot script for GenSlave Pi Zero
+# Only reboots if the generator is NOT running
+
+set -e
+
+GENSLAVE_API="http://localhost:8001/api/health"
+COMPOSE_DIR="/opt/genslave"
+LOG_TAG="[safe_reboot]"
+MAX_RETRIES=3
+RETRY_DELAY=5
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $LOG_TAG $1"
+}
+
+log_error() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $LOG_TAG ERROR: $1" >&2
+}
+
+check_generator_status() {
+    local retry=0
+    while [ $retry -lt $MAX_RETRIES ]; do
+        response=$(curl -s --max-time 10 "$GENSLAVE_API" 2>/dev/null)
+        if [ $? -eq 0 ] && [ -n "$response" ]; then
+            relay_state=$(echo "$response" | grep -o '"relay_state":[^,}]*' | cut -d':' -f2 | tr -d ' ')
+            if [ "$relay_state" = "true" ]; then
+                log "Generator is RUNNING - reboot NOT safe"
+                return 1
+            elif [ "$relay_state" = "false" ]; then
+                log "Generator is STOPPED - reboot is safe"
+                return 0
+            fi
+        fi
+        retry=$((retry + 1))
+        [ $retry -lt $MAX_RETRIES ] && sleep $RETRY_DELAY
+    done
+    log_error "Failed to get status after $MAX_RETRIES attempts - aborting"
+    return 1
+}
+
+stop_genslave() {
+    log "Stopping genslave container..."
+    cd "$COMPOSE_DIR" && docker compose stop -t 30 genslave
+}
+
+main() {
+    log "Safe reboot check initiated"
+    if ! check_generator_status; then
+        log "Reboot aborted - generator running or status unknown"
+        exit 1
+    fi
+    log "Proceeding with safe reboot..."
+    stop_genslave || { log_error "Failed to stop container"; exit 1; }
+    sleep 2
+    sync
+    /sbin/reboot
+}
+
+main "$@"
+REBOOT_EOF
+
+    chmod +x "$INSTALL_DIR/scripts/safe_reboot.sh"
+    log_success "Created safe_reboot.sh script"
+    log_info "To enable automatic maintenance reboots, add to crontab:"
+    log_info "  0 4 * * 0 $INSTALL_DIR/scripts/safe_reboot.sh >> /var/log/genslave_reboot.log 2>&1"
 }
 
 # Create docker-compose.yaml (embedded - no download needed)
@@ -452,7 +526,7 @@ print_success() {
     echo "  http://$(hostname).local:8001"
     echo ""
     echo -e "${CYAN}Health Check:${NC}"
-    echo "  curl http://localhost:8001/health"
+    echo "  curl http://localhost:8001/api/health"
     echo ""
 
     if command -v tailscale &>/dev/null; then
@@ -480,6 +554,7 @@ main() {
     install_docker
     install_compose
     setup_directories
+    create_safe_reboot_script
     create_compose_file
     create_env_file
     pull_image
