@@ -615,6 +615,137 @@
         </div>
       </Card>
 
+      <!-- Scheduled Reboot Card (Collapsible) -->
+      <Card :padding="false">
+        <button
+          @click="rebootScheduleSectionExpanded = !rebootScheduleSectionExpanded"
+          class="w-full p-4 flex items-center gap-4 hover:bg-surface-hover transition-colors rounded-lg"
+        >
+          <div class="p-3 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg">
+            <ClockIcon class="h-6 w-6 text-white" />
+          </div>
+          <div class="flex-1 text-left">
+            <h3 class="text-lg font-semibold text-primary">Scheduled Reboot</h3>
+            <p class="text-sm text-secondary">Configure automatic maintenance reboots</p>
+          </div>
+          <div :class="['p-2 rounded-lg transition-colors', rebootScheduleSectionExpanded ? 'bg-orange-100 dark:bg-orange-500/20' : 'bg-gray-100 dark:bg-gray-700']">
+            <ChevronDownIcon :class="['h-5 w-5 transition-transform duration-200', rebootScheduleSectionExpanded ? 'rotate-180 text-orange-600 dark:text-orange-400' : 'text-gray-500']" />
+          </div>
+        </button>
+        <div v-show="rebootScheduleSectionExpanded" class="p-4 pt-2 space-y-6 border-t border-gray-200 dark:border-gray-700">
+          <!-- Loading state -->
+          <div v-if="loadingRebootSchedule" class="text-center py-4">
+            <ArrowPathIcon class="h-6 w-6 animate-spin mx-auto text-orange-500" />
+            <p class="text-sm text-muted mt-2">Loading reboot schedule...</p>
+          </div>
+
+          <template v-else>
+            <!-- Enable/Disable Toggle -->
+            <div class="flex items-center justify-between p-4 rounded-lg bg-surface-hover">
+              <div>
+                <h4 class="text-sm font-medium text-primary">Scheduled Reboot Enabled</h4>
+                <p class="text-xs text-muted mt-1">
+                  When enabled, GenSlave will automatically reboot at the scheduled time (if generator is not running)
+                </p>
+              </div>
+              <button
+                @click="toggleRebootScheduleEnabled"
+                :disabled="savingRebootSchedule"
+                class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                :class="[
+                  rebootSchedule.enabled ? 'bg-orange-600' : 'bg-gray-200 dark:bg-gray-700'
+                ]"
+              >
+                <span
+                  :class="[
+                    rebootSchedule.enabled ? 'translate-x-5' : 'translate-x-0'
+                  ]"
+                  class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                />
+              </button>
+            </div>
+
+            <!-- Schedule Configuration -->
+            <div class="p-4 rounded-lg bg-surface-hover space-y-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-sm font-medium text-primary">Reboot Schedule</h4>
+                  <p class="text-xs text-muted mt-1">Set when GenSlave should automatically reboot for maintenance</p>
+                </div>
+                <span v-if="rebootSchedule.next_reboot" class="text-xs px-2 py-1 rounded-full bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400">
+                  Next: {{ formatNextReboot(rebootSchedule.next_reboot) }}
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Day selector -->
+                <div>
+                  <label class="block text-sm font-medium text-secondary mb-1">Day</label>
+                  <select
+                    v-model="rebootSchedule.day"
+                    class="input"
+                    :disabled="savingRebootSchedule"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="sunday">Sunday</option>
+                    <option value="monday">Monday</option>
+                    <option value="tuesday">Tuesday</option>
+                    <option value="wednesday">Wednesday</option>
+                    <option value="thursday">Thursday</option>
+                    <option value="friday">Friday</option>
+                    <option value="saturday">Saturday</option>
+                  </select>
+                </div>
+
+                <!-- Hour selector -->
+                <div>
+                  <label class="block text-sm font-medium text-secondary mb-1">Hour</label>
+                  <select
+                    v-model.number="rebootSchedule.hour"
+                    class="input"
+                    :disabled="savingRebootSchedule"
+                  >
+                    <option v-for="h in 24" :key="h-1" :value="h-1">{{ String(h-1).padStart(2, '0') }}:00</option>
+                  </select>
+                </div>
+
+                <!-- Minute selector -->
+                <div>
+                  <label class="block text-sm font-medium text-secondary mb-1">Minute</label>
+                  <select
+                    v-model.number="rebootSchedule.minute"
+                    class="input"
+                    :disabled="savingRebootSchedule"
+                  >
+                    <option v-for="m in [0, 15, 30, 45]" :key="m" :value="m">:{{ String(m).padStart(2, '0') }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Save button -->
+              <div class="flex justify-end pt-2">
+                <button
+                  @click="saveRebootSchedule"
+                  :disabled="savingRebootSchedule"
+                  class="btn-primary flex items-center gap-2"
+                >
+                  <ArrowPathIcon v-if="savingRebootSchedule" class="h-4 w-4 animate-spin" />
+                  <CheckIcon v-else class="h-4 w-4" />
+                  Save Schedule
+                </button>
+              </div>
+            </div>
+
+            <!-- Info box -->
+            <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+              <p class="text-sm text-amber-700 dark:text-amber-400">
+                <strong>Note:</strong> Reboots will only occur if the generator relay is OFF. If the generator is running at the scheduled time, the reboot will be skipped.
+              </p>
+            </div>
+          </template>
+        </div>
+      </Card>
+
       <!-- Connection Settings Card (Collapsible) -->
       <Card :padding="false">
         <button
@@ -1168,6 +1299,7 @@ import {
   ClockIcon,
   PowerIcon,
   XCircleIcon,
+  CheckIcon,
 } from '@heroicons/vue/24/outline'
 
 const notificationStore = useNotificationStore()
@@ -1265,6 +1397,20 @@ const savingCooldownSettings = ref(false)
 const savingNotificationEnabled = ref(false)
 const sendingTestNotification = ref(false)
 const clearingCooldown = ref(false)
+
+// Scheduled reboot management
+const rebootScheduleSectionExpanded = ref(false)
+const loadingRebootSchedule = ref(false)
+const savingRebootSchedule = ref(false)
+const rebootSchedule = ref({
+  enabled: false,
+  day: 'sunday',
+  hour: 4,
+  minute: 0,
+  running: false,
+  last_reboot_date: null,
+  next_reboot: null,
+})
 
 // Polling - fire-and-forget with overlap protection
 let pollInterval = null
@@ -1611,6 +1757,91 @@ function formatSeconds(seconds) {
 }
 
 // =========================================================================
+// Scheduled Reboot Management
+// =========================================================================
+
+// Load reboot schedule configuration from GenSlave
+async function loadRebootSchedule() {
+  loadingRebootSchedule.value = true
+  try {
+    const response = await genslaveApi.getRebootSchedule()
+    if (response.data) {
+      rebootSchedule.value = response.data
+    }
+  } catch (error) {
+    console.warn('Failed to load reboot schedule:', error)
+  } finally {
+    loadingRebootSchedule.value = false
+  }
+}
+
+// Save reboot schedule configuration
+async function saveRebootSchedule() {
+  savingRebootSchedule.value = true
+  try {
+    const response = await genslaveApi.setRebootSchedule({
+      enabled: rebootSchedule.value.enabled,
+      day: rebootSchedule.value.day,
+      hour: rebootSchedule.value.hour,
+      minute: rebootSchedule.value.minute,
+    })
+    if (response.data?.success) {
+      notificationStore.success('Reboot schedule saved')
+      // Reload to get updated next_reboot time
+      await loadRebootSchedule()
+    } else {
+      notificationStore.error(response.data?.message || 'Failed to save reboot schedule')
+    }
+  } catch (error) {
+    notificationStore.error('Failed to save reboot schedule')
+  } finally {
+    savingRebootSchedule.value = false
+  }
+}
+
+// Toggle scheduled reboot enabled/disabled
+async function toggleRebootScheduleEnabled() {
+  const newState = !rebootSchedule.value.enabled
+  savingRebootSchedule.value = true
+  try {
+    const response = await genslaveApi.setRebootScheduleEnabled(newState)
+    if (response.data?.success) {
+      rebootSchedule.value.enabled = newState
+      notificationStore.success(`Scheduled reboot ${newState ? 'enabled' : 'disabled'}`)
+      // Reload to get updated next_reboot time
+      await loadRebootSchedule()
+    } else {
+      notificationStore.error(response.data?.message || 'Failed to toggle scheduled reboot')
+    }
+  } catch (error) {
+    notificationStore.error('Failed to toggle scheduled reboot')
+  } finally {
+    savingRebootSchedule.value = false
+  }
+}
+
+// Format next reboot time for display
+function formatNextReboot(isoString) {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  const now = new Date()
+  const diffMs = date - now
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+  if (diffDays === 0) {
+    return `Today at ${timeStr}`
+  } else if (diffDays === 1) {
+    return `Tomorrow at ${timeStr}`
+  } else if (diffDays < 7) {
+    const dayName = date.toLocaleDateString([], { weekday: 'long' })
+    return `${dayName} at ${timeStr}`
+  } else {
+    return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ` at ${timeStr}`
+  }
+}
+
+// =========================================================================
 // WiFi Configuration
 // =========================================================================
 
@@ -1851,6 +2082,7 @@ async function executeReboot() {
 onMounted(() => {
   loadSlaveInfo()
   loadNotificationConfig()
+  loadRebootSchedule()
   // Poll every 30 seconds - fire-and-forget with overlap protection
   // This prevents UI blocking when GenSlave is slow/offline
   pollInterval = setInterval(() => {

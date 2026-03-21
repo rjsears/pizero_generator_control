@@ -731,3 +731,140 @@ async def get_reboot_status():
         "in_reboot_window": in_reboot,
         "remaining_seconds": remaining if in_reboot else 0,
     }
+
+
+# =========================================================================
+# Scheduled Reboot Configuration
+# =========================================================================
+
+
+class RebootScheduleConfig(BaseModel):
+    """Request to set reboot schedule."""
+
+    enabled: bool
+    day: str = Field(pattern=r"^(monday|tuesday|wednesday|thursday|friday|saturday|sunday|daily)$")
+    hour: int = Field(ge=0, le=23)
+    minute: int = Field(ge=0, le=59)
+
+
+class RebootScheduleEnableRequest(BaseModel):
+    """Request to enable/disable scheduled reboots."""
+
+    enabled: bool
+
+
+class RebootScheduleStatus(BaseModel):
+    """Reboot schedule status response."""
+
+    enabled: bool
+    day: str
+    hour: int
+    minute: int
+    running: bool
+    last_reboot_date: Optional[str] = None
+    next_reboot: Optional[str] = None
+
+
+class RebootScheduleResponse(BaseModel):
+    """Response from reboot schedule operations."""
+
+    success: bool
+    message: str
+
+
+@router.get("/reboot-schedule", response_model=RebootScheduleStatus)
+async def get_genslave_reboot_schedule():
+    """
+    Get GenSlave scheduled reboot configuration.
+
+    Returns the current schedule settings including next reboot time.
+    """
+    client = await get_slave_client()
+    try:
+        response = await client.get("/api/system/reboot-schedule")
+
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"GenSlave returned error: {response.text}",
+            )
+
+        data = response.json()
+        return RebootScheduleStatus(**data)
+
+    except httpx.RequestError as e:
+        logger.error(f"Failed to get reboot schedule from GenSlave: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="GenSlave is not responding",
+        )
+    finally:
+        await client.close()
+
+
+@router.post("/reboot-schedule", response_model=RebootScheduleResponse)
+async def set_genslave_reboot_schedule(request: RebootScheduleConfig):
+    """
+    Set GenSlave scheduled reboot configuration.
+
+    Configure the day and time for automatic maintenance reboots.
+    Reboots only occur when the generator relay is OFF.
+    """
+    client = await get_slave_client()
+    try:
+        response = await client.post(
+            "/api/system/reboot-schedule",
+            json=request.model_dump(),
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"GenSlave returned error: {response.text}",
+            )
+
+        data = response.json()
+        return RebootScheduleResponse(**data)
+
+    except httpx.RequestError as e:
+        logger.error(f"Failed to set reboot schedule on GenSlave: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="GenSlave is not responding",
+        )
+    finally:
+        await client.close()
+
+
+@router.post("/reboot-schedule/enable", response_model=RebootScheduleResponse)
+async def set_genslave_reboot_schedule_enabled(request: RebootScheduleEnableRequest):
+    """
+    Enable or disable scheduled reboots.
+
+    When disabled, no automatic reboots will occur.
+    The schedule configuration is preserved.
+    """
+    client = await get_slave_client()
+    try:
+        response = await client.post(
+            "/api/system/reboot-schedule/enable",
+            json={"enabled": request.enabled},
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"GenSlave returned error: {response.text}",
+            )
+
+        data = response.json()
+        return RebootScheduleResponse(**data)
+
+    except httpx.RequestError as e:
+        logger.error(f"Failed to set reboot schedule enabled on GenSlave: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="GenSlave is not responding",
+        )
+    finally:
+        await client.close()
