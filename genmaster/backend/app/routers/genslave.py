@@ -792,12 +792,11 @@ async def get_genslave_reboot_schedule():
         data = response.json()
         return RebootScheduleStatus(**data)
 
-    except httpx.RequestError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         logger.error(f"Failed to get reboot schedule from GenSlave: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail="GenSlave is not responding",
-        )
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         await client.close()
 
@@ -826,12 +825,11 @@ async def set_genslave_reboot_schedule(request: RebootScheduleConfig):
         data = response.json()
         return RebootScheduleResponse(**data)
 
-    except httpx.RequestError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         logger.error(f"Failed to set reboot schedule on GenSlave: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail="GenSlave is not responding",
-        )
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         await client.close()
 
@@ -860,11 +858,10 @@ async def set_genslave_reboot_schedule_enabled(request: RebootScheduleEnableRequ
         data = response.json()
         return RebootScheduleResponse(**data)
 
-    except httpx.RequestError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         logger.error(f"Failed to set reboot schedule enabled on GenSlave: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail="GenSlave is not responding",
-        )
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         await client.close()
