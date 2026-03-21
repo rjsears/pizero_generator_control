@@ -779,7 +779,7 @@ async def get_genslave_reboot_schedule():
 
     Returns the current schedule settings including next reboot time.
     """
-    client = await get_slave_client()
+    client = await create_slave_client()
     try:
         response = await client.get("/api/system/reboot-schedule")
 
@@ -809,7 +809,7 @@ async def set_genslave_reboot_schedule(request: RebootScheduleConfig):
     Configure the day and time for automatic maintenance reboots.
     Reboots only occur when the generator relay is OFF.
     """
-    client = await get_slave_client()
+    client = await create_slave_client()
     try:
         response = await client.post(
             "/api/system/reboot-schedule",
@@ -842,7 +842,7 @@ async def set_genslave_reboot_schedule_enabled(request: RebootScheduleEnableRequ
     When disabled, no automatic reboots will occur.
     The schedule configuration is preserved.
     """
-    client = await get_slave_client()
+    client = await create_slave_client()
     try:
         response = await client.post(
             "/api/system/reboot-schedule/enable",
