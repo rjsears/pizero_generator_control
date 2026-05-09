@@ -1,0 +1,27 @@
+[Unit]
+Description=WiFi Connectivity Watchdog
+Documentation=https://github.com/rjsears/pizero_generator_control
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/wifi-watchdog.sh
+Restart=always
+RestartSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wifi-watchdog
+
+# Environment variables for configuration (optional overrides)
+# Uncomment and modify as needed:
+#Environment="WATCHDOG_CHECK_INTERVAL=30"
+#Environment="WATCHDOG_PING_TIMEOUT=5"
+#Environment="WATCHDOG_MAX_SOFT_RESETS=3"
+#Environment="WATCHDOG_MAX_HARD_RESETS=2"
+#Environment="WATCHDOG_REBOOT_COOLDOWN=3600"
+
+[Install]
+WantedBy=multi-user.target

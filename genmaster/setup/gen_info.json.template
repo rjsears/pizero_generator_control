@@ -1,0 +1,9 @@
+{
+  "manufacturer": "",
+  "model_number": "",
+  "serial_number": "",
+  "fuel_type": "lpg",
+  "load_expected": 50,
+  "fuel_consumption_50": 0.0,
+  "fuel_consumption_100": 0.0
+}

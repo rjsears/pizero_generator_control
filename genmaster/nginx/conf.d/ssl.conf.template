@@ -1,0 +1,111 @@
+# GenMaster SSL Server Configuration Template
+#
+# This file is processed by setup.sh to replace placeholders:
+# - {{DOMAIN}} - Your domain name
+# - {{SSL_CERT_PATH}} - Path to SSL certificate
+# - {{SSL_KEY_PATH}} - Path to SSL private key
+#
+# After processing, save as /etc/nginx/conf.d/default.conf
+
+# Redirect HTTP to HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{DOMAIN}};
+
+    # ACME challenge for Let's Encrypt renewal
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Redirect all other traffic to HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS Server
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name {{DOMAIN}};
+
+    # SSL Certificate
+    ssl_certificate {{SSL_CERT_PATH}};
+    ssl_certificate_key {{SSL_KEY_PATH}};
+
+    # SSL Configuration (Mozilla Modern)
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+
+    # SSL Session
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:50m;
+    ssl_session_tickets off;
+
+    # OCSP Stapling
+    ssl_stapling on;
+    ssl_stapling_verify on;
+
+    # HSTS (uncomment after confirming SSL works)
+    # add_header Strict-Transport-Security "max-age=63072000" always;
+
+    # Health check endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+
+    # API routes - proxy to FastAPI
+    location /api {
+        limit_req zone=api burst=20 nodelay;
+
+        proxy_pass http://genmaster_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+
+        # WebSocket support
+        proxy_buffering off;
+    }
+
+    # WebSocket endpoint
+    location /ws {
+        proxy_pass http://genmaster_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket timeouts
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+
+    # Static files (Vue.js frontend)
+    location / {
+        root /app/static;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+
+        # Cache static assets
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+}

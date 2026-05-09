@@ -1,0 +1,122 @@
+site_name: RPi Generator Control
+site_description: Production-ready distributed generator control system for off-grid solar installations
+site_author: Richard J. Sears
+site_url: https://rjsears.github.io/pizero_generator_control
+
+repo_name: rjsears/pizero_generator_control
+repo_url: https://github.com/rjsears/pizero_generator_control
+
+theme:
+  name: material
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/lightning-bolt
+  favicon: images/favicon.svg
+
+plugins:
+  - search
+  - tags
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.critic
+  - pymdownx.caret
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - admonition
+  - tables
+  - attr_list
+  - md_in_html
+  - def_list
+  - footnotes
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/rjsears
+  generator: false
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/manual.js
+
+copyright: Copyright &copy; 2026 Richard J. Sears
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Overview: ARCHITECTURE.md
+  - User Manual:
+    - Welcome: manual/welcome.md
+    - Generator Control: manual/generator.md
+    - GenSlave: manual/genslave.md
+    - Schedule: manual/schedule.md
+    - Run History: manual/history.md
+    - Notifications: manual/notifications.md
+    - Containers: manual/containers.md
+    - System: manual/system.md
+    - Settings: manual/settings.md
+    - Common UI: manual/common-ui.md
+    - Appendix: manual/appendix.md
+  - User Guides:
+    - Generator Controls: GENERATOR.md
+    - Scheduling: SCHEDULING.md
+    - Victron Integration: VICTRON.md
+    - Notifications: NOTIFICATIONS.md
+  - Setup:
+    - GenSlave Setup: GENSLAVE.md
+    - Tailscale VPN: TAILSCALE.md
+    - Cloudflare Tunnel: CLOUDFLARE.md
+  - Reference:
+    - Troubleshooting: TROUBLESHOOTING.md
+    - Nginx Access Control: NGINX_ACCESS_CONTROL.md
+    - Cloudflare Real IP Fix: CLOUDFLARE_TUNNEL_REAL_IP_FIX.md

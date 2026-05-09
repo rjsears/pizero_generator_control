@@ -1,0 +1,494 @@
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# /genmaster/backend/app/routers/containers.py
+#
+# Part of the "RPi Generator Control" suite
+# Version 1.0.0 - January 15th, 2026
+#
+# Richard J. Sears
+# richardjsears@protonmail.com
+# https://github.com/rjsears
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+"""Docker container management API endpoints."""
+
+import logging
+import os
+import socket
+from typing import List, Optional
+
+from fastapi import APIRouter, HTTPException, Query
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _get_self_container_name(client) -> Optional[str]:
+    """
+    Determine which container this process is running in, if any.
+
+    Docker sets the container's hostname to its short ID by default, so we look
+    up the container by hostname. Returns the container's name, or None if we
+    can't determine it (e.g. running on bare metal or in a non-standard runtime).
+    """
+    short_id = os.environ.get("HOSTNAME") or socket.gethostname()
+    if not short_id:
+        return None
+    try:
+        return client.containers.get(short_id).name
+    except Exception:
+        return None
+
+
+def get_docker_client():
+    """Get Docker client, handling import errors."""
+    try:
+        import docker
+
+        return docker.from_env()
+    except Exception as e:
+        logger.warning(f"Docker not available: {e}")
+        return None
+
+
+@router.get("/stats")
+async def get_container_stats() -> List[dict]:
+    """
+    Get resource usage stats for all running containers.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        containers = client.containers.list()
+        stats = []
+
+        for container in containers:
+            try:
+                stat = container.stats(stream=False)
+                # Calculate CPU percentage
+                cpu_delta = (
+                    stat["cpu_stats"]["cpu_usage"]["total_usage"]
+                    - stat["precpu_stats"]["cpu_usage"]["total_usage"]
+                )
+                system_delta = (
+                    stat["cpu_stats"]["system_cpu_usage"]
+                    - stat["precpu_stats"]["system_cpu_usage"]
+                )
+                cpu_percent = 0.0
+                if system_delta > 0:
+                    cpu_percent = (cpu_delta / system_delta) * 100.0
+
+                # Calculate memory
+                mem_usage = stat["memory_stats"].get("usage", 0)
+                mem_limit = stat["memory_stats"].get("limit", 1)
+                mem_percent = (mem_usage / mem_limit) * 100
+
+                # Calculate network
+                networks = stat.get("networks", {})
+                network_rx = sum(n.get("rx_bytes", 0) for n in networks.values())
+                network_tx = sum(n.get("tx_bytes", 0) for n in networks.values())
+
+                stats.append({
+                    "name": container.name,
+                    "cpu_percent": round(cpu_percent, 2),
+                    "memory_usage": mem_usage,
+                    "memory_limit": mem_limit,
+                    "memory_usage_mb": round(mem_usage / (1024 * 1024), 2),
+                    "memory_limit_mb": round(mem_limit / (1024 * 1024), 2),
+                    "memory_percent": round(mem_percent, 2),
+                    "network_rx": network_rx,
+                    "network_tx": network_tx,
+                })
+            except Exception:
+                continue
+
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.get("/health")
+async def get_containers_health() -> dict:
+    """
+    Get overall container health status.
+
+    Returns count of running, stopped, and unhealthy containers.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        containers = client.containers.list(all=True)
+
+        running = 0
+        stopped = 0
+        unhealthy = 0
+
+        for c in containers:
+            if c.status == "running":
+                running += 1
+                # Check health status if available
+                health = c.attrs.get("State", {}).get("Health", {})
+                if health.get("Status") == "unhealthy":
+                    unhealthy += 1
+            else:
+                stopped += 1
+
+        overall = "healthy"
+        if unhealthy > 0:
+            overall = "unhealthy"
+        elif stopped > running:
+            overall = "warning"
+
+        return {
+            "status": overall,
+            "total": len(containers),
+            "running": running,
+            "stopped": stopped,
+            "unhealthy": unhealthy,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.get("")
+@router.get("/")
+async def list_containers(
+    all: bool = Query(False, description="Include stopped containers"),
+) -> List[dict]:
+    """
+    List Docker containers.
+
+    By default only shows running containers.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        containers = client.containers.list(all=all)
+        return [
+            {
+                "id": c.short_id,
+                "name": c.name,
+                "image": c.image.tags[0] if c.image.tags else c.image.short_id,
+                "status": c.status,
+                "health": c.attrs.get("State", {}).get("Health", {}).get("Status"),
+                "created": c.attrs.get("Created"),
+                "ports": c.ports,
+            }
+            for c in containers
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.get("/{name}")
+async def get_container(name: str) -> dict:
+    """
+    Get details for a specific container.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        container = client.containers.get(name)
+        return {
+            "id": container.short_id,
+            "name": container.name,
+            "image": container.image.tags[0] if container.image.tags else container.image.short_id,
+            "status": container.status,
+            "created": container.attrs.get("Created"),
+            "ports": container.ports,
+            "labels": container.labels,
+            "mounts": [
+                {"source": m.get("Source"), "destination": m.get("Destination")}
+                for m in container.attrs.get("Mounts", [])
+            ],
+        }
+    except Exception as e:
+        if "404" in str(e):
+            raise HTTPException(status_code=404, detail="Container not found")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.post("/{name}/start")
+async def start_container(name: str) -> dict:
+    """
+    Start a stopped container.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        container = client.containers.get(name)
+        container.start()
+        return {"success": True, "message": f"Container {name} started"}
+    except Exception as e:
+        if "404" in str(e):
+            raise HTTPException(status_code=404, detail="Container not found")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.post("/{name}/stop")
+async def stop_container(name: str) -> dict:
+    """
+    Stop a running container.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        container = client.containers.get(name)
+        container.stop()
+        return {"success": True, "message": f"Container {name} stopped"}
+    except Exception as e:
+        if "404" in str(e):
+            raise HTTPException(status_code=404, detail="Container not found")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.post("/{name}/restart")
+async def restart_container(name: str) -> dict:
+    """
+    Restart a container.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        container = client.containers.get(name)
+        container.restart()
+        return {"success": True, "message": f"Container {name} restarted"}
+    except Exception as e:
+        if "404" in str(e):
+            raise HTTPException(status_code=404, detail="Container not found")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.get("/{name}/logs")
+async def get_container_logs(
+    name: str,
+    tail: int = Query(100, ge=1, le=10000),
+    since: Optional[str] = Query(None, description="Show logs since timestamp"),
+) -> dict:
+    """
+    Get container logs.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        container = client.containers.get(name)
+        logs = container.logs(
+            tail=tail,
+            since=since,
+            timestamps=True,
+        )
+        return {
+            "container": name,
+            "logs": logs.decode("utf-8", errors="replace"),
+        }
+    except Exception as e:
+        if "404" in str(e):
+            raise HTTPException(status_code=404, detail="Container not found")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.delete("/{name}")
+async def delete_container(
+    name: str,
+    force: bool = Query(False, description="Force removal of running container"),
+) -> dict:
+    """
+    Delete a container.
+
+    Use force=true to remove a running container.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        container = client.containers.get(name)
+
+        # Check if container is running and force is not set
+        if container.status == "running" and not force:
+            raise HTTPException(
+                status_code=400,
+                detail="Container is running. Use force=true to remove it.",
+            )
+
+        container.remove(force=force)
+        return {"success": True, "message": f"Container {name} deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if "404" in str(e):
+            raise HTTPException(status_code=404, detail="Container not found")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()
+
+
+@router.post("/{name}/recreate")
+async def recreate_container(
+    name: str,
+    pull: bool = Query(False, description="Pull latest image before recreating"),
+) -> dict:
+    """
+    Recreate a container with the same configuration.
+
+    Optionally pulls the latest image, stops and removes the old container,
+    then creates a new one with the same configuration.
+
+    Special case: if the requested container is the one running this process
+    (self-recreate), the work is handed off to the host_tools sidecar so that
+    the recreate can complete after this process is killed by `container.stop()`.
+    """
+    client = get_docker_client()
+    if not client:
+        raise HTTPException(
+            status_code=503, detail="Docker is not available"
+        )
+
+    try:
+        container = client.containers.get(name)
+
+        # ------------------------------------------------------------------
+        # Self-recreate detection
+        # ------------------------------------------------------------------
+        # If the target container is the one running THIS process, we cannot
+        # do the recreate in-process: container.stop() will kill the request
+        # handler before it can call containers.run() to bring up the new
+        # container. Hand the work off to host_tools (which has docker-cli +
+        # docker-cli-compose + the project mount) and return immediately.
+        self_name = _get_self_container_name(client)
+        if self_name and name == self_name:
+            from app.routers.system import _exec_host_command_detached
+
+            # Build the recreate command. host_tools mounts the compose
+            # project at /genmaster (read-only) and sets COMPOSE_PROJECT_NAME
+            # so compose preserves the existing project's identity.
+            cmd_parts = ["sleep 3"]  # let the API response flush first
+            if pull:
+                cmd_parts.append(f"docker compose pull {name}")
+            cmd_parts.append(f"docker compose up -d --force-recreate {name}")
+            command = " && ".join(cmd_parts)
+
+            logger.info(f"Self-recreate detected for '{name}'; scheduling via host_tools: {command}")
+            scheduled, message = _exec_host_command_detached(command)
+            if not scheduled:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        f"Self-recreate could not be scheduled: {message}. "
+                        f"host_tools must be running with docker-cli, docker socket, "
+                        f"and the compose project mounted at /genmaster."
+                    ),
+                )
+            return {
+                "success": True,
+                "message": (
+                    f"Self-recreate of '{name}' scheduled via host_tools. "
+                    f"This container will stop in ~3 seconds and the new one "
+                    f"will start shortly after — the web UI will reconnect "
+                    f"automatically."
+                ),
+                "via": "host_tools",
+                "pull": pull,
+            }
+
+        # ------------------------------------------------------------------
+        # Normal in-process recreate (works for any container we're not in)
+        # ------------------------------------------------------------------
+
+        # Get container configuration
+        config = container.attrs
+        image = config["Config"]["Image"]
+        labels = config["Config"].get("Labels", {})
+        env = config["Config"].get("Env", [])
+        volumes = config.get("HostConfig", {}).get("Binds", [])
+        ports = config.get("HostConfig", {}).get("PortBindings", {})
+        network_mode = config.get("HostConfig", {}).get("NetworkMode", "bridge")
+        restart_policy = config.get("HostConfig", {}).get("RestartPolicy", {})
+
+        # Pull latest image if requested
+        if pull:
+            logger.info(f"Pulling latest image for {image}")
+            try:
+                client.images.pull(image)
+            except Exception as e:
+                logger.warning(f"Failed to pull image {image}: {e}")
+
+        # Stop and remove old container
+        container.stop()
+        container.remove()
+
+        # Create new container
+        new_container = client.containers.run(
+            image,
+            name=name,
+            labels=labels,
+            environment=env,
+            volumes=volumes,
+            ports=ports if ports else None,
+            network_mode=network_mode,
+            restart_policy=restart_policy,
+            detach=True,
+        )
+
+        return {
+            "success": True,
+            "message": f"Container {name} recreated",
+            "new_id": new_container.short_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        if "404" in str(e):
+            raise HTTPException(status_code=404, detail="Container not found")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        client.close()

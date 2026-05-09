@@ -1,0 +1,17 @@
+.env
+.mcp.json
+*.credentials
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# JetBrains IDEs (PyCharm, IntelliJ, etc.)
+.idea/
+*.iml
+
+# Generated nginx config - contains domain-specific settings
+genmaster/nginx/nginx.conf
+
+# Agent documentation (internal use only)
+docs/agents/

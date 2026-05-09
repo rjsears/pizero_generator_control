@@ -1,0 +1,100 @@
+/* ==========================================================================
+   Custom styles for the User Manual
+   - Widens the content area so screenshots have more room to render
+   - Makes screenshots full-width with a subtle border and click-to-zoom
+   ========================================================================== */
+
+/* Widen the main content area slightly so 1100px-max screenshots have room.
+   Material default is ~56rem (~900px); 70rem gives ~1120px. */
+.md-grid {
+  max-width: 70rem;
+}
+
+/* Default styling for screenshots in articles. Captured at 2x DPI so they
+   stay crisp when scaled down. Use max-width only — never stretch images
+   beyond their natural size, which would blur small modal captures. */
+.md-content article img {
+  max-width: min(1100px, 100%);
+  height: auto;
+  display: block;
+  margin: 1.5em auto;
+  border-radius: 6px;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  cursor: zoom-in;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Smaller modals (Add Channel, About, edit forms, shutdown warnings) are
+   compact natural-size captures — let them display at their natural width. */
+.md-content article img[src*="modal"],
+.md-content article img[src*="warning"] {
+  max-width: 700px;
+}
+
+/* The Help & Documentation dialog is content-rich (9 link cards, 4 sections)
+   so it needs more room. */
+.md-content article img[src*="help-dialog"] {
+  max-width: 900px;
+}
+
+/* About dialog is taller-than-wide and reads fine at modest size. */
+.md-content article img[src*="about-dialog"] {
+  max-width: 600px;
+}
+
+/* The shared header strip is short — show it at a comfortable readable size,
+   not stretched full width. */
+.md-content article img[src*="header"] {
+  max-width: 1100px;
+}
+
+/* Hover state: subtle lift to suggest interactivity */
+.md-content article img:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Click-to-zoom: when an image is clicked, expand it to fill the viewport.
+   Implemented purely with the :target pseudo-class - no JS required when
+   images are wrapped in <a href="#img-id"> links. For our standard markdown
+   images, we use a lightbox approach via the manual.js script below. */
+
+/* Lightbox overlay (toggled by manual.js click handler) */
+.lightbox-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  cursor: zoom-out;
+  padding: 2rem;
+}
+
+.lightbox-overlay img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Don't apply image styles to icons (e.g. badges in the README) */
+.md-content article img[src*="img.shields.io"],
+.md-content article img[src*="badge"] {
+  width: auto;
+  border: none;
+  box-shadow: none;
+  cursor: auto;
+  margin: 0 0.25em;
+  transform: none;
+}
+.md-content article img[src*="img.shields.io"]:hover,
+.md-content article img[src*="badge"]:hover {
+  box-shadow: none;
+}

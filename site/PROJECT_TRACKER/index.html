@@ -1,0 +1,2311 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Production-ready distributed generator control system for off-grid solar installations">
+      
+      
+        <meta name="author" content="Richard J. Sears">
+      
+      
+        <link rel="canonical" href="https://rjsears.github.io/pizero_generator_control/PROJECT_TRACKER/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../images/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>PiZero Generator Control - Project Tracker - RPi Generator Control</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#pizero-generator-control-project-tracker" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="RPi Generator Control" class="md-header__button md-logo" aria-label="RPi Generator Control" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 15H6l7-14v8h5l-7 14z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RPi Generator Control
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              PiZero Generator Control - Project Tracker
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/rjsears/pizero_generator_control" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    rjsears/pizero_generator_control
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="RPi Generator Control" class="md-nav__button md-logo" aria-label="RPi Generator Control" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 15H6l7-14v8h5l-7 14z"/></svg>
+
+    </a>
+    RPi Generator Control
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/rjsears/pizero_generator_control" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    rjsears/pizero_generator_control
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GENERATOR/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generator Controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCHEDULING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VICTRON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Victron Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../NOTIFICATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Setup
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GENSLAVE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenSlave Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TAILSCALE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tailscale VPN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUDFLARE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloudflare Tunnel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../NGINX_ACCESS_CONTROL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nginx Access Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOUDFLARE_TUNNEL_REAL_IP_FIX/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloudflare Real IP Fix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#project-status-in-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Status: 🟡 In Development
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hardware-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hardware Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-architecture-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Architecture Decisions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Links
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Links">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#implementation-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Phases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Phases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-foundation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Foundation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-core-communication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Core Communication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-state-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: State Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-web-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Web Interface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-notifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Notifications
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-scheduling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Scheduling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-7-containerization-genmaster-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7: Containerization (GenMaster Only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#genslave-native-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GenSlave Native Installation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-8-remote-access-networking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 8: Remote Access &amp; Networking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-9-setup-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 9: Setup &amp; Installation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-10-cicd-publishing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 10: CI/CD &amp; Publishing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-11-testing-polish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 11: Testing &amp; Polish
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#legend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hardware-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hardware Requirements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hardware Requirements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#genmaster-updated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GenMaster (Updated)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#genslave" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GenSlave
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#agent-assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Assignment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deployment-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployment Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#changelog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changelog
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Changelog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#2026-01-15-architecture-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2026-01-15 (Architecture Update)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2024-01-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2024-01-15
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="pizero-generator-control-project-tracker">PiZero Generator Control - Project Tracker<a class="headerlink" href="#pizero-generator-control-project-tracker" title="Permanent link">&para;</a></h1>
+<h2 id="project-status-in-development">Project Status: 🟡 In Development<a class="headerlink" href="#project-status-in-development" title="Permanent link">&para;</a></h2>
+<p><strong>Last Updated</strong>: 2026-01-15</p>
+<hr />
+<h2 id="architecture-overview">Architecture Overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h2>
+<h3 id="hardware-configuration">Hardware Configuration<a class="headerlink" href="#hardware-configuration" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Device</th>
+<th>Hardware</th>
+<th>Role</th>
+<th>Deployment</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>GenMaster</strong></td>
+<td>Raspberry Pi 5 8GB + 128GB NVMe</td>
+<td>Master controller, Web UI</td>
+<td>Docker + PostgreSQL</td>
+</tr>
+<tr>
+<td><strong>GenSlave</strong></td>
+<td>Raspberry Pi Zero 2W + Automation Hat Mini</td>
+<td>Relay controller</td>
+<td>Native Python + SQLite</td>
+</tr>
+</tbody>
+</table>
+<h3 id="key-architecture-decisions">Key Architecture Decisions<a class="headerlink" href="#key-architecture-decisions" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>GenMaster on Pi 5</strong>: Upgraded from Pi Zero 2W for better performance and Docker support</li>
+<li><strong>PostgreSQL for GenMaster</strong>: Full-featured database with JSONB, async support via asyncpg</li>
+<li><strong>SQLite for GenSlave</strong>: Zero-overhead file-based database to conserve RAM on Pi Zero 2W</li>
+<li><strong>Native deployment for GenSlave</strong>: No Docker to save ~150MB RAM</li>
+<li><strong>Docker Hub publishing</strong>: Multi-arch images (amd64/arm64) for GenMaster</li>
+</ol>
+<hr />
+<h2 id="quick-links">Quick Links<a class="headerlink" href="#quick-links" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Document</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../generator_project_outline.md">Project Outline</a></td>
+<td>Complete system design</td>
+</tr>
+<tr>
+<td><a href="../agents/01-project-structure/">01 - Project Structure</a></td>
+<td>Conventions &amp; file structure</td>
+</tr>
+<tr>
+<td><a href="../agents/02-database-schema/">02 - Database Schema</a></td>
+<td>PostgreSQL (GenMaster) &amp; SQLite (GenSlave)</td>
+</tr>
+<tr>
+<td><a href="../agents/03-genmaster-backend/">03 - GenMaster Backend</a></td>
+<td>FastAPI backend implementation</td>
+</tr>
+<tr>
+<td><a href="../agents/04-genmaster-frontend/">04 - GenMaster Frontend</a></td>
+<td>Vue.js frontend implementation</td>
+</tr>
+<tr>
+<td><a href="../agents/05-genslave-backend/">05 - GenSlave Backend</a></td>
+<td>Native relay controller implementation</td>
+</tr>
+<tr>
+<td><a href="../agents/06-docker-infrastructure/">06 - Docker Infrastructure</a></td>
+<td>Container configuration</td>
+</tr>
+<tr>
+<td><a href="../agents/07-networking/">07 - Networking</a></td>
+<td>Tailscale &amp; Cloudflare setup</td>
+</tr>
+<tr>
+<td><a href="../agents/08-setup-scripts/">08 - Setup Scripts</a></td>
+<td>Installation automation</td>
+</tr>
+</tbody>
+</table>
+<h3 id="implementation-files">Implementation Files<a class="headerlink" href="#implementation-files" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Description</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>genmaster/Dockerfile</code></td>
+<td>Multi-arch Dockerfile</td>
+<td>✅ Created</td>
+</tr>
+<tr>
+<td><code>genmaster/docker-compose.yml</code></td>
+<td>Docker Compose with profiles</td>
+<td>✅ Created</td>
+</tr>
+<tr>
+<td><code>genmaster/setup.sh</code></td>
+<td>Interactive installation script</td>
+<td>✅ Created</td>
+</tr>
+<tr>
+<td><code>genmaster/.env.example</code></td>
+<td>Environment template</td>
+<td>✅ Created</td>
+</tr>
+<tr>
+<td><code>genmaster/nginx/</code></td>
+<td>Nginx configuration</td>
+<td>✅ Created</td>
+</tr>
+<tr>
+<td><code>genslave/setup.sh</code></td>
+<td>Native installation script</td>
+<td>✅ Created</td>
+</tr>
+<tr>
+<td><code>.github/workflows/docker-publish.yml</code></td>
+<td>Docker Hub CI/CD</td>
+<td>✅ Created</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="implementation-phases">Implementation Phases<a class="headerlink" href="#implementation-phases" title="Permanent link">&para;</a></h2>
+<h3 id="phase-1-foundation">Phase 1: Foundation<a class="headerlink" href="#phase-1-foundation" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🔴 Not Started</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Agent Document</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Create project directory structure</td>
+<td>⬜</td>
+<td>01-project-structure</td>
+<td></td>
+</tr>
+<tr>
+<td>Set up GenMaster Python package</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Set up GenSlave Python package</td>
+<td>⬜</td>
+<td>05-genslave-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Create base SQLAlchemy models</td>
+<td>⬜</td>
+<td>02-database-schema</td>
+<td>PostgreSQL for GenMaster</td>
+</tr>
+<tr>
+<td>Create SQLite models for GenSlave</td>
+<td>⬜</td>
+<td>02-database-schema</td>
+<td>No Alembic needed</td>
+</tr>
+<tr>
+<td>Initialize Alembic migrations (GenMaster only)</td>
+<td>⬜</td>
+<td>02-database-schema</td>
+<td></td>
+</tr>
+<tr>
+<td>Create initial migration</td>
+<td>⬜</td>
+<td>02-database-schema</td>
+<td></td>
+</tr>
+<tr>
+<td>Create FastAPI skeleton (GenMaster)</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Create FastAPI skeleton (GenSlave)</td>
+<td>⬜</td>
+<td>05-genslave-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Test GPIO reading (GenMaster GPIO17)</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td>Requires Pi 5 hardware</td>
+</tr>
+<tr>
+<td>Test Automation Hat Mini relay</td>
+<td>⬜</td>
+<td>05-genslave-backend</td>
+<td>Requires Pi Zero 2W</td>
+</tr>
+<tr>
+<td>Test Automation Hat Mini LCD</td>
+<td>⬜</td>
+<td>05-genslave-backend</td>
+<td>Requires hardware</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="phase-2-core-communication">Phase 2: Core Communication<a class="headerlink" href="#phase-2-core-communication" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🔴 Not Started</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Agent Document</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Implement GenSlave relay endpoints</td>
+<td>⬜</td>
+<td>05-genslave-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Implement GenSlave heartbeat endpoint</td>
+<td>⬜</td>
+<td>05-genslave-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Implement GenMaster slave client</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Implement GenMaster heartbeat service</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Create heartbeat monitor (GenSlave)</td>
+<td>⬜</td>
+<td>05-genslave-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Implement failsafe logic (GenSlave)</td>
+<td>⬜</td>
+<td>05-genslave-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Test bidirectional communication</td>
+<td>⬜</td>
+<td>-</td>
+<td>Integration test</td>
+</tr>
+<tr>
+<td>Test failsafe trigger</td>
+<td>⬜</td>
+<td>-</td>
+<td>Integration test</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="phase-3-state-management">Phase 3: State Management<a class="headerlink" href="#phase-3-state-management" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🔴 Not Started</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Agent Document</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Implement state machine service</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Implement GPIO monitor service</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td>Using gpiod for Pi 5</td>
+</tr>
+<tr>
+<td>Create Victron signal handlers</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Implement boot recovery logic</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Add manual start/stop functionality</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Implement override system</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Test state persistence</td>
+<td>⬜</td>
+<td>-</td>
+<td>Reboot test</td>
+</tr>
+<tr>
+<td>Test Victron signal response</td>
+<td>⬜</td>
+<td>-</td>
+<td>Hardware test</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="phase-4-web-interface">Phase 4: Web Interface<a class="headerlink" href="#phase-4-web-interface" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🔴 Not Started</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Agent Document</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Initialize Vue.js project</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Configure Tailwind CSS</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Create API client modules</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Create Pinia stores</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Build StatusCard component</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Build HealthGauge component</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Build RuntimeChart component</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Build ScheduleTable component</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Build Dashboard view</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Build History view</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Build Schedule view</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Build Settings view</td>
+<td>⬜</td>
+<td>04-genmaster-frontend</td>
+<td></td>
+</tr>
+<tr>
+<td>Test real-time updates</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+<tr>
+<td>Test responsive design</td>
+<td>⬜</td>
+<td>-</td>
+<td>Mobile testing</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="phase-5-notifications">Phase 5: Notifications<a class="headerlink" href="#phase-5-notifications" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🔴 Not Started</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Agent Document</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Implement webhook service</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Create webhook payload schemas</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Add webhook test endpoint</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Implement GenSlave failsafe webhook</td>
+<td>⬜</td>
+<td>05-genslave-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Create n8n workflow</td>
+<td>⬜</td>
+<td>-</td>
+<td>External system</td>
+</tr>
+<tr>
+<td>Test all webhook events</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="phase-6-scheduling">Phase 6: Scheduling<a class="headerlink" href="#phase-6-scheduling" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🔴 Not Started</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Agent Document</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Implement APScheduler service</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Create schedule CRUD endpoints</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Implement recurring schedules</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Add auto-stop for manual runs</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Test schedule execution</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+<tr>
+<td>Test recurring patterns</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="phase-7-containerization-genmaster-only">Phase 7: Containerization (GenMaster Only)<a class="headerlink" href="#phase-7-containerization-genmaster-only" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🟡 Infrastructure Created</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Agent Document</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Create GenMaster Dockerfile</td>
+<td>✅</td>
+<td>genmaster/Dockerfile</td>
+<td>Multi-arch support</td>
+</tr>
+<tr>
+<td>Create docker-compose.yml</td>
+<td>✅</td>
+<td>genmaster/docker-compose.yml</td>
+<td>With profiles</td>
+</tr>
+<tr>
+<td>Configure nginx</td>
+<td>✅</td>
+<td>genmaster/nginx/</td>
+<td>HTTP &amp; SSL configs</td>
+</tr>
+<tr>
+<td>Create .env.example</td>
+<td>✅</td>
+<td>genmaster/.env.example</td>
+<td></td>
+</tr>
+<tr>
+<td>Create entrypoint scripts</td>
+<td>✅</td>
+<td>genmaster/docker/</td>
+<td></td>
+</tr>
+<tr>
+<td>Test GPIO access in container</td>
+<td>⬜</td>
+<td>-</td>
+<td>Requires Pi 5 hardware</td>
+</tr>
+<tr>
+<td>Build and test Docker image</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="genslave-native-installation">GenSlave Native Installation<a class="headerlink" href="#genslave-native-installation" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🟡 Infrastructure Created</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Agent Document</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Create setup.sh script</td>
+<td>✅</td>
+<td>genslave/setup.sh</td>
+<td></td>
+</tr>
+<tr>
+<td>Configure systemd service</td>
+<td>✅</td>
+<td>05-genslave-backend</td>
+<td>In documentation</td>
+</tr>
+<tr>
+<td>Configure log rotation</td>
+<td>✅</td>
+<td>05-genslave-backend</td>
+<td>In documentation</td>
+</tr>
+<tr>
+<td>Test native installation</td>
+<td>⬜</td>
+<td>-</td>
+<td>Requires Pi Zero 2W</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="phase-8-remote-access-networking">Phase 8: Remote Access &amp; Networking<a class="headerlink" href="#phase-8-remote-access-networking" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🔴 Not Started</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Agent Document</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Configure Tailscale (GenMaster)</td>
+<td>⬜</td>
+<td>07-networking</td>
+<td>Docker container</td>
+</tr>
+<tr>
+<td>Configure Tailscale (GenSlave)</td>
+<td>⬜</td>
+<td>05-genslave-backend</td>
+<td>Native install</td>
+</tr>
+<tr>
+<td>Test Tailscale connectivity</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+<tr>
+<td>Configure Cloudflare Tunnel (optional)</td>
+<td>⬜</td>
+<td>07-networking</td>
+<td></td>
+</tr>
+<tr>
+<td>Set up Tailscale ACLs</td>
+<td>⬜</td>
+<td>07-networking</td>
+<td></td>
+</tr>
+<tr>
+<td>Configure nginx for dual access</td>
+<td>⬜</td>
+<td>07-networking</td>
+<td></td>
+</tr>
+<tr>
+<td>Test GenMaster ↔ GenSlave over Tailscale</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+<tr>
+<td>Test webhook delivery over Tailscale</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="phase-9-setup-installation">Phase 9: Setup &amp; Installation<a class="headerlink" href="#phase-9-setup-installation" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🟡 Scripts Created</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Agent Document</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Create GenMaster setup.sh</td>
+<td>✅</td>
+<td>genmaster/setup.sh</td>
+<td>Full n8n_nginx style</td>
+</tr>
+<tr>
+<td>Create GenSlave setup.sh</td>
+<td>✅</td>
+<td>genslave/setup.sh</td>
+<td>Lightweight native</td>
+</tr>
+<tr>
+<td>Create health-check scripts</td>
+<td>✅</td>
+<td>In setup.sh files</td>
+<td></td>
+</tr>
+<tr>
+<td>Create backup scripts</td>
+<td>✅</td>
+<td>In setup.sh files</td>
+<td></td>
+</tr>
+<tr>
+<td>Test fresh install (GenMaster)</td>
+<td>⬜</td>
+<td>-</td>
+<td>Requires Pi 5</td>
+</tr>
+<tr>
+<td>Test fresh install (GenSlave)</td>
+<td>⬜</td>
+<td>-</td>
+<td>Requires Pi Zero 2W</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="phase-10-cicd-publishing">Phase 10: CI/CD &amp; Publishing<a class="headerlink" href="#phase-10-cicd-publishing" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🟡 Workflows Created</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Create Docker Hub workflow</td>
+<td>✅</td>
+<td>.github/workflows/docker-publish.yml</td>
+</tr>
+<tr>
+<td>Configure Docker Hub secrets</td>
+<td>⬜</td>
+<td>DOCKERHUB_USERNAME, DOCKERHUB_TOKEN</td>
+</tr>
+<tr>
+<td>Test multi-arch build</td>
+<td>⬜</td>
+<td>linux/amd64, linux/arm64</td>
+</tr>
+<tr>
+<td>Publish to Docker Hub</td>
+<td>⬜</td>
+<td>rjsears/genmaster</td>
+</tr>
+<tr>
+<td>Add security scanning</td>
+<td>✅</td>
+<td>Trivy in workflow</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="phase-11-testing-polish">Phase 11: Testing &amp; Polish<a class="headerlink" href="#phase-11-testing-polish" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🔴 Not Started</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Status</th>
+<th>Agent Document</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Write unit tests (GenMaster backend)</td>
+<td>⬜</td>
+<td>03-genmaster-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Write unit tests (GenSlave backend)</td>
+<td>⬜</td>
+<td>05-genslave-backend</td>
+<td></td>
+</tr>
+<tr>
+<td>Write integration tests</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+<tr>
+<td>Performance testing on Pi 5</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+<tr>
+<td>Memory optimization (GenSlave)</td>
+<td>⬜</td>
+<td>-</td>
+<td>Target &lt;200MB</td>
+</tr>
+<tr>
+<td>Database backup/restore testing</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+<tr>
+<td>Documentation review</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+<tr>
+<td>Security review</td>
+<td>⬜</td>
+<td>-</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="legend">Legend<a class="headerlink" href="#legend" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>⬜</td>
+<td>Not started</td>
+</tr>
+<tr>
+<td>🟡</td>
+<td>In progress</td>
+</tr>
+<tr>
+<td>✅</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>❌</td>
+<td>Blocked</td>
+</tr>
+<tr>
+<td>⏸️</td>
+<td>On hold</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="hardware-requirements">Hardware Requirements<a class="headerlink" href="#hardware-requirements" title="Permanent link">&para;</a></h2>
+<h3 id="genmaster-updated">GenMaster (Updated)<a class="headerlink" href="#genmaster-updated" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] Raspberry Pi 5 8GB (upgraded from Pi Zero 2W)</li>
+<li>[x] 128GB NVMe SSD + adapter</li>
+<li>[ ] 5V 5A USB-C power supply</li>
+<li>[ ] 2-wire connection to Victron Cerbo GX relay</li>
+</ul>
+<h3 id="genslave">GenSlave<a class="headerlink" href="#genslave" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Raspberry Pi Zero 2W</li>
+<li>[ ] Pimoroni Automation Hat Mini</li>
+<li>[ ] SSD + USB adapter (or good quality SD card)</li>
+<li>[ ] 5V 2.5A power supply</li>
+<li>[ ] 2-wire connection to generator remote start</li>
+</ul>
+<hr />
+<h2 id="open-questions">Open Questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Victron Relay Behavior</strong>: Does the relay close to ground or provide voltage?</li>
+<li><strong>Status</strong>: ❓ Needs confirmation</li>
+<li>
+<p><strong>Assumption</strong>: Closes to ground (normally open)</p>
+</li>
+<li>
+<p><strong>Generator Start Mechanism</strong>: Momentary pulse or continuous contact?</p>
+</li>
+<li><strong>Status</strong>: ❓ Needs confirmation</li>
+<li>
+<p><strong>Assumption</strong>: Continuous contact while running</p>
+</li>
+<li>
+<p><strong>Generator Feedback</strong>: Any way to confirm generator started?</p>
+</li>
+<li><strong>Status</strong>: ❓ Needs confirmation</li>
+<li><strong>Assumption</strong>: None available</li>
+</ol>
+<hr />
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<h3 id="agent-assignment">Agent Assignment<a class="headerlink" href="#agent-assignment" title="Permanent link">&para;</a></h3>
+<p>Each agent document can be handed off independently. Recommended order:
+1. Database schema (02) - foundation for all code
+2. GenMaster backend (03) - core business logic
+3. GenSlave backend (05) - can work in parallel with GenMaster
+4. Frontend (04) - after backend APIs are defined
+5. Docker (06) - after applications are built
+6. Networking (07) - after Docker is configured
+7. Setup scripts (08) - final integration</p>
+<h3 id="deployment-strategy">Deployment Strategy<a class="headerlink" href="#deployment-strategy" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>GenMaster</strong>: Use <code>genmaster/setup.sh</code> for guided Docker installation</li>
+<li><strong>GenSlave</strong>: Use <code>genslave/setup.sh</code> for native Python installation</li>
+<li>Both devices communicate over Tailscale VPN</li>
+</ul>
+<h3 id="testing-strategy">Testing Strategy<a class="headerlink" href="#testing-strategy" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Unit tests can be written without hardware (mock GPIO)</li>
+<li>Integration tests require both Pi devices on Tailscale</li>
+<li>End-to-end tests require full hardware setup including Victron/generator</li>
+</ul>
+<hr />
+<h2 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h2>
+<h3 id="2026-01-15-architecture-update">2026-01-15 (Architecture Update)<a class="headerlink" href="#2026-01-15-architecture-update" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Upgraded GenMaster hardware to Raspberry Pi 5 8GB + 128GB NVMe</li>
+<li>Changed GenMaster database from MariaDB to PostgreSQL 16</li>
+<li>Changed GenSlave database from MariaDB to SQLite</li>
+<li>Updated GenSlave to native deployment (no Docker)</li>
+<li>Created GenMaster Dockerfile with multi-arch support</li>
+<li>Created docker-compose.yml with Tailscale/Cloudflare profiles</li>
+<li>Created GitHub Actions workflow for Docker Hub publishing</li>
+<li>Created comprehensive setup.sh scripts for both devices</li>
+<li>Updated all agent documentation to reflect new architecture</li>
+</ul>
+<h3 id="2024-01-15">2024-01-15<a class="headerlink" href="#2024-01-15" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Created project tracker</li>
+<li>Created all 8 agent handoff documents</li>
+<li>Added comprehensive task breakdown</li>
+</ul>
+<hr />
+<p><em>This document should be updated as tasks are completed.</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Richard J. Sears
+    </div>
+  
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/rjsears" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

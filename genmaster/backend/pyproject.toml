@@ -1,0 +1,44 @@
+[tool.ruff]
+# Target Python 3.11
+target-version = "py311"
+
+# Line length
+line-length = 100
+
+# Exclude auto-generated files
+exclude = [
+    "alembic/",
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+]
+
+[tool.ruff.lint]
+# Essential rules only - catch real issues without being overly strict
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+]
+
+# Ignore specific rules that are too noisy
+ignore = [
+    "E501",  # line too long (handled by formatter if needed)
+    "E402",  # module import not at top of file (often intentional)
+    "E712",  # comparison to True/False (SQLAlchemy uses this pattern)
+    "F841",  # unused variables (often intentional for debugging/future use)
+    "UP045", # Optional[X] vs X | None (style preference)
+    "UP006", # deprecated type annotations (style preference)
+    "UP035", # deprecated imports (keep for compatibility)
+    "UP017", # datetime.timezone.utc (style preference)
+    "UP015", # redundant open modes (style preference)
+    "UP042", # replace str enum (keep existing pattern)
+    "UP041", # timeout error alias (keep for clarity)
+    "UP037", # quoted annotations (style preference)
+    "UP011", # lru_cache without parameters (style preference)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
