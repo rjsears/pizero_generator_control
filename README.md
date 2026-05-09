@@ -56,7 +56,7 @@
   <strong><a href="https://rjsears.github.io/pizero_generator_control/">View Full Documentation</a></strong>
 </p>
 
-A production-ready, distributed generator control system designed for off-grid solar installations with Victron energy systems. Built on a master-slave architecture using Raspberry Pi devices, it provides automated generator management with manual override capabilities, scheduling, and real-time monitoring through a modern web interface.
+A working (in production in my system), distributed generator control system designed for off-grid solar installations with Victron energy systems. Built on a master-slave architecture using Raspberry Pi devices, it provides automated generator management with manual override capabilities, scheduling, and real-time monitoring through a modern web interface.
 
 While designed around Victron integration, the architecture is universal—any two-wire trigger source (home automation, PLC, manual switch, or relay output) can signal GenMaster, and GenSlave can control any device with a two-wire start input (generators, pumps, HVAC, irrigation, industrial equipment). With optional Tailscale VPN and Cloudflare Tunnel support, your trigger source and controlled device can operate anywhere in the world—same building or different continents, wherever there's internet access.
 
