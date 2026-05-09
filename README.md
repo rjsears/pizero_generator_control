@@ -52,6 +52,17 @@
 
 > *"The best automation is the kind you forget is running."*
 
+> [!WARNING]
+> **Safety scope.** This project controls only the dry-contact start input on a generator. It is **NOT** a replacement for, and does not implement:
+> - Automatic Transfer Switch (ATS) logic
+> - Generator manufacturer safety controls (overspeed, overtemp, low oil, etc.)
+> - Overcurrent protection or breaker coordination
+> - Carbon monoxide detection or ventilation
+> - Fuel storage, fuel-line, or shut-off safety
+> - Electrical-code compliance (NEC/CEC/local)
+>
+> Electrical work should be performed by a qualified electrician following local code. Use at your own risk.
+
 <p align="center">
   <strong><a href="https://rjsears.github.io/pizero_generator_control/">View Full Documentation</a></strong>
 </p>
