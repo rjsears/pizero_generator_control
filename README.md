@@ -50,25 +50,6 @@
   <a href="https://www.raspberrypi.com"><img src="https://img.shields.io/badge/Raspberry%20Pi-5_&_Zero_2W-A22846.svg?logo=raspberrypi&logoColor=white" alt="Raspberry Pi"></a>
 </p>
 
-> *"The best automation is the kind you forget is running."*
-
-> [!WARNING]
-> **Safety scope.** This project controls only the dry-contact start input on a generator. It is **NOT** a replacement for, and does not implement:
-> - Automatic Transfer Switch (ATS) logic
-> - Generator manufacturer safety controls (overspeed, overtemp, low oil, etc.)
-> - Overcurrent protection or breaker coordination
-> - Carbon monoxide detection or ventilation
-> - Fuel storage, fuel-line, or shut-off safety
-> - Electrical-code compliance (NEC/CEC/local)
->
-> Electrical work should be performed by a qualified electrician following local code. Use at your own risk.
-
-
-
-
-
-
-
 
 
 <p align="center">
