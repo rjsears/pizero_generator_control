@@ -26,9 +26,13 @@
 }
 
 /* Smaller modals (Add Channel, About, edit forms, shutdown warnings) are
-   compact natural-size captures — let them display at their natural width. */
+   compact natural-size captures — let them display at their natural width.
+   Use suffix matching ($=) for warnings so it only catches manual-screenshot
+   files like `containers-04-shutdown-warning.png` and NOT bigger marketing
+   cards like `safety_scope_warning_card.png` that happen to contain the
+   word "warning". */
 .md-content article img[src*="modal"],
-.md-content article img[src*="warning"] {
+.md-content article img[src$="-warning.png"] {
   max-width: 700px;
 }
 
