@@ -117,6 +117,7 @@ nav:
     - Tailscale VPN: TAILSCALE.md
     - Cloudflare Tunnel: CLOUDFLARE.md
   - Reference:
+    - Security: SECURITY.md
     - Troubleshooting: TROUBLESHOOTING.md
     - Nginx Access Control: NGINX_ACCESS_CONTROL.md
     - Cloudflare Real IP Fix: CLOUDFLARE_TUNNEL_REAL_IP_FIX.md

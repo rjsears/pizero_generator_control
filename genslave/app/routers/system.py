@@ -710,6 +710,55 @@ def _mask_url(url: str) -> str:
         return f"{scheme}://****"
 
 
+def _is_masked_url(url: str) -> bool:
+    """True if `url` looks like the output of _mask_url() rather than a real
+    Apprise URL. We treat any URL containing the literal '****' (or being just
+    '****') as masked."""
+    return "****" in url
+
+
+def _resolve_masked_urls(incoming: list[str], existing: list[str]) -> list[str]:
+    """Merge a posted URL list against the current DB list, replacing any
+    masked entries with their original full-credential values from the DB.
+
+    The bug we're fixing: the GET endpoint returns URLs with credentials
+    masked (`twilio://****/...`). If the frontend sends the masked list back
+    on save (e.g. when adding a new entry), `set_urls` would persist the
+    masked string, wiping the credentials. Here we detect masked entries
+    in the incoming list and substitute the matching original from
+    `existing` before persisting.
+
+    Matching strategy: for each masked URL we find existing URLs that share
+    the same scheme AND would mask to the same string. If exactly one
+    matches, use it. If zero matches, log a warning and drop the entry
+    (it's user-pasted nonsense). If multiple match, log a warning and drop
+    (ambiguous — better to lose one than corrupt all).
+    """
+    resolved: list[str] = []
+    for inc in incoming:
+        inc = inc.strip()
+        if not inc:
+            continue
+        if not _is_masked_url(inc):
+            resolved.append(inc)
+            continue
+        # Find existing URLs whose mask matches this incoming masked entry.
+        candidates = [orig for orig in existing if _mask_url(orig) == inc]
+        if len(candidates) == 1:
+            resolved.append(candidates[0])
+        elif len(candidates) == 0:
+            logger.warning(
+                f"Discarding masked Apprise URL with no matching original "
+                f"in the existing config: {inc}"
+            )
+        else:
+            logger.warning(
+                f"Discarding ambiguous masked Apprise URL — {len(candidates)} "
+                f"existing entries mask to {inc}; cannot decide which is meant"
+            )
+    return resolved
+
+
 @router.get("/notifications", response_model=NotificationConfig)
 async def get_notifications() -> NotificationConfig:
     """
@@ -745,12 +794,20 @@ async def update_notifications(
     - And many more: https://github.com/caronc/apprise/wiki
 
     The configuration is stored in the database and takes effect immediately.
+
+    Masked entries in the incoming list (those still containing '****' from a
+    prior GET response) are merged against the current DB values rather than
+    persisted as-is — otherwise saving a NEW URL would corrupt every existing
+    URL by writing the masked placeholder over the real credentials.
     """
     try:
-        success = notification_service.set_urls(request.apprise_urls)
+        existing_urls = notification_service.get_urls()
+        merged_urls = _resolve_masked_urls(request.apprise_urls, existing_urls)
+
+        success = notification_service.set_urls(merged_urls)
 
         if success:
-            url_count = len([u for u in request.apprise_urls if u.strip()])
+            url_count = len(merged_urls)
             logger.info(f"Notification config updated: {url_count} URLs configured")
             return NotificationResponse(
                 success=True,

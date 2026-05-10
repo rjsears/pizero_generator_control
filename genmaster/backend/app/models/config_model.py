@@ -86,6 +86,15 @@ class Config(Base):
     # Auto-Arm on Connection Restore
     auto_arm_relay_on_connect: Mapped[bool] = mapped_column(default=False)
 
+    # Boot Arming Policy
+    # 'fail_safe' (default): on GenMaster boot, force slave_relay_armed = False.
+    #    Operator must explicitly re-arm via the UI. Boot-time auto-arm is also
+    #    suppressed under this policy. Runtime auto-arm on reconnect is unaffected.
+    # 'preserve_state': preserve slave_relay_armed across GenMaster reboots.
+    #    Combined with auto-arm, generator can resume automatically after an
+    #    outage with no operator interaction.
+    boot_arming_policy: Mapped[str] = mapped_column(default="fail_safe")
+
     # Metadata
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()

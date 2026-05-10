@@ -622,6 +622,104 @@
       </Card>
     </div>
 
+    <!-- Boot Arming Policy - Collapsible -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden">
+      <!-- Section Header (clickable) -->
+      <div
+        @click="bootArmingExpanded = !bootArmingExpanded"
+        class="flex items-center gap-4 p-5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+      >
+        <div class="flex-shrink-0 w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center">
+          <ShieldCheckIcon class="h-6 w-6 text-amber-500" />
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-gray-900 dark:text-white text-lg">Boot Arming Policy</p>
+          <p class="text-sm text-gray-500 dark:text-gray-400">What happens to the relay armed state after a GenMaster reboot</p>
+        </div>
+        <span
+          :class="[
+            'flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium',
+            bootArmingPolicy === 'fail_safe'
+              ? 'bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400'
+              : 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
+          ]"
+        >
+          {{ bootArmingPolicy === 'fail_safe' ? 'Fail-Safe (default)' : 'Preserve State' }}
+        </span>
+        <ChevronRightIcon
+          :class="[
+            'h-5 w-5 text-gray-400 transition-transform duration-200',
+            bootArmingExpanded ? 'rotate-90' : ''
+          ]"
+        />
+      </div>
+
+      <Transition name="section-expand">
+        <div v-if="bootArmingExpanded" class="border-t border-gray-100 dark:border-gray-700">
+          <div class="p-5 space-y-4">
+            <!-- Fail-Safe option -->
+            <div
+              @click="onBootArmingPolicyChange('fail_safe')"
+              :class="[
+                'cursor-pointer p-4 rounded-lg border-2 transition-all',
+                bootArmingPolicy === 'fail_safe'
+                  ? 'border-green-500 bg-green-50 dark:bg-green-500/10'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-400'
+              ]"
+            >
+              <div class="flex items-start gap-3">
+                <div :class="['w-5 h-5 mt-0.5 rounded-full border-2 flex items-center justify-center flex-shrink-0', bootArmingPolicy === 'fail_safe' ? 'border-green-500' : 'border-gray-400']">
+                  <div v-if="bootArmingPolicy === 'fail_safe'" class="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                </div>
+                <div class="flex-1">
+                  <p class="font-medium text-primary">Fail-Safe on Boot <span class="text-xs text-green-600 dark:text-green-400 font-normal">(recommended)</span></p>
+                  <p class="text-sm text-secondary mt-1">
+                    On every GenMaster restart, the relay is automatically <strong>disarmed</strong>.
+                    The generator will <strong>not</strong> start automatically until you log in and re-arm it.
+                    Boot-time auto-arm is suppressed under this policy. Runtime auto-arm-on-reconnect (when GenSlave drops out and reconnects during normal operation) is unaffected.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Preserve State option -->
+            <div
+              @click="onBootArmingPolicyChange('preserve_state')"
+              :class="[
+                'cursor-pointer p-4 rounded-lg border-2 transition-all',
+                bootArmingPolicy === 'preserve_state'
+                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-500/10'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-400'
+              ]"
+            >
+              <div class="flex items-start gap-3">
+                <div :class="['w-5 h-5 mt-0.5 rounded-full border-2 flex items-center justify-center flex-shrink-0', bootArmingPolicy === 'preserve_state' ? 'border-amber-500' : 'border-gray-400']">
+                  <div v-if="bootArmingPolicy === 'preserve_state'" class="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                </div>
+                <div class="flex-1">
+                  <p class="font-medium text-primary">Preserve State Across Reboots</p>
+                  <p class="text-sm text-secondary mt-1">
+                    GenMaster remembers the prior armed state across reboots. Combined with auto-arm-on-connect, the generator can resume operation automatically after a power outage with no operator interaction. Use only if your installation can safely auto-resume.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+              <Button
+                variant="primary"
+                @click="saveBootArmingPolicy"
+                :disabled="savingBootArmingPolicy || bootArmingPolicy === bootArmingPolicyServerValue"
+                :loading="savingBootArmingPolicy"
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </div>
+
     <!-- Generator Information - Collapsible -->
     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden">
       <!-- Section Header (clickable) -->
@@ -1021,6 +1119,36 @@
         <Button variant="warning" @click="executeFuelReset">Reset</Button>
       </template>
     </Modal>
+
+    <!-- Boot Arming Policy: confirmation when switching to Preserve State -->
+    <Modal v-model="showBootArmingWarning" title="⚠️ Switch to Preserve State Mode?">
+      <div class="space-y-3 text-gray-700 dark:text-gray-300">
+        <p class="font-medium text-amber-700 dark:text-amber-400">
+          Read this carefully before confirming.
+        </p>
+        <p>
+          In <strong>Preserve State</strong> mode, GenMaster will remember the relay's
+          armed state across reboots.
+        </p>
+        <p>
+          If a power outage takes the system down while the generator was running and your
+          battery monitor still calls for power when the system returns,
+          <strong>the generator may restart automatically with no operator interaction</strong>.
+        </p>
+        <p>
+          Use this mode only if your installation can safely auto-resume after a power event
+          (e.g. you have a properly configured ATS, weatherproof enclosure, fuel and CO safety
+          measures, and accept that the generator may run unattended after an outage).
+        </p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+          You can switch back to Fail-Safe at any time without confirmation.
+        </p>
+      </div>
+      <template #footer>
+        <Button variant="secondary" @click="cancelBootArmingChange">Cancel</Button>
+        <Button variant="warning" @click="confirmBootArmingChange">I Understand — Enable Preserve State</Button>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -1058,6 +1186,7 @@ import {
   ArrowPathIcon,
   ChevronRightIcon,
   InformationCircleIcon,
+  ShieldCheckIcon,
 } from '@heroicons/vue/24/outline'
 
 const generatorStore = useGeneratorStore()
@@ -1137,6 +1266,14 @@ const overrideEnabled = ref(false)
 const runtimeLimitsExpanded = ref(false)
 const generatorInfoExpanded = ref(false)
 const exerciseScheduleExpanded = ref(false)
+const bootArmingExpanded = ref(false)
+
+// Boot Arming Policy state
+const bootArmingPolicy = ref('fail_safe')                // current UI selection
+const bootArmingPolicyServerValue = ref('fail_safe')     // last value loaded from server (for dirty-check)
+const savingBootArmingPolicy = ref(false)
+const showBootArmingWarning = ref(false)
+const pendingBootArmingPolicy = ref(null)
 
 // Generator Info state
 const generatorInfoLoading = ref(true)
@@ -1626,6 +1763,50 @@ async function handleOverrideToggle(enabled) {
   }
 }
 
+// Boot Arming Policy: handle a click on one of the two policy options.
+// Switching from fail_safe → preserve_state shows a confirmation modal first.
+// Switching back the other way (or same value) just updates the local selection.
+function onBootArmingPolicyChange(newValue) {
+  if (newValue === bootArmingPolicy.value) return
+  if (newValue === 'preserve_state') {
+    pendingBootArmingPolicy.value = newValue
+    showBootArmingWarning.value = true
+  } else {
+    bootArmingPolicy.value = newValue
+  }
+}
+
+function cancelBootArmingChange() {
+  showBootArmingWarning.value = false
+  pendingBootArmingPolicy.value = null
+}
+
+function confirmBootArmingChange() {
+  if (pendingBootArmingPolicy.value) {
+    bootArmingPolicy.value = pendingBootArmingPolicy.value
+  }
+  showBootArmingWarning.value = false
+  pendingBootArmingPolicy.value = null
+}
+
+async function saveBootArmingPolicy() {
+  savingBootArmingPolicy.value = true
+  try {
+    await configApi.update({ boot_arming_policy: bootArmingPolicy.value })
+    bootArmingPolicyServerValue.value = bootArmingPolicy.value
+    notificationStore.success(
+      bootArmingPolicy.value === 'fail_safe'
+        ? 'Boot policy set to Fail-Safe — relay will be disarmed on every reboot'
+        : 'Boot policy set to Preserve State — armed state will persist across reboots'
+    )
+  } catch (error) {
+    const message = error.response?.data?.detail || 'Failed to save boot arming policy'
+    notificationStore.error(message)
+  } finally {
+    savingBootArmingPolicy.value = false
+  }
+}
+
 // Save run time configuration
 async function saveRunTimeConfig() {
   // Validate max > min
@@ -1764,6 +1945,10 @@ onMounted(async () => {
       runTimeConfig.value.max_run_minutes = configRes.data.max_run_minutes || 480
       runTimeConfig.value.max_runtime_action = configRes.data.max_runtime_action || 'manual_reset'
       runTimeConfig.value.cooldown_duration_minutes = configRes.data.cooldown_duration_minutes || 60
+      // Boot arming policy ('fail_safe' or 'preserve_state')
+      const policy = configRes.data.boot_arming_policy || 'fail_safe'
+      bootArmingPolicy.value = policy
+      bootArmingPolicyServerValue.value = policy
     }
   } catch {
     // Use defaults

@@ -136,6 +136,20 @@ async def sync_env_to_database() -> None:
                 config.auto_arm_relay_on_connect = auto_arm_value
                 updates.append(f"auto_arm_relay_on_connect={auto_arm_value}")
 
+        # Sync boot_arming_policy if explicitly set in environment
+        env_boot_policy = os.getenv("BOOT_ARMING_POLICY")
+        if env_boot_policy is not None:
+            policy_value = env_boot_policy.lower().strip()
+            if policy_value in ("fail_safe", "preserve_state"):
+                if config.boot_arming_policy != policy_value:
+                    config.boot_arming_policy = policy_value
+                    updates.append(f"boot_arming_policy={policy_value}")
+            else:
+                logger.warning(
+                    f"BOOT_ARMING_POLICY env var has invalid value '{env_boot_policy}'; "
+                    f"expected 'fail_safe' or 'preserve_state'. Ignoring."
+                )
+
         if updates:
             await db.commit()
             logger.info(f"Synced env vars to database config: {', '.join(updates)}")

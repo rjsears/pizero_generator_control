@@ -20,19 +20,32 @@ http {
     # ==========================================================================
     # Real IP Configuration for Cloudflare Tunnel
     # ==========================================================================
-    # Trust Docker/internal networks as proxies (cloudflared connects from here)
-    # This allows nginx to extract the real client IP from X-Forwarded-For header
-    set_real_ip_from 172.16.0.0/12;
-    set_real_ip_from 10.0.0.0/8;
-    set_real_ip_from 192.168.0.0/16;
-    set_real_ip_from 100.64.0.0/10;
-    set_real_ip_from 127.0.0.1;
+    # IMPORTANT — proxy trust model (see docs/SECURITY.md for full details):
+    #
+    # `set_real_ip_from` only tells nginx which source IPs are TRUSTED PROXIES
+    # whose forwarding header should be honored to overwrite $remote_addr. It
+    # does NOT control who can connect — that is governed by listen, firewall,
+    # and the IP access-control list managed in the web UI.
+    #
+    # The ONLY trusted proxy in this stack is the cloudflared sidecar.
+    # docker-compose pins it to a static IP on a dedicated /24 subnet
+    # (genmaster-external = 172.30.0.0/24, cloudflared = 172.30.0.10) so that
+    # only this exact host can rewrite $remote_addr via CF-Connecting-IP.
+    # Tailscale, LAN, Docker app containers, and localhost are direct
+    # clients or peer services — NOT proxies — and trusting their headers
+    # lets them spoof their source IP for access-control / audit-log
+    # purposes.
+    set_real_ip_from 172.30.0.10;       # cloudflared sidecar (pinned IP)
 
-    # Cloudflare sets X-Forwarded-For with the real client IP
-    real_ip_header X-Forwarded-For;
+    # Use Cloudflare's CF-Connecting-IP header. Cloudflare's edge sets this to
+    # the real client IP and STRIPS any client-supplied version on ingress, so
+    # it cannot be spoofed by browsers or downstream callers — unlike
+    # X-Forwarded-For, which any HTTP client can set arbitrarily.
+    real_ip_header CF-Connecting-IP;
 
-    # Enable recursive lookup (use rightmost untrusted IP)
-    real_ip_recursive on;
+    # Recursive lookup is unnecessary with CF-Connecting-IP (it's a single
+    # value set by Cloudflare, not an X-F-F-style chain).
+    real_ip_recursive off;
 
     log_format main '$remote_addr - $remote_user [$time_local] "$request" '
                     '$status $body_bytes_sent "$http_referer" '

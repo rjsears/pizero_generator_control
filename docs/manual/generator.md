@@ -16,7 +16,7 @@ Three at-a-glance status cards span the top of the page.
 
 ### Arming behavior
 
-GenMaster ships **disarmed** every time it boots — this is intentional safety behavior. After any reboot or power loss, an operator must explicitly arm the system before automated actions can resume.
+Under the default **Fail-Safe** boot policy, GenMaster ships **disarmed** every time it boots — this is intentional safety behavior. After a reboot, the operator must explicitly arm the system before automated actions can resume, and the `boot_disarmed_failsafe` notification is fired so you know to do it.
 
 | State | Victron signal | Scheduled runs | Manual start |
 |-------|----------------|----------------|--------------|
@@ -25,6 +25,9 @@ GenMaster ships **disarmed** every time it boots — this is intentional safety 
 
 !!! warning "Disarming does NOT stop a running generator"
     If the generator is currently running, flipping the arming switch off only blocks **future** automated actions. Use the **Stop Generator** button or **Emergency Stop** to halt a running generator.
+
+!!! info "Boot Arming Policy is configurable"
+    The "always disarm on boot" behavior is the default (`fail_safe`) policy and is what most operators want. Power users with the right physical safety setup can switch to `preserve_state` (under the **Boot Arming Policy** collapsible on this page), which keeps the armed state across reboots so the system can auto-resume after a power outage. Switching to `preserve_state` requires confirming a warning modal — read it carefully before enabling.
 
 ## Generator status and Victron command
 

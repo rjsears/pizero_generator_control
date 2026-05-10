@@ -122,6 +122,17 @@ DEFAULT_SYSTEM_NOTIFICATION_EVENTS = [
         "default_title": "FAILSAFE TRIGGERED",
         "default_message": "GenSlave failsafe triggered at {time}.\n\nThe generator relay has been turned OFF due to loss of communication with GenMaster.\n\nYou must restore communication and re-enable the generator relay.",
     },
+    {
+        "event_type": "boot_disarmed_failsafe",
+        "display_name": "Relay Disarmed on Boot (Fail-Safe)",
+        "description": "The fail-safe boot policy automatically disarmed the relay after a GenMaster restart",
+        "icon": "ShieldExclamationIcon",
+        "category": "generator",
+        "severity": "warning",
+        "enabled": True,
+        "default_title": "Generator Disarmed After Reboot — Action Required",
+        "default_message": "GenMaster restarted with the fail-safe boot policy enabled.\n\nThe generator relay has been automatically DISARMED for safety.\n\nThe generator WILL NOT START automatically until you log in and re-arm it from the web interface.",
+    },
     # Communication Events
     {
         "event_type": "genslave_comm_lost",

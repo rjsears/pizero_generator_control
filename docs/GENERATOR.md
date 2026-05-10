@@ -28,7 +28,7 @@ The generator control system uses a **master-slave architecture** where GenMaste
 2. **Heartbeat synchronization** - GenMaster sends heartbeats to GenSlave every 10 seconds. If GenSlave's relay state doesn't match GenMaster's intended state, the heartbeat corrects it.
 
 3. **Safety first** - The system defaults to a safe state:
-   - Relay is **disarmed** on boot (requires explicit arming)
+   - Relay is **disarmed** on every GenMaster boot under the default `fail_safe` policy (operator must re-arm — see [Boot Arming Policy](#boot-arming-policy))
    - Generator can always be **stopped** even when disarmed
    - GenSlave has an independent **failsafe** that stops the generator if communication is lost
 
@@ -81,7 +81,7 @@ The **arming system** is a safety feature that prevents accidental generator sta
 
 - **Prevents unintended starts** during maintenance
 - **Requires explicit operator action** to enable automation
-- **Disarmed by default** on system boot
+- **Disarmed by default** on system boot under the `fail_safe` boot policy (see [Boot Arming Policy](#boot-arming-policy) below for the alternative `preserve_state` mode)
 
 ### Arming Behavior
 
@@ -117,6 +117,23 @@ If enabled via `AUTO_ARM_RELAY_ON_CONNECT=true`, the system will automatically a
 - If you manually disarmed via the UI, auto-arm will **not** override your choice
 - If you manually arm via the UI, the "manual disarm" flag is cleared
 - Auto-arm only triggers when connection is restored, not on every heartbeat
+
+### Boot Arming Policy
+
+Operator-selectable behavior for what happens to the relay's armed state when GenMaster restarts. Configure in **Generator → Boot Arming Policy** in the UI, or via the `BOOT_ARMING_POLICY` env var.
+
+| Policy | Behavior on GenMaster boot | When to use |
+|--------|---------------------------|-------------|
+| `fail_safe` (default) | If the relay was armed pre-boot, **disarms it** and sets `manual_disarm_active = True` so boot-time auto-arm is suppressed. Fires the `boot_disarmed_failsafe` notification so the operator knows they need to re-arm. | Default for safety. Required when unsupervised auto-restart after a power event would be unsafe or undesirable. |
+| `preserve_state` | Keeps the prior `slave_relay_armed` value across the reboot. Combined with auto-arm, the system can resume operation automatically after an outage. | Only when your installation can safely auto-resume (proper ATS, weatherproofing, fuel/CO safety). Requires confirming a UI warning before enabling. |
+
+**Independence from runtime auto-arm:** The `boot_arming_policy` only affects the **boot path**. Runtime auto-arm-on-connect (when GenSlave drops out and reconnects during normal operation) still works exactly as configured by `auto_arm_relay_on_connect` regardless of the boot policy.
+
+**Notification on disarm:** When the `fail_safe` policy disarms the relay, GenMaster fires the `boot_disarmed_failsafe` notification event. Configure the channels/groups that receive it under **Notifications → Configure → Generator Events**. Default message text reads:
+
+> Generator Disarmed After Reboot — Action Required
+>
+> GenMaster restarted with the fail-safe boot policy enabled. The generator relay has been automatically DISARMED for safety. The generator WILL NOT START automatically until you log in and re-arm it from the web interface.
 
 ---
 

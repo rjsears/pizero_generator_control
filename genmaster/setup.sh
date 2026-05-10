@@ -71,6 +71,10 @@ GENSLAVE_API_SECRET=""
 GENSLAVE_IP=""
 GENSLAVE_HOSTNAME="genslave"
 AUTO_ARM_RELAY_ON_CONNECT=false
+# Boot arming policy: "fail_safe" (default, safer) or "preserve_state".
+# fail_safe: relay disarms on every GenMaster boot; operator must re-arm.
+# preserve_state: relay armed state persists across reboots (auto-resume).
+BOOT_ARMING_POLICY=fail_safe
 
 # Mock GPIO mode (auto-detected based on hardware)
 MOCK_GPIO_MODE=false
@@ -583,6 +587,7 @@ SAVED_GENSLAVE_API_SECRET="$GENSLAVE_API_SECRET"
 SAVED_GENSLAVE_IP="$GENSLAVE_IP"
 SAVED_GENSLAVE_HOSTNAME="$GENSLAVE_HOSTNAME"
 SAVED_AUTO_ARM_RELAY_ON_CONNECT="$AUTO_ARM_RELAY_ON_CONNECT"
+SAVED_BOOT_ARMING_POLICY="$BOOT_ARMING_POLICY"
 SAVED_WEBHOOK_URL="$WEBHOOK_URL"
 SAVED_WEBHOOK_SECRET="$WEBHOOK_SECRET"
 SAVED_INSTALL_PORTAINER="$INSTALL_PORTAINER"
@@ -616,6 +621,7 @@ load_state() {
         GENSLAVE_IP="${SAVED_GENSLAVE_IP:-}"
         GENSLAVE_HOSTNAME="${SAVED_GENSLAVE_HOSTNAME:-genslave}"
         AUTO_ARM_RELAY_ON_CONNECT="${SAVED_AUTO_ARM_RELAY_ON_CONNECT:-false}"
+        BOOT_ARMING_POLICY="${SAVED_BOOT_ARMING_POLICY:-fail_safe}"
         WEBHOOK_URL="${SAVED_WEBHOOK_URL:-}"
         WEBHOOK_SECRET="${SAVED_WEBHOOK_SECRET:-}"
         INSTALL_PORTAINER="${SAVED_INSTALL_PORTAINER:-false}"
@@ -2486,6 +2492,7 @@ generate_env_file() {
         local EXISTING_DOMAIN EXISTING_SECRET_KEY EXISTING_TIMEZONE EXISTING_DB_NAME
         local EXISTING_DB_USER EXISTING_DB_PASSWORD EXISTING_GENSLAVE_ENABLED
         local EXISTING_GENSLAVE_API_URL EXISTING_GENSLAVE_API_SECRET EXISTING_AUTO_ARM_RELAY_ON_CONNECT
+        local EXISTING_BOOT_ARMING_POLICY
         local EXISTING_WEBHOOK_URL
         local EXISTING_WEBHOOK_SECRET EXISTING_DNS_PROVIDER EXISTING_DNS_CERTBOT_IMAGE
         local EXISTING_DNS_CREDENTIALS_FILE EXISTING_LETSENCRYPT_EMAIL
@@ -2518,6 +2525,7 @@ generate_env_file() {
                 SLAVE_API_URL) EXISTING_GENSLAVE_API_URL="$value" ;;
                 SLAVE_API_SECRET) EXISTING_GENSLAVE_API_SECRET="$value" ;;
                 AUTO_ARM_RELAY_ON_CONNECT) EXISTING_AUTO_ARM_RELAY_ON_CONNECT="$value" ;;
+                BOOT_ARMING_POLICY) EXISTING_BOOT_ARMING_POLICY="$value" ;;
                 WEBHOOK_BASE_URL) EXISTING_WEBHOOK_URL="$value" ;;
                 WEBHOOK_SECRET) EXISTING_WEBHOOK_SECRET="$value" ;;
                 DNS_PROVIDER) EXISTING_DNS_PROVIDER="$value" ;;
@@ -2550,6 +2558,7 @@ generate_env_file() {
         GENSLAVE_API_URL="${GENSLAVE_API_URL:-$EXISTING_GENSLAVE_API_URL}"
         GENSLAVE_API_SECRET="${GENSLAVE_API_SECRET:-$EXISTING_GENSLAVE_API_SECRET}"
         AUTO_ARM_RELAY_ON_CONNECT="${AUTO_ARM_RELAY_ON_CONNECT:-$EXISTING_AUTO_ARM_RELAY_ON_CONNECT}"
+        BOOT_ARMING_POLICY="${BOOT_ARMING_POLICY:-${EXISTING_BOOT_ARMING_POLICY:-fail_safe}}"
         WEBHOOK_URL="${WEBHOOK_URL:-$EXISTING_WEBHOOK_URL}"
         WEBHOOK_SECRET="${WEBHOOK_SECRET:-$EXISTING_WEBHOOK_SECRET}"
         DNS_PROVIDER_NAME="${DNS_PROVIDER_NAME:-$EXISTING_DNS_PROVIDER}"
@@ -2623,6 +2632,10 @@ SLAVE_API_SECRET=${GENSLAVE_API_SECRET}
 GENSLAVE_IP=${GENSLAVE_IP}
 GENSLAVE_HOSTNAME=${GENSLAVE_HOSTNAME:-genslave}
 AUTO_ARM_RELAY_ON_CONNECT=${AUTO_ARM_RELAY_ON_CONNECT:-false}
+
+# Boot arming policy: "fail_safe" (default, safer) or "preserve_state".
+# Configurable via the web UI under Generator → Boot Arming Policy after install.
+BOOT_ARMING_POLICY=${BOOT_ARMING_POLICY:-fail_safe}
 
 # Generator Information (optional - can be configured via web UI)
 # Set these values to pre-populate generator info on first startup
@@ -2718,11 +2731,21 @@ generate_docker_compose() {
 # =============================================================================
 
 networks:
+  # Internal network: db, redis, app — no internet egress, no inbound exposure.
   genmaster-internal:
     driver: bridge
     internal: true
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
+  # External network: nginx + tunnel/proxy sidecars. Pinned to a precise /24
+  # so that nginx's set_real_ip_from can be tightened to the cloudflared
+  # subnet ONLY (see docs/SECURITY.md).
   genmaster-external:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
 
 volumes:
   genmaster_db_data:
@@ -2928,8 +2951,11 @@ EOF
     command: tunnel run
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    # Pinned IP so nginx's set_real_ip_from can trust this exact host as
+    # the only proxy. See docs/SECURITY.md for the trust model.
     networks:
-      - genmaster-external
+      genmaster-external:
+        ipv4_address: 172.30.0.10
 
 EOF
     fi

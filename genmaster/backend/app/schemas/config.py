@@ -77,6 +77,15 @@ class ConfigResponse(BaseModel):
         description="Duration in minutes for cooldown period before restart allowed"
     )
 
+    # Boot Arming Policy
+    boot_arming_policy: str = Field(
+        description=(
+            "Boot arming policy. 'fail_safe' (default) disarms the relay on every "
+            "GenMaster boot — operator must re-arm. 'preserve_state' keeps the prior "
+            "armed state across reboots, allowing automatic resume after a power outage."
+        )
+    )
+
     class Config:
         from_attributes = True
 
@@ -127,3 +136,10 @@ class ConfigUpdateRequest(BaseModel):
     max_run_minutes: Optional[int] = Field(None, ge=1, le=1440)
     max_runtime_action: Optional[str] = Field(None, pattern=r"^(manual_reset|cooldown)$")
     cooldown_duration_minutes: Optional[int] = Field(None, ge=1, le=1440)
+
+    # Boot Arming Policy
+    boot_arming_policy: Optional[str] = Field(
+        None,
+        pattern=r"^(fail_safe|preserve_state)$",
+        description="'fail_safe' (default, safer) or 'preserve_state'",
+    )

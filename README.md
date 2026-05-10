@@ -63,6 +63,14 @@
 >
 > Electrical work should be performed by a qualified electrician following local code. Use at your own risk.
 
+
+
+
+
+
+
+
+
 <p align="center">
   <strong><a href="https://rjsears.github.io/pizero_generator_control/">View Full Documentation</a></strong>
 </p>
@@ -613,33 +621,39 @@ The arming system prevents accidental generator operations during startup, maint
 - **Startup Safety**: Prevents race conditions when GenMaster/GenSlave boot at different times
 - **Maintenance Mode**: Disarm before working on the generator or electrical systems
 - **Testing**: Safely test configurations without triggering the generator
-- **Power Loss Recovery**: After any reboot, system starts disarmed requiring operator confirmation
+- **Power Loss Recovery**: Operator-configurable boot policy controls whether armed state survives across reboots (default: disarm and require re-arming)
 
 ### Power Loss / Reboot Behavior
 
-When power is lost or devices reboot, the system automatically enters a safe state:
+GenMaster's boot behavior is controlled by an operator-selectable **Boot Arming Policy** (Generator → Boot Arming Policy in the UI, or `BOOT_ARMING_POLICY` in `.env`). GenSlave's behavior is the same regardless of GenMaster's policy.
 
-| On Boot | GenMaster | GenSlave |
-|---------|-----------|----------|
-| **Automation Armed** | Always reset to **False** | Reset to **False** (synced via heartbeat) |
-| **Generator Running** | Reset to **False** | N/A |
-| **Relay State** | N/A | Always **OFF** on boot |
-| **Connection Status** | Reset to "unknown" | Waits for heartbeat |
+**Boot Arming Policy options on GenMaster:**
 
-**What happens on GenMaster boot:**
-1. Resets `automation_armed = False` (requires operator to re-arm)
-2. Resets `generator_running = False` if it was True before crash
-3. Closes any orphaned generator run records with `stop_reason = "power_loss"`
-4. Attempts to reconcile state with GenSlave
-5. Logs `SYSTEM_BOOT_RESET` event
+| Policy | Behavior on GenMaster boot | Use case |
+|--------|---------------------------|----------|
+| `fail_safe` (default) | Disarms the relay if it was armed pre-boot. Sets `manual_disarm_active = True` so boot-time auto-arm is suppressed. Fires the `boot_disarmed_failsafe` notification. **Operator must re-arm via the UI.** | Default. Required if your installation should NOT auto-resume after a power event. |
+| `preserve_state` | Keeps the prior armed state across the reboot. Combined with auto-arm, the generator can resume operation automatically after an outage. | Only when your installation is safe to auto-resume (proper ATS, weatherproofing, fuel/CO safety, etc.). Switching to this mode requires confirming a UI warning. |
 
-**What happens on GenSlave boot:**
-1. Relay is immediately set to **OFF** (hardware safety)
-2. Internal armed state reset to **False**
+**On GenMaster boot (regardless of policy):**
+
+1. `slave_connection_status = "unknown"`, `missed_heartbeat_count = 0`
+2. If `generator_running` was True, reset to False; close orphaned run with `stop_reason = "error"`
+3. Apply boot arming policy:
+   - `fail_safe`: `slave_relay_armed = False`, `manual_disarm_active = True`, fire `boot_disarmed_failsafe` notification
+   - `preserve_state`: leave `slave_relay_armed` unchanged
+4. Reconcile with GenSlave once it's reachable
+5. Log `SYSTEM_BOOT_RESET` event with `boot_arming_policy` and `relay_disarmed_by_policy` fields
+
+**On GenSlave boot (always, no policy choice):**
+
+1. Relay is immediately set to **OFF** (hardware-default and software-enforced)
+2. Internal `_armed = False`
 3. Failsafe monitor starts waiting for heartbeats
-4. Armed state is synced from GenMaster via heartbeat
+4. First heartbeat from GenMaster syncs both armed state and relay state — within ~1 heartbeat cycle (~60s default), GenSlave matches whatever GenMaster says
 
-**Important:** The generator will NOT auto-start after a power loss, even if the Victron signal is active. An operator must explicitly arm the system first.
+**Important under `fail_safe` (default):** The generator will NOT auto-start after a power loss, even if the Victron signal is active. An operator must explicitly re-arm the system first. The `boot_disarmed_failsafe` notification (configurable in Notifications → Configure → Generator Events) tells you when this happens.
+
+**Important under `preserve_state`:** With auto-arm-on-connect also enabled, the generator may automatically restart after an outage if your battery monitor is still calling for power. Use only when your installation can safely auto-resume.
 
 ### Arming Behavior
 

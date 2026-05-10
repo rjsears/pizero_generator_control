@@ -10,6 +10,27 @@
 .idea/
 *.iml
 
+# Python virtualenvs and bytecode
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Frontend build artifacts and dependencies
+node_modules/
+dist/
+.vite/
+
+# MkDocs build output
+site/
+
+# OS / editor scratch
+*.swp
+*.swo
+*~
+.vscode/
+
 # Generated nginx config - contains domain-specific settings
 genmaster/nginx/nginx.conf
 

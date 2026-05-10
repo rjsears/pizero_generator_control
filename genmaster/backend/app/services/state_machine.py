@@ -88,29 +88,67 @@ class StateMachine:
         """
         Initialize state machine from database.
 
-        On boot, we reset certain states for safety:
-        - slave_relay_armed = False (require operator to re-arm)
-        - slave_connection_status = "unknown" (will be updated by heartbeat)
-        - If generator_running was True, mark it as needing reconciliation
+        Boot behavior is governed by the operator-configurable
+        ``config.boot_arming_policy`` setting:
+
+        - ``"fail_safe"`` (default, safer): force ``slave_relay_armed = False``
+          on every GenMaster boot. The operator must explicitly re-arm via the
+          UI. A `boot_disarmed_failsafe` notification is fired so the operator
+          knows the generator will not start automatically until they act.
+          Boot-time auto-arm is also suppressed under this policy (see
+          ``reconcile_with_slave``); runtime auto-arm-on-reconnect is unaffected.
+        - ``"preserve_state"``: keep the prior ``slave_relay_armed`` value
+          across the reboot. Combined with auto-arm, this allows the system
+          to resume operation automatically after a power outage.
+
+        Regardless of policy, ``generator_running`` is reset to ``False`` on
+        boot — actual run state is reconciled from GenSlave via the first
+        heartbeat.
         """
         async with AsyncSessionLocal() as db:
             # Ensure system_state row exists
             state = await SystemState.get_instance(db)
+
+            # Read the policy from config
+            config = await Config.get_instance(db)
+            boot_policy = config.boot_arming_policy or "fail_safe"
 
             # Log pre-boot state for debugging
             logger.info(
                 f"Pre-boot state - "
                 f"generator_running: {state.generator_running}, "
                 f"relay_armed: {state.slave_relay_armed}, "
-                f"slave_status: {state.slave_connection_status}"
+                f"slave_status: {state.slave_connection_status}, "
+                f"boot_arming_policy: {boot_policy}"
             )
 
             # Check if we had a running generator before crash/reboot
             was_running = state.generator_running
 
-            # Preserve armed state across reboots - GenSlave maintains actual state
-            if state.slave_relay_armed:
-                logger.info("Relay was armed before reboot - preserving armed state")
+            # Apply the boot-arming policy
+            was_armed_pre_boot = state.slave_relay_armed
+            policy_disarmed = False
+            if boot_policy == "fail_safe":
+                if was_armed_pre_boot:
+                    logger.warning(
+                        "Boot arming policy is 'fail_safe' — disarming relay "
+                        "(was armed pre-boot). Operator must re-arm to enable "
+                        "automatic generator operations."
+                    )
+                    state.slave_relay_armed = False
+                    # Set manual_disarm_active so the boot-time auto-arm path
+                    # in reconcile_with_slave will skip auto-arming. This is
+                    # cleared automatically when the operator re-arms manually.
+                    state.manual_disarm_active = True
+                    policy_disarmed = True
+                else:
+                    logger.info("Boot arming policy is 'fail_safe' — relay was already disarmed")
+            else:  # preserve_state
+                if was_armed_pre_boot:
+                    logger.info(
+                        "Boot arming policy is 'preserve_state' — keeping armed "
+                        "state across reboot"
+                    )
 
             # Reset slave connection status - will be updated by heartbeat
             state.slave_connection_status = "unknown"
@@ -149,19 +187,46 @@ class StateMachine:
                 f"State machine initialized - "
                 f"generator_running: {state.generator_running}, "
                 f"relay_armed: {state.slave_relay_armed}, "
-                f"override: {state.override_enabled}"
+                f"override: {state.override_enabled}, "
+                f"boot_arming_policy: {boot_policy}"
             )
 
-            # Log event for reboot
+            # Log internal event for reboot — accurately reflects whether the
+            # policy actually disarmed the relay this time.
             await self.log_event(
                 "SYSTEM_BOOT_RESET",
                 {
                     "was_running": was_running,
-                    "relay_disarmed": True,
-                    "reason": "Safety reset on boot",
+                    "was_armed_pre_boot": was_armed_pre_boot,
+                    "boot_arming_policy": boot_policy,
+                    "relay_disarmed_by_policy": policy_disarmed,
                 },
-                severity="WARNING" if was_running else "INFO",
+                severity="WARNING" if (was_running or policy_disarmed) else "INFO",
             )
+
+            # Fire the operator-facing notification ONLY when fail_safe
+            # actually disarmed the relay (i.e. it was armed before boot).
+            # This is what tells the user "the generator will not start until
+            # you re-arm it."
+            if policy_disarmed:
+                try:
+                    from app.services.system_notification_engine import (
+                        system_notification_engine,
+                    )
+                    async with AsyncSessionLocal() as notify_db:
+                        await system_notification_engine.trigger_notification(
+                            db=notify_db,
+                            event_type="boot_disarmed_failsafe",
+                            event_data={
+                                "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                "was_running": str(was_running),
+                            },
+                            skip_rate_limiting=True,
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to fire boot_disarmed_failsafe notification: {e}"
+                    )
 
             self._initialized = True
 

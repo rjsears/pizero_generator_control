@@ -35,7 +35,7 @@ The **Add Schedule** button opens a Create Schedule dialog where you fill in:
     Pick multiple days for a schedule that should run repeatedly (e.g. weekday mornings: select Mon, Tue, Wed, Thu, Fri). Pick a single day for a once-a-week run (e.g. Sunday exercise).
 
 !!! warning "Schedules respect the arming state"
-    A scheduled run will be **logged but skipped** if GenMaster is disarmed when the trigger fires. This is intentional — a power-loss reboot leaves the system disarmed for safety.
+    A scheduled run will be **logged but skipped** if GenMaster is disarmed when the trigger fires. Under the default Fail-Safe boot policy, a reboot leaves the system disarmed until the operator re-arms — so a schedule that fires within that window will be skipped. The skipped run shows up in the Notification History with the "disarmed" reason.
 
 ## Editing and deleting
 

@@ -8,12 +8,12 @@ The System page is the host-level dashboard for GenMaster — it shows server he
 
 | Button | Effect |
 |--------|--------|
-| **Reboot** | Reboots the GenMaster host. The web UI will go offline for ~60 seconds. Generator state is reset to safe (disarmed, generator off) on boot. |
+| **Reboot** | Reboots the GenMaster host. The web UI will go offline for ~60 seconds. Behavior on boot depends on the active **Boot Arming Policy** (see Generator page). |
 | **Shutdown** | Powers off the GenMaster host. Someone will need physical access to power it back on. |
 | **Refresh** | Re-poll all health metrics immediately. |
 
-!!! danger "Reboot resets the system to a safe state"
-    On boot, GenMaster always sets `automation_armed = False` and `generator_running = False`. Any in-progress runs are closed with reason `power_loss`. You'll need to re-arm before scheduled or Victron-driven runs will fire again. This is intentional — the system errs on the side of OFF after any unexpected restart.
+!!! danger "Reboot behavior depends on the Boot Arming Policy"
+    The default `fail_safe` policy disarms the relay on every boot — so after a reboot you'll need to re-arm before scheduled or Victron-driven runs fire again. The `boot_disarmed_failsafe` notification (configurable in Notifications) tells you when this happens. Under the alternative `preserve_state` policy, the armed state is kept across the reboot and the system can auto-resume. Either way, `generator_running` is reset to False and any in-progress runs are closed with reason `error`. Choose the policy that matches your installation's safety profile under Generator → Boot Arming Policy.
 
 ## Health sub-tab
 

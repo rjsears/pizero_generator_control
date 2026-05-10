@@ -18,34 +18,56 @@ The RPi Generator Control system is a distributed two-device architecture for au
 
 ---
 
-## GenSlave Native Application Architecture
+## GenSlave Container Architecture
 
-GenSlave runs as a native Python service (no Docker) to minimize resource usage on the Pi Zero 2W.
+GenSlave runs as a single Docker container on the Pi Zero 2W. The image
+(`rjsears/pizero_generator_control:genslave`) is built for `linux/arm/v6`
+and ships from Docker Hub, so the Pi Zero only needs Docker installed —
+no Python, no virtualenv, no system packages.
+
+The container runs `privileged` for GPIO access to the Pimoroni Automation
+Hat Mini, and uses `network_mode: host` so Tailscale on the host can route
+inbound API calls from GenMaster directly to the container's port 8001.
 
 ![GenSlave Architecture](images/genslave_arch.jpeg)
 
-### GenSlave File Structure
+### GenSlave Host File Structure
+
+The Pi Zero only stores the compose file and runtime state — the application
+code itself lives entirely inside the image:
 
 ```
 /opt/genslave/
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI application
-│   ├── config.py            # Configuration from environment
-│   ├── routers/
-│   │   ├── health.py        # Health check + heartbeat
-│   │   ├── relay.py         # Relay control + arming
-│   │   └── system.py        # System info
-│   └── services/
-│       ├── relay.py         # Automation Hat Mini control
-│       └── failsafe.py      # Heartbeat monitor
-├── data/
-│   └── genslave.db          # SQLite database (optional)
-├── logs/                    # Application logs
-├── venv/                    # Python virtual environment
-├── requirements.txt         # Python dependencies
-└── .env                     # Environment configuration
+├── docker-compose.yaml      # Pulled from the repo on install
+└── .env                     # Per-host configuration (API secret, GenMaster URL, etc.)
 ```
+
+Two named Docker volumes hold mutable state across container recreates:
+
+| Volume | Mount inside container | Purpose |
+|--------|------------------------|---------|
+| `genslave_data` | `/opt/genslave/data` | SQLite database (optional state cache) |
+| `genslave_logs` | `/opt/genslave/logs` | Application logs |
+
+### What's inside the image
+
+The container's `/app` directory contains the FastAPI service:
+
+```
+/app/
+├── main.py                  # FastAPI application
+├── config.py                # Configuration from environment
+├── routers/
+│   ├── health.py            # Health check + heartbeat
+│   ├── relay.py             # Relay control + arming
+│   └── system.py            # System info
+└── services/
+    ├── relay.py             # Automation Hat Mini control
+    └── failsafe.py          # Heartbeat monitor
+```
+
+Updates are deployed by pulling a newer tag of the image and recreating the
+container — no source files on the Pi Zero ever change.
 
 ---
 
@@ -69,24 +91,54 @@ Both GenMaster and GenSlave implement safety measures for power loss and reboot 
 
 ![Boot Sequence](images/boot_sequence.png)
 
+### Boot Arming Policy
+
+GenMaster's behavior on reboot is controlled by an operator-configurable policy
+(`config.boot_arming_policy`), exposed in the UI under
+**Generator → Boot Arming Policy** and via the `BOOT_ARMING_POLICY`
+environment variable. There are two valid values:
+
+| Policy | What happens on GenMaster boot | When to use it |
+|--------|--------------------------------|----------------|
+| `fail_safe` (default) | If the relay was armed pre-boot, it is **disarmed**. `manual_disarm_active` is set so boot-time auto-arm is suppressed. A `boot_disarmed_failsafe` notification fires so the operator knows the generator will not start until they re-arm it via the UI. | Default for safety. Recommended for any installation where unsupervised auto-restart is undesirable. |
+| `preserve_state` | The pre-boot armed state is preserved. Combined with auto-arm, the generator can resume operation automatically after a power outage. | Only when your installation can safely auto-resume (proper ATS, weatherproofing, fuel/CO safety, operator awareness). |
+
+Runtime auto-arm-on-reconnect (when GenSlave drops out and reconnects during
+normal operation) is **independent** of this setting — it always works the way
+the operator configured `auto_arm_relay_on_connect`.
+
+### GenSlave on reboot (always the same)
+
+Unlike GenMaster, GenSlave has no per-policy choice. On reboot it always:
+
+1. Comes up with `_armed = False` and the relay physically OFF
+2. Treats the first heartbeat from GenMaster as authoritative for both armed
+   state and relay state — so within ~1 heartbeat cycle (~60s default) it
+   ends up matching whatever GenMaster says
+3. If GenMaster is in `fail_safe` and disarmed itself on boot, GenSlave stays
+   disarmed (no auto-arm). If GenMaster is in `preserve_state` and was armed,
+   GenSlave re-arms via "self-heal" sync.
+
 ### Reconciliation Events
 
 | Event | Severity | Description |
 |-------|----------|-------------|
-| `SYSTEM_BOOT_RESET` | WARNING/INFO | Logged on every boot with pre-boot state |
+| `SYSTEM_BOOT_RESET` | WARNING/INFO | Logged on every boot. Now includes `boot_arming_policy` and `relay_disarmed_by_policy` so the log accurately reflects what happened. |
 | `RECONCILIATION_MISMATCH` | WARNING | GenSlave relay ON but no active run in GenMaster |
+| `boot_disarmed_failsafe` (notification) | WARNING | Sent to configured channels when `fail_safe` policy disarms the relay. Tells the operator they need to re-arm. |
 
 ### Database Fields Reset on Boot
 
 ```sql
 -- Always reset
-automation_armed = False
-automation_armed_at = NULL
-automation_armed_by = NULL
 slave_connection_status = 'unknown'
 missed_heartbeat_count = 0
 
--- Reset if generator was running
+-- Reset based on boot_arming_policy
+slave_relay_armed = False        -- ONLY if policy = 'fail_safe' AND was armed pre-boot
+manual_disarm_active = True      -- Set when fail_safe disarms (suppresses boot-time auto-arm)
+
+-- Reset if generator was running (regardless of policy)
 generator_running = False
 run_trigger = 'idle'
 generator_start_time = NULL
