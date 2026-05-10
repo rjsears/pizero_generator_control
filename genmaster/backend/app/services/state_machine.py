@@ -886,25 +886,29 @@ class StateMachine:
                     if "relay_state" in slave_status:
                         state.slave_relay_state = slave_status["relay_state"]
 
-                    # Handle armed state carefully - GenMaster is authoritative
+                    # Handle armed state carefully — GenMaster is authoritative
+                    # for the armed flag. The heartbeat reply from GenSlave can
+                    # carry a stale `armed` value (the reply is composed before
+                    # GenSlave processes the in-bound heartbeat that would tell
+                    # it to disarm), so we must NEVER adopt GenSlave's value.
+                    # Just log the mismatch — the next heartbeat we send carries
+                    # the correct value and GenSlave's failsafe.record_heartbeat
+                    # will sync the slave to match GenMaster.
                     if "armed" in slave_status:
                         master_armed = state.slave_relay_armed or False
                         slave_armed = slave_status["armed"]
 
                         if master_armed and not slave_armed:
-                            # GenMaster expects armed but GenSlave reports disarmed
-                            # This is a sync issue - keep GenMaster's state, next heartbeat will re-push
                             logger.warning(
                                 "Armed state mismatch: GenMaster=True, GenSlave=False. "
-                                "Keeping GenMaster state - next heartbeat will re-sync GenSlave."
+                                "Keeping GenMaster state — next heartbeat will re-sync GenSlave."
                             )
-                            # Don't update - keep master's armed state
                         elif not master_armed and slave_armed:
-                            # GenSlave armed by external means - adopt that state
-                            logger.info(
-                                "GenSlave armed externally, updating GenMaster to match"
+                            logger.warning(
+                                "Armed state mismatch: GenMaster=False, GenSlave=True. "
+                                "Keeping GenMaster state (e.g. fail_safe boot disarm) — "
+                                "next heartbeat will tell GenSlave to disarm."
                             )
-                            state.slave_relay_armed = True
                         # else: states match, no update needed
 
                 # Check if connection was restored or established for the first time
