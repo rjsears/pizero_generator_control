@@ -207,26 +207,32 @@ class StateMachine:
             # Fire the operator-facing notification ONLY when fail_safe
             # actually disarmed the relay (i.e. it was armed before boot).
             # This is what tells the user "the generator will not start until
-            # you re-arm it."
+            # you re-arm it." We dispatch it as a background task so a slow
+            # or hung notification target (SMTP, Twilio, etc.) cannot block
+            # GenMaster startup — startup must complete promptly so the
+            # health check passes and the rest of the stack comes up.
             if policy_disarmed:
-                try:
-                    from app.services.system_notification_engine import (
-                        system_notification_engine,
-                    )
-                    async with AsyncSessionLocal() as notify_db:
-                        await system_notification_engine.trigger_notification(
-                            db=notify_db,
-                            event_type="boot_disarmed_failsafe",
-                            event_data={
-                                "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                "was_running": str(was_running),
-                            },
-                            skip_rate_limiting=True,
+                async def _fire_boot_disarmed_notification():
+                    try:
+                        from app.services.system_notification_engine import (
+                            system_notification_engine,
                         )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to fire boot_disarmed_failsafe notification: {e}"
-                    )
+                        async with AsyncSessionLocal() as notify_db:
+                            await system_notification_engine.trigger_notification(
+                                db=notify_db,
+                                event_type="boot_disarmed_failsafe",
+                                event_data={
+                                    "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                    "was_running": str(was_running),
+                                },
+                                skip_rate_limiting=True,
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to fire boot_disarmed_failsafe notification: {e}"
+                        )
+
+                asyncio.create_task(_fire_boot_disarmed_notification())
 
             self._initialized = True
 
