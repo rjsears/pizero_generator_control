@@ -6,6 +6,14 @@ A production-ready, distributed generator control system for off-grid solar inst
   <img src="images/pizero_gen_control_logo.png" alt="RPi Generator Control">
 </p>
 
+<p align="center">
+  <img src="images/safety_scope_warning_card.png" alt="Safety scope warning">
+</p>
+
+<p align="center">
+  <img src="images/network_config_warning_card.png" alt="Network configuration warning">
+</p>
+
 ---
 
 ## Overview
