@@ -200,15 +200,16 @@ class SystemNotificationEngine:
                     # Critical events also go to L2 immediately
                     escalation_level = 2
 
-            # Get targets for this escalation level
+            # Get targets for this escalation level. If the operator hasn't
+            # explicitly assigned any channels/groups to this event, suppress
+            # rather than silently broadcasting to every enabled channel —
+            # the UI shows "No targets" so suppression matches what the
+            # operator sees.
             targets = await self._get_targets_for_level(db, event, escalation_level)
-            if not targets:
-                # Fall back to all enabled channels if no targets configured
-                targets = await self._get_default_targets(db)
 
             if not targets:
-                result.status = "failed"
-                result.error_message = "No notification targets configured"
+                result.status = "suppressed"
+                result.suppression_reason = "no_targets_configured"
                 await self._record_history(db, event, target_id, event_data, result)
                 return result
 
