@@ -7,11 +7,11 @@ A production-ready, distributed generator control system for off-grid solar inst
 </p>
 
 <p align="center">
-  <img src="images/safety_scope_warning_card.png" alt="Safety scope warning">
+  <img src="images/safety_scope_warning_card.png" alt="Safety scope warning" width="900">
 </p>
 
 <p align="center">
-  <img src="images/network_config_warning_card.png" alt="Network configuration warning">
+  <img src="images/network_config_warning_card.png" alt="Network configuration warning" width="900">
 </p>
 
 ---
