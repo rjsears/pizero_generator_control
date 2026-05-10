@@ -70,6 +70,7 @@ async def get_config(
         max_run_minutes=config.max_run_minutes,
         max_runtime_action=config.max_runtime_action,
         cooldown_duration_minutes=config.cooldown_duration_minutes,
+        boot_arming_policy=config.boot_arming_policy,
     )
 
 
@@ -182,4 +183,5 @@ async def update_config(
         max_run_minutes=config.max_run_minutes,
         max_runtime_action=config.max_runtime_action,
         cooldown_duration_minutes=config.cooldown_duration_minutes,
+        boot_arming_policy=config.boot_arming_policy,
     )
