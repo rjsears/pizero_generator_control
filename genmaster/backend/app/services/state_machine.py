@@ -279,9 +279,18 @@ class StateMachine:
             async with AsyncSessionLocal() as db:
                 state = await self._get_state(db)
 
-                # Update our record of slave's relay state and armed state
+                # GenSlave's PHYSICAL relay state is the truth on startup —
+                # update our record to reflect what's actually on the wire.
                 state.slave_relay_state = result["relay_state"]
-                state.slave_relay_armed = result["slave_armed"]
+
+                # NOTE: We deliberately do NOT overwrite state.slave_relay_armed
+                # from result["slave_armed"]. The armed flag is GenMaster's
+                # policy decision (set by initialize() per boot_arming_policy
+                # or by explicit operator action via the UI) — GenSlave is the
+                # follower. If GenSlave is currently in a different armed state
+                # than GenMaster's DB says, the next heartbeat will push the
+                # correct value down to GenSlave via failsafe.record_heartbeat.
+                # Overwriting here would silently undo a fail_safe boot disarm.
 
                 # On startup, GenSlave's PHYSICAL state is the truth.
                 # Update GenMaster to match reality - do NOT send relay commands.
