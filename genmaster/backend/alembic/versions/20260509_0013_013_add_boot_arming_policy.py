@@ -41,8 +41,10 @@ def upgrade() -> None:
 
     # Seed the new notification event so users can configure who gets pinged
     # when the fail-safe boot policy disarms the relay.
+    # NOTE: op.execute() takes only the statement (no params dict). For bound
+    # parameters, use op.get_bind().execute(text, params).
     now = int(time.time())
-    op.execute(
+    op.get_bind().execute(
         sa.text(
             """
             INSERT INTO system_notification_events (
