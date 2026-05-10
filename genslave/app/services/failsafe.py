@@ -135,11 +135,11 @@ class FailsafeMonitor:
                 self._relay_service.relay_off(force=True)
 
         # After failsafe recovery, send notification with current armed state
-        # This tells the user whether they need to re-arm or if it self-healed
-        # Use delayed notification to allow auto-arm from GenMaster sync to complete first
+        # This tells the user whether they need to re-arm or if it self-healed.
+        # Brief delay so the heartbeat-driven armed-state sync above has time
+        # to complete before we read final_armed_state.
         if was_failsafe:
             async def delayed_restore_notification():
-                # Wait for auto-arm to complete (GenMaster sync happens above)
                 await asyncio.sleep(5.0)
                 if self._relay_service:
                     final_armed_state = self._relay_service.is_armed

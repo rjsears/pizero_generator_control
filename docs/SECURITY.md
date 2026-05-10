@@ -345,8 +345,6 @@ In rough order of impact:
 - [ ] **Set the session-lockout** to a low N (3–5) and reasonable lockout
       duration (15–60 min) under Settings → Security. Default values are
       already sensible but worth confirming.
-- [ ] **Limit `auto_arm_relay_on_connect`** to deployments that genuinely
-      need it. The default is off.
 - [ ] **Configure a firewall on the Pi host** (`ufw`/`nftables`) to only
       expose 80/443 to the LAN and 22 to admin IPs. Cloudflare Tunnel is
       outbound-only, so 80/443 don't strictly need to be open on the host

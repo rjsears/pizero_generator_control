@@ -95,11 +95,9 @@ class StateMachine:
           on every GenMaster boot. The operator must explicitly re-arm via the
           UI. A `boot_disarmed_failsafe` notification is fired so the operator
           knows the generator will not start automatically until they act.
-          Boot-time auto-arm is also suppressed under this policy (see
-          ``reconcile_with_slave``); runtime auto-arm-on-reconnect is unaffected.
         - ``"preserve_state"``: keep the prior ``slave_relay_armed`` value
-          across the reboot. Combined with auto-arm, this allows the system
-          to resume operation automatically after a power outage.
+          across the reboot. The system can resume operation automatically
+          after a power outage.
 
         Regardless of policy, ``generator_running`` is reset to ``False`` on
         boot — actual run state is reconciled from GenSlave via the first
@@ -136,9 +134,12 @@ class StateMachine:
                         "automatic generator operations."
                     )
                     state.slave_relay_armed = False
-                    # Set manual_disarm_active so the boot-time auto-arm path
-                    # in reconcile_with_slave will skip auto-arming. This is
-                    # cleared automatically when the operator re-arms manually.
+                    # Set manual_disarm_active so the operator's "this is
+                    # disarmed and stays disarmed" intent is recorded. The
+                    # flag is cleared automatically when the operator re-arms
+                    # manually via the UI. (Originally this also suppressed
+                    # the auto-arm-on-connect feature, which was removed in
+                    # migration 014.)
                     state.manual_disarm_active = True
                     policy_disarmed = True
                 else:
@@ -343,38 +344,10 @@ class StateMachine:
                 f"slave armed: {result['slave_armed']}"
             )
 
-            # Check if auto-arm should trigger on startup
-            async with AsyncSessionLocal() as db:
-                config = await self._get_config(db)
-                state = await self._get_state(db)
-
-                if config.auto_arm_relay_on_connect:
-                    if state.manual_disarm_active:
-                        logger.info(
-                            "Auto-arm enabled but manual_disarm_active is set - "
-                            "skipping auto-arm on startup (respecting user's manual disarm)"
-                        )
-                    elif result["slave_armed"]:
-                        logger.info("Auto-arm enabled but relay already armed - no action needed")
-                    else:
-                        logger.info("Auto-arm enabled on startup - arming relay")
-                        arm_response = await slave_client.arm_relay()
-                        if arm_response.success:
-                            state.slave_relay_armed = True
-                            await db.commit()
-                            logger.info("Auto-armed relay on startup")
-                            await self.log_event(
-                                "RELAY_AUTO_ARMED",
-                                {"reason": "startup"},
-                            )
-                            result["slave_armed"] = True
-                        else:
-                            logger.warning(f"Auto-arm on startup failed: {arm_response.error}")
-                            await self.log_event(
-                                "RELAY_AUTO_ARM_FAILED",
-                                {"error": arm_response.error, "reason": "startup"},
-                                severity="WARNING",
-                            )
+            # Note: auto-arm-on-connect was removed in migration 014. The
+            # heartbeat-driven sync from GenMaster to GenSlave handles all
+            # reconnect/recovery cases — slave reads `armed` from each
+            # heartbeat and matches GenMaster's DB without any extra wiring.
 
         except Exception as e:
             result["message"] = f"Reconciliation error: {e}"
@@ -869,50 +842,6 @@ class StateMachine:
             await db.commit()
             logger.info(f"Relay armed state set to {armed} in GenMaster database (manual={manual})")
 
-    async def _auto_arm_relay(self) -> bool:
-        """
-        Automatically arm the relay on connection restore.
-
-        This is called when auto-arm is enabled and the connection is restored.
-        It sends the arm command to GenSlave and updates local state.
-
-        Returns:
-            True if auto-arm succeeded, False otherwise
-        """
-        try:
-            slave_client = await self._get_slave_client()
-            try:
-                response = await slave_client.arm_relay()
-            finally:
-                await slave_client.close()
-
-            if response.success:
-                # Update local state (not a manual action)
-                await self.set_armed_state(armed=True, manual=False)
-                logger.info("Auto-armed relay on connection restore")
-                await self.log_event(
-                    "RELAY_AUTO_ARMED",
-                    {"reason": "connection_restored"},
-                )
-                await self._send_webhook("relay.auto_armed", {"reason": "connection_restored"})
-                return True
-            else:
-                logger.warning(f"Auto-arm failed: {response.error}")
-                await self.log_event(
-                    "RELAY_AUTO_ARM_FAILED",
-                    {"error": response.error},
-                    severity="WARNING",
-                )
-                return False
-        except Exception as e:
-            logger.error(f"Auto-arm error: {e}")
-            await self.log_event(
-                "RELAY_AUTO_ARM_ERROR",
-                {"error": str(e)},
-                severity="ERROR",
-            )
-            return False
-
     # =========================================================================
     # Heartbeat/Communication Operations
     # =========================================================================
@@ -982,29 +911,16 @@ class StateMachine:
                         logger.info("GenSlave connection established (first connect)")
                         await self.log_event("COMMUNICATION_ESTABLISHED", {"latency_ms": latency_ms})
 
-                    # Check if auto-arm should trigger (on restore OR initial connect)
-                    auto_arm_will_trigger = (
-                        config.auto_arm_relay_on_connect and not state.manual_disarm_active
-                    )
-                    if auto_arm_will_trigger:
-                        logger.info("Auto-arm enabled and no manual disarm - triggering auto-arm")
-                        # Commit current state before auto-arm (connection status update)
-                        await db.commit()
-                        # Auto-arm is async and may take time, do it outside the db session
-                        asyncio.create_task(self._auto_arm_relay())
-                    elif config.auto_arm_relay_on_connect and state.manual_disarm_active:
-                        logger.info(
-                            "Auto-arm enabled but manual_disarm_active is set - "
-                            "skipping auto-arm (respecting user's manual disarm)"
-                        )
+                    # No explicit auto-arm step needed: GenMaster's DB still
+                    # holds the operator's intended armed state (user only
+                    # changes it via the UI). The next heartbeat to GenSlave
+                    # carries that value, and GenSlave's failsafe.record_heartbeat
+                    # syncs the local _armed flag accordingly.
 
                     if was_disconnected:
-                        # Determine relay status for notification
-                        # If auto-arm is triggering, report as ENABLED (it will be armed momentarily)
-                        if auto_arm_will_trigger:
-                            relay_status = "ENABLED"
-                            relay_warning = "Relay has been automatically re-armed."
-                        elif state.slave_relay_armed:
+                        # Determine relay status for notification based on
+                        # GenMaster's DB armed state (the source of truth).
+                        if state.slave_relay_armed:
                             relay_status = "ENABLED"
                             relay_warning = ""
                         else:

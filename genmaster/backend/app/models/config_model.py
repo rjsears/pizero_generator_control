@@ -83,16 +83,12 @@ class Config(Base):
     # Fuel Tracking
     fuel_tracking_reset_timestamp: Mapped[Optional[int]] = mapped_column(nullable=True, default=None)
 
-    # Auto-Arm on Connection Restore
-    auto_arm_relay_on_connect: Mapped[bool] = mapped_column(default=False)
-
     # Boot Arming Policy
     # 'fail_safe' (default): on GenMaster boot, force slave_relay_armed = False.
-    #    Operator must explicitly re-arm via the UI. Boot-time auto-arm is also
-    #    suppressed under this policy. Runtime auto-arm on reconnect is unaffected.
+    #    Operator must explicitly re-arm via the UI.
     # 'preserve_state': preserve slave_relay_armed across GenMaster reboots.
-    #    Combined with auto-arm, generator can resume automatically after an
-    #    outage with no operator interaction.
+    #    Generator can resume operation automatically after an outage with no
+    #    operator interaction.
     boot_arming_policy: Mapped[str] = mapped_column(default="fail_safe")
 
     # Metadata

@@ -100,12 +100,13 @@ environment variable. There are two valid values:
 
 | Policy | What happens on GenMaster boot | When to use it |
 |--------|--------------------------------|----------------|
-| `fail_safe` (default) | If the relay was armed pre-boot, it is **disarmed**. `manual_disarm_active` is set so boot-time auto-arm is suppressed. A `boot_disarmed_failsafe` notification fires so the operator knows the generator will not start until they re-arm it via the UI. | Default for safety. Recommended for any installation where unsupervised auto-restart is undesirable. |
-| `preserve_state` | The pre-boot armed state is preserved. Combined with auto-arm, the generator can resume operation automatically after a power outage. | Only when your installation can safely auto-resume (proper ATS, weatherproofing, fuel/CO safety, operator awareness). |
+| `fail_safe` (default) | If the relay was armed pre-boot, it is **disarmed**. `manual_disarm_active` is set. A `boot_disarmed_failsafe` notification fires so the operator knows the generator will not start until they re-arm it via the UI. | Default for safety. Recommended for any installation where unsupervised auto-restart is undesirable. |
+| `preserve_state` | The pre-boot armed state is preserved. The generator can resume operation automatically after a power outage. | Only when your installation can safely auto-resume (proper ATS, weatherproofing, fuel/CO safety, operator awareness). |
 
-Runtime auto-arm-on-reconnect (when GenSlave drops out and reconnects during
-normal operation) is **independent** of this setting — it always works the way
-the operator configured `auto_arm_relay_on_connect`.
+Runtime GenSlave reconnects (when GenSlave drops out and reconnects during
+normal operation) are handled by the heartbeat-driven sync — GenSlave reads
+`armed` from every heartbeat and matches GenMaster's DB, with no separate
+configuration needed.
 
 ### GenSlave on reboot (always the same)
 
@@ -116,8 +117,8 @@ Unlike GenMaster, GenSlave has no per-policy choice. On reboot it always:
    state and relay state — so within ~1 heartbeat cycle (~60s default) it
    ends up matching whatever GenMaster says
 3. If GenMaster is in `fail_safe` and disarmed itself on boot, GenSlave stays
-   disarmed (no auto-arm). If GenMaster is in `preserve_state` and was armed,
-   GenSlave re-arms via "self-heal" sync.
+   disarmed. If GenMaster is in `preserve_state` and was armed, GenSlave
+   re-arms via "self-heal" sync.
 
 ### Reconciliation Events
 
@@ -136,7 +137,7 @@ missed_heartbeat_count = 0
 
 -- Reset based on boot_arming_policy
 slave_relay_armed = False        -- ONLY if policy = 'fail_safe' AND was armed pre-boot
-manual_disarm_active = True      -- Set when fail_safe disarms (suppresses boot-time auto-arm)
+manual_disarm_active = True      -- Set when fail_safe disarms (records operator-must-re-arm intent)
 
 -- Reset if generator was running (regardless of policy)
 generator_running = False

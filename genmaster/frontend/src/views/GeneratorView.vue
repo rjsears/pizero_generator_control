@@ -676,7 +676,6 @@
                   <p class="text-sm text-secondary mt-1">
                     On every GenMaster restart, the relay is automatically <strong>disarmed</strong>.
                     The generator will <strong>not</strong> start automatically until you log in and re-arm it.
-                    Boot-time auto-arm is suppressed under this policy. Runtime auto-arm-on-reconnect (when GenSlave drops out and reconnects during normal operation) is unaffected.
                   </p>
                 </div>
               </div>
@@ -699,10 +698,17 @@
                 <div class="flex-1">
                   <p class="font-medium text-primary">Preserve State Across Reboots</p>
                   <p class="text-sm text-secondary mt-1">
-                    GenMaster remembers the prior armed state across reboots. Combined with auto-arm-on-connect, the generator can resume operation automatically after a power outage with no operator interaction. Use only if your installation can safely auto-resume.
+                    GenMaster remembers the prior armed state across reboots. The system can auto-resume after a power outage with no operator interaction. Use only if your installation can safely auto-resume.
                   </p>
                 </div>
               </div>
+            </div>
+
+            <!-- Recovery note -->
+            <div class="p-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20">
+              <p class="text-xs text-blue-900 dark:text-blue-200">
+                <strong>Mid-operation GenSlave drops</strong> (network blip, slave reboot, etc.) are handled automatically and are independent of this setting: GenSlave reads the armed state from every heartbeat and matches whatever GenMaster's database says, so it re-arms on its own when communication is restored.
+              </p>
             </div>
 
             <div class="flex justify-end pt-2">

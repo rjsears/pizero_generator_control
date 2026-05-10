@@ -64,9 +64,7 @@
               </div>
             </div>
             <div class="flex items-center space-x-3">
-              <StatusBadge :status="schedule.enabled ? 'success' : 'gray'">
-                {{ schedule.enabled ? 'Active' : 'Disabled' }}
-              </StatusBadge>
+              <StatusBadge :status="schedule.enabled ? 'active' : 'disabled'" />
               <div class="flex items-center space-x-2">
                 <button
                   class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"

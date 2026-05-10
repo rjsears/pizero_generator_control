@@ -128,14 +128,6 @@ async def sync_env_to_database() -> None:
                 config.genslave_ip = settings.genslave_ip
                 updates.append(f"genslave_ip={settings.genslave_ip}")
 
-        # Sync auto_arm_relay_on_connect if explicitly set in environment
-        env_auto_arm = os.getenv("AUTO_ARM_RELAY_ON_CONNECT")
-        if env_auto_arm is not None:
-            auto_arm_value = env_auto_arm.lower() in ("true", "1", "yes")
-            if config.auto_arm_relay_on_connect != auto_arm_value:
-                config.auto_arm_relay_on_connect = auto_arm_value
-                updates.append(f"auto_arm_relay_on_connect={auto_arm_value}")
-
         # Sync boot_arming_policy if explicitly set in environment
         env_boot_policy = os.getenv("BOOT_ARMING_POLICY")
         if env_boot_policy is not None:

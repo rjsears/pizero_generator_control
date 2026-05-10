@@ -143,3 +143,4 @@ class ConfigUpdateRequest(BaseModel):
         pattern=r"^(fail_safe|preserve_state)$",
         description="'fail_safe' (default, safer) or 'preserve_state'",
     )
+

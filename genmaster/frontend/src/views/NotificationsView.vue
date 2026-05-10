@@ -612,9 +612,7 @@ async function executeDelete() {
                     </div>
                   </div>
                   <div class="flex items-center space-x-2">
-                    <StatusBadge :status="channel.enabled ? 'success' : 'gray'">
-                      {{ channel.enabled ? 'Active' : 'Disabled' }}
-                    </StatusBadge>
+                    <StatusBadge :status="channel.enabled ? 'active' : 'disabled'" />
                     <button
                       class="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-500/10 rounded-lg transition-colors"
                       @click="testChannel(channel)"
@@ -721,9 +719,7 @@ async function executeDelete() {
                       </div>
                     </div>
                     <div class="flex items-center space-x-2">
-                      <StatusBadge :status="group.enabled ? 'success' : 'gray'">
-                        {{ group.enabled ? 'Active' : 'Disabled' }}
-                      </StatusBadge>
+                      <StatusBadge :status="group.enabled ? 'active' : 'disabled'" />
                       <button
                         class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
                         @click="openGroupModal(group)"

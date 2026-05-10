@@ -344,7 +344,7 @@ curl "https://your-genmaster/api/generator/history?trigger_type=scheduled" \
 
 Scheduled runs require the relay to be armed. If you regularly disarm for maintenance:
 - Set a calendar reminder to re-arm before scheduled runs
-- Consider using `AUTO_ARM_RELAY_ON_CONNECT=true` for automatic re-arming
+- Consider switching the **Boot Arming Policy** to `preserve_state` (Generator → Boot Arming Policy) if you want the relay to stay armed across GenMaster reboots
 
 ---
 

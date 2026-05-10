@@ -612,8 +612,8 @@ GenMaster's boot behavior is controlled by an operator-selectable **Boot Arming 
 
 | Policy | Behavior on GenMaster boot | Use case |
 |--------|---------------------------|----------|
-| `fail_safe` (default) | Disarms the relay if it was armed pre-boot. Sets `manual_disarm_active = True` so boot-time auto-arm is suppressed. Fires the `boot_disarmed_failsafe` notification. **Operator must re-arm via the UI.** | Default. Required if your installation should NOT auto-resume after a power event. |
-| `preserve_state` | Keeps the prior armed state across the reboot. Combined with auto-arm, the generator can resume operation automatically after an outage. | Only when your installation is safe to auto-resume (proper ATS, weatherproofing, fuel/CO safety, etc.). Switching to this mode requires confirming a UI warning. |
+| `fail_safe` (default) | Disarms the relay if it was armed pre-boot. Sets `manual_disarm_active = True`. Fires the `boot_disarmed_failsafe` notification. **Operator must re-arm via the UI.** | Default. Required if your installation should NOT auto-resume after a power event. |
+| `preserve_state` | Keeps the prior armed state across the reboot. The system can resume operation automatically after an outage. | Only when your installation is safe to auto-resume (proper ATS, weatherproofing, fuel/CO safety, etc.). Switching to this mode requires confirming a UI warning. |
 
 **On GenMaster boot (regardless of policy):**
 
@@ -634,7 +634,7 @@ GenMaster's boot behavior is controlled by an operator-selectable **Boot Arming 
 
 **Important under `fail_safe` (default):** The generator will NOT auto-start after a power loss, even if the Victron signal is active. An operator must explicitly re-arm the system first. The `boot_disarmed_failsafe` notification (configurable in Notifications → Configure → Generator Events) tells you when this happens.
 
-**Important under `preserve_state`:** With auto-arm-on-connect also enabled, the generator may automatically restart after an outage if your battery monitor is still calling for power. Use only when your installation can safely auto-resume.
+**Important under `preserve_state`:** The generator may automatically restart after an outage if your battery monitor is still calling for power when the system returns. Use only when your installation can safely auto-resume.
 
 ### Arming Behavior
 

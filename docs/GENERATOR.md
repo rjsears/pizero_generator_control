@@ -110,24 +110,16 @@ curl -X POST https://your-genmaster/api/generator/disarm \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### Auto-Arm on Connection Restore
-
-If enabled via `AUTO_ARM_RELAY_ON_CONNECT=true`, the system will automatically arm the relay when GenSlave connection is restored after an outage. This feature respects manual disarms:
-
-- If you manually disarmed via the UI, auto-arm will **not** override your choice
-- If you manually arm via the UI, the "manual disarm" flag is cleared
-- Auto-arm only triggers when connection is restored, not on every heartbeat
-
 ### Boot Arming Policy
 
 Operator-selectable behavior for what happens to the relay's armed state when GenMaster restarts. Configure in **Generator → Boot Arming Policy** in the UI, or via the `BOOT_ARMING_POLICY` env var.
 
 | Policy | Behavior on GenMaster boot | When to use |
 |--------|---------------------------|-------------|
-| `fail_safe` (default) | If the relay was armed pre-boot, **disarms it** and sets `manual_disarm_active = True` so boot-time auto-arm is suppressed. Fires the `boot_disarmed_failsafe` notification so the operator knows they need to re-arm. | Default for safety. Required when unsupervised auto-restart after a power event would be unsafe or undesirable. |
-| `preserve_state` | Keeps the prior `slave_relay_armed` value across the reboot. Combined with auto-arm, the system can resume operation automatically after an outage. | Only when your installation can safely auto-resume (proper ATS, weatherproofing, fuel/CO safety). Requires confirming a UI warning before enabling. |
+| `fail_safe` (default) | If the relay was armed pre-boot, **disarms it** and sets `manual_disarm_active = True`. Fires the `boot_disarmed_failsafe` notification so the operator knows they need to re-arm. | Default for safety. Required when unsupervised auto-restart after a power event would be unsafe or undesirable. |
+| `preserve_state` | Keeps the prior `slave_relay_armed` value across the reboot. The system can resume operation automatically after an outage. | Only when your installation can safely auto-resume (proper ATS, weatherproofing, fuel/CO safety). Requires confirming a UI warning before enabling. |
 
-**Independence from runtime auto-arm:** The `boot_arming_policy` only affects the **boot path**. Runtime auto-arm-on-connect (when GenSlave drops out and reconnects during normal operation) still works exactly as configured by `auto_arm_relay_on_connect` regardless of the boot policy.
+**Mid-operation GenSlave drops** (network blip, slave reboot, etc.) are handled automatically and are independent of this setting — GenSlave reads `armed` from every heartbeat and matches GenMaster's database, so it re-arms on its own when communication is restored.
 
 **Notification on disarm:** When the `fail_safe` policy disarms the relay, GenMaster fires the `boot_disarmed_failsafe` notification event. Configure the channels/groups that receive it under **Notifications → Configure → Generator Events**. Default message text reads:
 
