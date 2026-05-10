@@ -14,8 +14,6 @@ Adds:
   the relay.
 """
 
-import time
-
 import sqlalchemy as sa
 from alembic import op
 
@@ -41,32 +39,28 @@ def upgrade() -> None:
 
     # Seed the new notification event so users can configure who gets pinged
     # when the fail-safe boot policy disarms the relay.
-    # NOTE: op.execute() takes only the statement (no params dict). For bound
-    # parameters, use op.get_bind().execute(text, params).
-    now = int(time.time())
-    op.get_bind().execute(
-        sa.text(
-            """
-            INSERT INTO system_notification_events (
-                event_type, display_name, description, icon, category,
-                severity, enabled, default_title, default_message,
-                created_at, updated_at
-            ) VALUES (
-                'boot_disarmed_failsafe',
-                'Relay Disarmed on Boot (Fail-Safe)',
-                'The fail-safe boot policy automatically disarmed the relay after a GenMaster restart',
-                'ShieldExclamationIcon',
-                'generator',
-                'warning',
-                true,
-                'Generator Disarmed After Reboot — Action Required',
-                'GenMaster restarted with the fail-safe boot policy enabled.\n\nThe generator relay has been automatically DISARMED for safety.\n\nThe generator WILL NOT START automatically until you log in and re-arm it from the web interface.',
-                :now, :now
-            )
-            ON CONFLICT (event_type) DO NOTHING
-            """
-        ),
-        {"now": now},
+    # `created_at` / `updated_at` are TIMESTAMP columns — use Postgres NOW()
+    # directly rather than passing epoch ints from Python.
+    op.execute(
+        """
+        INSERT INTO system_notification_events (
+            event_type, display_name, description, icon, category,
+            severity, enabled, default_title, default_message,
+            created_at, updated_at
+        ) VALUES (
+            'boot_disarmed_failsafe',
+            'Relay Disarmed on Boot (Fail-Safe)',
+            'The fail-safe boot policy automatically disarmed the relay after a GenMaster restart',
+            'ShieldExclamationIcon',
+            'generator',
+            'warning',
+            true,
+            'Generator Disarmed After Reboot — Action Required',
+            'GenMaster restarted with the fail-safe boot policy enabled.\n\nThe generator relay has been automatically DISARMED for safety.\n\nThe generator WILL NOT START automatically until you log in and re-arm it from the web interface.',
+            NOW(), NOW()
+        )
+        ON CONFLICT (event_type) DO NOTHING
+        """
     )
 
 
