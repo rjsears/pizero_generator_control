@@ -35,7 +35,8 @@ class Config(Base):
     id: Mapped[int] = mapped_column(primary_key=True, default=1)
 
     # Heartbeat Settings
-    heartbeat_interval_seconds: Mapped[int] = mapped_column(default=60)
+    # 10s default → GenSlave failsafe trips at 30s without heartbeat (3x rule).
+    heartbeat_interval_seconds: Mapped[int] = mapped_column(default=10)
     heartbeat_failure_threshold: Mapped[int] = mapped_column(default=3)
 
     # GenSlave Connection

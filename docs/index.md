@@ -1,6 +1,6 @@
 # RPi Generator Control
 
-A production-ready, distributed generator control system for off-grid solar installations with Victron energy systems.
+A working (in production in my system), distributed generator control system designed for off-grid solar installations with Victron energy systems. Built on a master-slave architecture using Raspberry Pi devices, it provides automated generator management with manual override capabilities, scheduling, and real-time monitoring through a modern web interface.
 
 <p align="center">
   <img src="images/pizero_gen_control_logo.png" alt="RPi Generator Control">
@@ -101,38 +101,48 @@ The system uses a **master-slave architecture** with two Raspberry Pi devices:
 
 ## Quick Start
 
-### 1. Deploy GenMaster
+Both GenMaster and GenSlave install via interactive `setup.sh` scripts.
+The scripts handle Docker installation, environment configuration, secret
+generation, and systemd integration — they are the recommended install
+path. Manual install is possible but not covered here.
+
+### 1. Deploy GenMaster (on the Pi 5)
 
 ```bash
-# Clone repository
-git clone https://github.com/rjsears/pizero_generator_control.git
-cd pizero_generator_control/genmaster
-
-# Configure environment
-cp .env.example .env
-nano .env  # Edit settings
-
-# Start services
-docker compose up -d
+# Single-command install — pulls and runs the setup script
+curl -fsSL https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/genmaster/install.sh | sudo bash
 ```
 
-### 2. Deploy GenSlave
+The setup script will install Docker, generate a `.env` file, prompt for
+the values it can't infer (timezone, generator info, optional notification
+URLs), pull the GenMaster image from Docker Hub, and start all containers.
+
+When it finishes, you'll have a working GenMaster on `https://<pi-ip>` with
+the API secret already generated. **Note the displayed `SLAVE_API_SECRET`
+value — you'll need it on the GenSlave side in step 2.**
+
+### 2. Deploy GenSlave (on the Pi Zero 2W)
 
 ```bash
-# On Pi Zero 2W
-mkdir -p /opt/genslave && cd /opt/genslave
+# SSH into the Pi Zero
+ssh pi@genslave.local
 
-# Download compose file
-curl -O https://raw.githubusercontent.com/.../docker-compose.yaml
-
-# Configure
-echo "GENSLAVE_API_SECRET=your-secret" > .env
-
-# Start
-docker compose up -d
+# Download and run the setup script
+curl -fsSL https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/genslave/setup.sh -o setup.sh
+chmod +x setup.sh
+sudo ./setup.sh
 ```
 
-### 3. Configure Tailscale
+The setup script will install Docker, prompt you for the API secret
+(press Enter to **auto-generate** a new one, or paste GenMaster's
+`SLAVE_API_SECRET` from step 1 to use that), pull the GenSlave ARM image,
+configure systemd, and start the container.
+
+If you auto-generated the secret on this side, copy the displayed value
+back into GenMaster's `SLAVE_API_SECRET` (in `genmaster/.env` or via the
+GenMaster UI under **Settings → GenSlave Configuration**).
+
+### 3. Configure Tailscale (recommended)
 
 ```bash
 # Install on both devices

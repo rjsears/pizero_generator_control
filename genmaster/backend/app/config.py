@@ -12,8 +12,9 @@
 """Application configuration using Pydantic settings."""
 
 from functools import lru_cache
-from typing import Optional
+from typing import List, Optional
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -58,8 +59,24 @@ class Settings(BaseSettings):
     genslave_ip: Optional[str] = None
 
     # Heartbeat Settings
-    heartbeat_interval_seconds: int = 60
+    # 10s default → GenSlave's failsafe trips at 30s without a heartbeat (3x rule).
+    heartbeat_interval_seconds: int = 10
     heartbeat_failure_threshold: int = 3
+
+    # CORS — empty by default = same-origin only (browser default enforcement).
+    # All production access paths (Cloudflare Tunnel, LAN, Tailscale Serve)
+    # are same-origin via nginx, so no CORS is needed in production. Set to a
+    # comma-separated list of dev origins (e.g. "http://localhost:5173") only
+    # when running the Vue dev server against a separately-running backend.
+    cors_allowed_origins: List[str] = []
+
+    @field_validator("cors_allowed_origins", mode="before")
+    @classmethod
+    def _split_cors_origins(cls, v):
+        """Accept a comma-separated string from env vars and split into a list."""
+        if isinstance(v, str):
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v
 
     # Webhook Settings (n8n)
     webhook_base_url: Optional[str] = None

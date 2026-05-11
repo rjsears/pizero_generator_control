@@ -38,7 +38,7 @@ class SlaveClient:
     """
     HTTP client for communicating with GenSlave API.
 
-    All requests include the X-GenControl-Secret header for authentication.
+    All requests include the X-API-Key header for authentication.
     """
 
     def __init__(
@@ -179,7 +179,9 @@ class SlaveClient:
         timestamp: int,
         generator_running: bool,
         armed: bool,
-        heartbeat_interval: int = 60,
+        # Defensive default — production callers always pass the live DB value.
+        # 10s matches the canonical default (3x rule → 30s GenSlave failsafe).
+        heartbeat_interval: int = 10,
         command: str = "none",
     ) -> SlaveResponse:
         """

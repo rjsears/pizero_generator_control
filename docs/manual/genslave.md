@@ -72,7 +72,7 @@ The independent watchdog that protects you if GenMaster goes silent.
 | **Last Heartbeat** | Wall-clock time of the most recent heartbeat received from GenMaster. |
 | **Since Heartbeat** | Seconds since the last heartbeat. |
 | **Heartbeat Count** | Lifetime counter (resets on slave reboot). |
-| **Timeout** | How long the slave will wait without a heartbeat before forcing the relay OFF and (optionally) sending an Apprise alert. Default `180s`. |
+| **Timeout** | How long the slave will wait without a heartbeat before forcing the relay OFF and (optionally) sending an Apprise alert. Calculated as 3× the GenMaster heartbeat interval — default `30s` with the default 10s interval. |
 | **Failsafe Triggered** | If shown, the failsafe has fired since the last reset — clear it manually after diagnosing. |
 
 !!! warning "Failsafe is your last line of defense"
@@ -135,7 +135,7 @@ The most sensitive section on this page — it controls how GenMaster talks to G
 |-------|---------|
 | **GenSlave IP Address** | IP that GenMaster uses. Edit and save to update both ends. |
 | **API URL (auto-generated)** | Read-only — built from the IP and the fixed slave port `8001`. |
-| **Heartbeat Interval (seconds)** | How often GenMaster pings the slave with the heartbeat. Default `60`. Lower = faster failsafe trigger but more network noise. |
+| **Heartbeat Interval (seconds)** | How often GenMaster pings the slave with the heartbeat. Default `10` — failsafe trips at 3× this interval (30s by default). Higher = less network noise; lower = faster failsafe. |
 | **Current API Secret** | Hidden by default. Click the eye to reveal, the clipboard to copy. |
 | **Change API Secret** | Type a new secret, or click the dice button to generate a random one. The Save action propagates the new key to both GenMaster and GenSlave at once. |
 

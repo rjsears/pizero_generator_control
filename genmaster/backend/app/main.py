@@ -128,20 +128,6 @@ async def sync_env_to_database() -> None:
                 config.genslave_ip = settings.genslave_ip
                 updates.append(f"genslave_ip={settings.genslave_ip}")
 
-        # Sync boot_arming_policy if explicitly set in environment
-        env_boot_policy = os.getenv("BOOT_ARMING_POLICY")
-        if env_boot_policy is not None:
-            policy_value = env_boot_policy.lower().strip()
-            if policy_value in ("fail_safe", "preserve_state"):
-                if config.boot_arming_policy != policy_value:
-                    config.boot_arming_policy = policy_value
-                    updates.append(f"boot_arming_policy={policy_value}")
-            else:
-                logger.warning(
-                    f"BOOT_ARMING_POLICY env var has invalid value '{env_boot_policy}'; "
-                    f"expected 'fail_safe' or 'preserve_state'. Ignoring."
-                )
-
         if updates:
             await db.commit()
             logger.info(f"Synced env vars to database config: {', '.join(updates)}")
@@ -394,15 +380,22 @@ async def redoc_html() -> HTMLResponse:
         redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@2.1.3/bundles/redoc.standalone.js",
     )
 
-# CORS middleware - allow all origins for development
-# In production, restrict to specific origins
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS middleware — only added when explicitly configured.
+# In production, every browser path reaches GenMaster same-origin via nginx
+# (Cloudflare Tunnel / LAN / Tailscale Serve all serve UI and API from the
+# same hostname), so CORS is unnecessary. Omitting the middleware entirely
+# means the browser's default same-origin policy is the only gate — exactly
+# what we want.
+# Set CORS_ALLOWED_ORIGINS in .env (comma-separated) to enable for local dev
+# (e.g. running the Vue dev server on :5173 against the backend on :8000).
+if settings.cors_allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "X-API-Key"],
+    )
 
 # Include API routers
 app.include_router(health.router, prefix="/api/health", tags=["Health"])

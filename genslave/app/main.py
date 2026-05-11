@@ -16,7 +16,6 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import verify_api_key
 from app.config import settings
@@ -51,6 +50,22 @@ async def lifespan(app: FastAPI):
     # Initialize database (loads API secret from env on first run)
     db_service.initialize()
 
+    # Mandatory API auth check — refuse to start without a configured secret.
+    # Generator-control endpoints must NEVER run unauthenticated. There is
+    # no opt-out flag by design — silent unauthenticated mode is exactly the
+    # kind of misconfiguration that ate someone's generator in production.
+    api_secret = db_service.get_api_secret()
+    if not api_secret:
+        msg = (
+            "GENSLAVE_API_SECRET is not configured. GenSlave refuses to start "
+            "without API authentication. Generate a secret via setup.sh "
+            "(recommended) or set GENSLAVE_API_SECRET in .env (use "
+            "`openssl rand -hex 32` to generate one), then restart the "
+            "container."
+        )
+        logger.critical(msg)
+        raise RuntimeError(msg)
+
     # Connect failsafe monitor to relay service
     failsafe_monitor.set_relay_service(relay_service)
 
@@ -66,15 +81,11 @@ async def lifespan(app: FastAPI):
     # Start reboot scheduler
     await reboot_scheduler.start(relay_service)
 
-    # Check if API secret is configured
-    api_secret = db_service.get_api_secret()
-    api_status = "configured" if api_secret else "NOT CONFIGURED (API unprotected!)"
-
     logger.info(
         f"GenSlave ready - "
         f"HAT: {'real' if not relay_service.is_mock_mode else 'mock'}, "
         f"Failsafe timeout: {settings.FAILSAFE_TIMEOUT_SECONDS}s, "
-        f"API Auth: {api_status}"
+        f"API Auth: configured"
     )
 
     yield
@@ -105,14 +116,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to GenMaster IP
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# NOTE: No CORS middleware. GenSlave is server-to-server only — browsers never
+# call this API directly. GenMaster's backend is the only client. Adding CORS
+# would be dead config that serves no purpose. If a browser-facing UI is ever
+# added to GenSlave, configure CORS at that point.
 
 # Include routers with API key authentication
 # All API endpoints require X-API-Key header (if API_SECRET is configured)

@@ -339,7 +339,7 @@ docker compose down && docker compose up -d
 | Symptom | Tuning |
 |---------|--------|
 | Web UI slow to load | Check [System → Host Resources](system.md#host-system-resources) — if CPU >80% sustained, restart `genmaster`. |
-| Frequent timeouts | Lower [Heartbeat Interval](genslave.md#connection-settings) from 60s to 30s for faster failure detection, but expect more network traffic. |
+| Frequent timeouts | Default [Heartbeat Interval](genslave.md#connection-settings) is 10s (failsafe at 30s). Raise it if you're seeing network noise; lower (e.g. 5s) for faster failure detection. Failsafe scales as 3× the interval. |
 | Database slow | `VACUUM FULL` rarely needed but can help: `docker compose exec genmaster_db psql -U genmaster -d genmaster -c 'VACUUM FULL ANALYZE;'` |
 | Disk filling up | Old run history accumulates. Either purge from the DB or increase disk. The run-history table is the largest contributor. |
 
@@ -369,7 +369,7 @@ The slave's stat panel on [GenSlave](genslave.md#at-a-glance-health-cpu-memory-d
 | **GenMaster** | The Raspberry Pi 5 running the FastAPI backend, web UI, scheduler, and Victron GPIO listener. The "brain". |
 | **GenSlave** | The Raspberry Pi Zero 2W running the relay controller and failsafe. The "muscle". |
 | **GPIO17** | The Pi 5 pin (physical pin 11) that listens for the Victron Cerbo GX relay signal. |
-| **Heartbeat** | Periodic message GenMaster sends to GenSlave to confirm liveness and sync arming state. Default interval 60s. |
+| **Heartbeat** | Periodic message GenMaster sends to GenSlave to confirm liveness and sync arming state. Default interval 10s; GenSlave's failsafe trips at 3× this (30s by default). |
 | **HMAC** | Hash-based message authentication code; used to sign webhook payloads so receivers can verify they came from GenMaster. |
 | **HAT (Pimoroni Automation Hat Mini)** | The add-on board on GenSlave that provides the physical relay and small LCD. |
 | **Manual Override** | Mode where GenMaster ignores the Victron GPIO signal completely. Use during maintenance or when Victron is misreporting. |
@@ -529,9 +529,9 @@ All authenticated endpoints require either:
 
 | Scenario | Expected behavior |
 |----------|-------------------|
-| GenMaster reboots while generator running | On boot: state reset to safe (disarmed, generator_running=false), orphaned run closed with `stop_reason=power_loss`. Generator may still be physically running until GenSlave's failsafe trips (default 180s after last heartbeat). |
+| GenMaster reboots while generator running | On boot: state reset to safe (disarmed, generator_running=false), orphaned run closed with `stop_reason=power_loss`. Generator may still be physically running until GenSlave's failsafe trips (default 30s after last heartbeat — calculated as 3× the heartbeat interval). |
 | GenSlave reboots while generator running | On boot: relay forced OFF (hardware safety). Generator stops. Run record on GenMaster gets stop_reason `slave_lost` after heartbeat timeout. |
-| Network partition between master and slave | Heartbeats fail. After `HEARTBEAT_TIMEOUT_SECONDS` (default 180s) the slave triggers failsafe and forces relay OFF, sends Apprise alert. |
+| Network partition between master and slave | Heartbeats fail. After the failsafe timeout (default 30s = 3× the 10s heartbeat interval) the slave triggers failsafe and forces relay OFF, sends Apprise alert. |
 | Postgres dies | API errors. Web UI shows toast + degraded badges. Generator state retained in-memory until restart. Recover by restarting `genmaster_db`. |
 | Disk full | Logs fail to write. Backups fail. Run history may stop persisting. Web UI may degrade. Free space immediately. |
 | Cert expires | HTTPS access fails. Force renew via [System → SSL Certificates](system.md#ssl-certificates) or `docker compose exec genmaster_certbot certbot renew --force-renewal`. |

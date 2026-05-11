@@ -68,6 +68,8 @@ While designed around Victron integration, the architecture is universal—any t
 - [Features](#features)
 - [System Architecture](#system-and-network-architecture)
 - [Hardware Requirements](#hardware-requirements)
+- [Tested Deployment](#tested-deployment)
+- [Known Limitations](#known-limitations)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
 - [Web Interface](#web-interface)
@@ -189,6 +191,56 @@ The RPi Generator Control system automates generator management for off-grid sol
 - 2-wire normally-open contact from Cerbo GX MK2 Relay
 - Connected to GPIO17 (Pin 11) and Ground (Pin 9)
 - Internal pull-up resistor enabled
+
+---
+
+## Tested Deployment
+
+This is what I've actually verified in my own off-grid setup — not just what
+the design supports on paper. Other hardware combinations (different Pi
+models, alternative relay HATs, other battery monitors) may work fine but
+have not been field-tested here.
+
+| Area | Tested configuration |
+|------|----------------------|
+| **GenMaster** | Raspberry Pi 5, 8GB, Raspberry Pi OS 64-bit |
+| **GenSlave** | Raspberry Pi Zero 2 W |
+| **Relay HAT** | Pimoroni Automation HAT Mini |
+| **Trigger source** | Victron Cerbo GX MK2 relay |
+| **Network** | LAN baseline (same-network operation works with no VPN). Tailscale optional — required for remote administration or when GenMaster and GenSlave are on different networks. Cloudflare Tunnel optional — used to expose the GenMaster web UI publicly. |
+| **Boot policies tested** | `fail_safe` and `preserve_state` (both verified across real reboots) |
+| **Failure tests run** | GenMaster reboot mid-operation, GenSlave reboot mid-operation, network loss between master and slave, heartbeat loss triggering GenSlave's independent failsafe, relay forced OFF on failsafe trigger |
+
+---
+
+## Known Limitations
+
+A handful of architectural and operational realities to be aware of before
+deploying this in your own setup:
+
+- **Fuel usage is estimated, not measured.** The fuel-tracking number is
+  calculated from runtime × your configured consumption-rate values
+  (`fuel_consumption_50` / `fuel_consumption_100`) — there is no actual
+  fuel-flow sensor. Accuracy depends on how well your rate values match
+  real-world performance.
+
+- **Network and security configuration is non-trivial.** This project has
+  many moving parts (nginx reverse proxy, cloudflared tunnel, Tailscale,
+  per-route auth, IP allowlists). Read [`docs/SECURITY.md`](docs/SECURITY.md)
+  end-to-end before exposing GenMaster beyond your LAN.
+
+- **GenSlave needs privileged GPIO access.** It runs as a `privileged`
+  container with host networking so the Pimoroni Automation Hat Mini can
+  drive GPIO. That's a deliberate trade-off — if you compromise the GenSlave
+  container, you have effective root on the Pi Zero. See
+  [`docs/SECURITY.md#container-privilege-model`](docs/SECURITY.md#container-privilege-model).
+
+- **Tested with my specific hardware setup; other generators may need
+  wiring/config changes.** Generators differ in start-contact polarity,
+  voltage tolerance, dry-vs-wet contacts, hold-time requirements, etc. The
+  relay control logic itself is generator-agnostic, but the physical wiring
+  between GenSlave's relay and your generator's start input is your
+  responsibility to verify.
 
 ---
 
@@ -360,7 +412,7 @@ SLAVE_API_URL=http://genslave.local:8001
 SLAVE_API_SECRET=<shared-secret>
 
 # Heartbeat
-HEARTBEAT_INTERVAL_SECONDS=60
+HEARTBEAT_INTERVAL_SECONDS=10
 HEARTBEAT_FAILURE_THRESHOLD=3
 
 # Webhooks (Optional)
@@ -606,7 +658,7 @@ The arming system prevents accidental generator operations during startup, maint
 
 ### Power Loss / Reboot Behavior
 
-GenMaster's boot behavior is controlled by an operator-selectable **Boot Arming Policy** (Generator → Boot Arming Policy in the UI, or `BOOT_ARMING_POLICY` in `.env`). GenSlave's behavior is the same regardless of GenMaster's policy.
+GenMaster's boot behavior is controlled by an operator-selectable **Boot Arming Policy**, configured in the UI under **Generator → Boot Arming Policy**. The setting is stored in the database and persists across reboots. GenSlave's behavior is the same regardless of GenMaster's policy.
 
 **Boot Arming Policy options on GenMaster:**
 
@@ -630,7 +682,7 @@ GenMaster's boot behavior is controlled by an operator-selectable **Boot Arming 
 1. Relay is immediately set to **OFF** (hardware-default and software-enforced)
 2. Internal `_armed = False`
 3. Failsafe monitor starts waiting for heartbeats
-4. First heartbeat from GenMaster syncs both armed state and relay state — within ~1 heartbeat cycle (~60s default), GenSlave matches whatever GenMaster says
+4. First heartbeat from GenMaster syncs both armed state and relay state — within ~1 heartbeat cycle (~10s default), GenSlave matches whatever GenMaster says
 
 **Important under `fail_safe` (default):** The generator will NOT auto-start after a power loss, even if the Victron signal is active. An operator must explicitly re-arm the system first. The `boot_disarmed_failsafe` notification (configurable in Notifications → Configure → Generator Events) tells you when this happens.
 

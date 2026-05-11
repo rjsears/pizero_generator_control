@@ -18,8 +18,6 @@
         <link rel="prev" href="../TROUBLESHOOTING/">
       
       
-        <link rel="next" href="../CLOUDFLARE_TUNNEL_REAL_IP_FIX/">
-      
       
         
       
@@ -55,6 +53,8 @@
       
     
     
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nginx-access-control-and-real-ip-configuration" class="md-skip">
+        <a href="#nginx-access-control" class="md-skip">
           Skip to content
         </a>
       
@@ -405,7 +405,7 @@
   <span class="md-ellipsis">
     
   
-    User Guides
+    User Manual
   
 
     
@@ -418,6 +418,375 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Manual
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/welcome/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Welcome
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/generator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generator Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/genslave/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenSlave
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/schedule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schedule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/containers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Containers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/common-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/appendix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -568,10 +937,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -589,8 +958,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -713,10 +1082,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -734,8 +1103,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -744,6 +1113,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -923,17 +1320,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#the-real_ip-configuration-cloudflare" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The real_ip Configuration (Cloudflare)
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -993,34 +1379,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../CLOUDFLARE_TUNNEL_REAL_IP_FIX/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Cloudflare Real IP Fix
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -1143,17 +1501,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#the-real_ip-configuration-cloudflare" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The real_ip Configuration (Cloudflare)
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -1229,10 +1576,19 @@
   
 
 
-<h1 id="nginx-access-control-and-real-ip-configuration">Nginx Access Control and Real IP Configuration<a class="headerlink" href="#nginx-access-control-and-real-ip-configuration" title="Permanent link">&para;</a></h1>
-<p>This document explains the nginx access control configuration for GenMaster, including how traffic from different sources (LAN, Cloudflare Tunnel, and Tailscale) is handled.</p>
+<h1 id="nginx-access-control">Nginx Access Control<a class="headerlink" href="#nginx-access-control" title="Permanent link">&para;</a></h1>
+<p>This document explains the <strong>IP-based access control</strong> layer of GenMaster's nginx reverse proxy: how the <code>geo</code> block evaluates client IPs, how traffic from different sources (LAN, Cloudflare Tunnel, Tailscale) is treated, and how to manage the allowlist from the GenMaster UI.</p>
+<div class="admonition note">
+<p class="admonition-title">Real-IP and trusted-proxy configuration is documented separately</p>
+<p>For how nginx identifies the real client IP behind the cloudflared tunnel sidecar — including <code>set_real_ip_from</code>, the <code>CF-Connecting-IP</code> vs <code>X-Forwarded-For</code> decision, and the trust model — see <a href="../SECURITY/#how-nginx-identifies-the-real-client-ip"><code>SECURITY.md</code></a>. This page assumes that real-IP is already correctly configured and focuses on what to do with the resulting <code>$remote_addr</code>.</p>
+</div>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>GenMaster uses nginx as a reverse proxy with IP-based access control. The <code>geo</code> block in nginx.conf determines whether requests are treated as "internal" (full access) or "external" (blocked or limited access).</p>
+<p>GenMaster uses nginx as a reverse proxy with IP-based access control. The <code>geo</code> block in nginx.conf determines whether requests are treated as "internal" or "external".</p>
+<ul>
+<li><strong>internal</strong> — granted access to the entire GenMaster interface on port 443: the web UI (<code>/</code>), backend API (<code>/api/</code>), websocket (<code>/ws/</code>), health endpoint (<code>/healthz</code>), and Portainer (<code>/portainer/</code>).</li>
+<li><strong>external</strong> — denied with HTTP 403 by every location block on the 443 listener.</li>
+</ul>
+<p>In other words, the IP allowlist below governs <strong>all</strong> access to GenMaster's public HTTPS interface, not just Portainer. If a client's IP is not in the list, none of the management interface is reachable. To tighten security further, you can disable the Cloudflare tunnel entirely and reach the UI only over Tailscale.</p>
 <h2 id="traffic-sources">Traffic Sources<a class="headerlink" href="#traffic-sources" title="Permanent link">&para;</a></h2>
 <p>GenMaster can be accessed through three different paths:</p>
 <h3 id="1-direct-lan-access-10xxx-192168xx-etc">1. Direct LAN Access (10.x.x.x, 192.168.x.x, etc.)<a class="headerlink" href="#1-direct-lan-access-10xxx-192168xx-etc" title="Permanent link">&para;</a></h3>
@@ -1243,10 +1599,10 @@
 </ul>
 <h3 id="2-cloudflare-tunnel-access">2. Cloudflare Tunnel Access<a class="headerlink" href="#2-cloudflare-tunnel-access" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Path</strong>: Client → Cloudflare Edge → cloudflared container → nginx container</li>
-<li><strong>What nginx sees without real_ip config</strong>: Docker network IP (172.x.x.x)</li>
-<li><strong>What nginx sees with real_ip config</strong>: Real client IP from X-Forwarded-For header</li>
-<li><strong>Why real_ip is needed</strong>: cloudflared container connects to nginx through Docker network</li>
+<li><strong>Path</strong>: Client → Cloudflare Edge → cloudflared sidecar (pinned at <code>172.30.0.10</code>) → nginx container</li>
+<li><strong>What nginx sees without real_ip config</strong>: Docker network IP (<code>172.30.0.10</code>, the cloudflared sidecar)</li>
+<li><strong>What nginx sees with real_ip config</strong>: Real client IP from the <code>CF-Connecting-IP</code> header</li>
+<li><strong>Why real_ip is needed</strong>: nginx must rewrite <code>$remote_addr</code> from the sidecar's IP to the real client so the <code>geo</code> block can apply the allowlist correctly. The trusted-proxy list is narrowed to <strong>only</strong> the pinned cloudflared IP — see <a href="../SECURITY/#how-nginx-identifies-the-real-client-ip"><code>SECURITY.md</code></a> for the rationale.</li>
 </ul>
 <h3 id="3-tailscale-access">3. Tailscale Access<a class="headerlink" href="#3-tailscale-access" title="Permanent link">&para;</a></h3>
 <ul>
@@ -1267,19 +1623,6 @@
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>This block evaluates the client's IP (after real_ip processing) and sets <code>$access_level</code> to either "internal" or "external".</p>
-<h3 id="the-real_ip-configuration-cloudflare">The <code>real_ip</code> Configuration (Cloudflare)<a class="headerlink" href="#the-real_ip-configuration-cloudflare" title="Permanent link">&para;</a></h3>
-<div class="language-nginx highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Trust Docker/internal networks as proxies</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">set_real_ip_from</span><span class="w"> </span><span class="mi">172</span><span class="s">.16.0.0/12</span><span class="p">;</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="k">set_real_ip_from</span><span class="w"> </span><span class="mi">10</span><span class="s">.0.0.0/8</span><span class="p">;</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">set_real_ip_from</span><span class="w"> </span><span class="mi">192</span><span class="s">.168.0.0/16</span><span class="p">;</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">set_real_ip_from</span><span class="w"> </span><span class="mi">100</span><span class="s">.64.0.0/10</span><span class="p">;</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">set_real_ip_from</span><span class="w"> </span><span class="mi">127</span><span class="s">.0.0.1</span><span class="p">;</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="c1"># Extract real client IP from header</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="k">real_ip_header</span><span class="w"> </span><span class="s">X-Forwarded-For</span><span class="p">;</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">real_ip_recursive</span><span class="w"> </span><span class="no">on</span><span class="p">;</span>
-</span></code></pre></div>
-<p>When a request comes from a trusted proxy IP (Docker network), nginx looks at the X-Forwarded-For header to find the real client IP.</p>
 <h2 id="why-tailscale-uses-network_mode-host">Why Tailscale Uses <code>network_mode: host</code><a class="headerlink" href="#why-tailscale-uses-network_mode-host" title="Permanent link">&para;</a></h2>
 <p>The Tailscale container uses <code>network_mode: host</code> for a critical reason:</p>
 <p><strong>GenMaster must be able to reach GenSlave over Tailscale when they are NOT on the same local network.</strong></p>
@@ -1304,7 +1647,7 @@
 <th>Access Method</th>
 <th>Nginx Sees</th>
 <th>Access Level</th>
-<th>Notes</th>
+<th>Result</th>
 </tr>
 </thead>
 <tbody>
@@ -1312,25 +1655,25 @@
 <td>LAN (10.x.x.x)</td>
 <td>Real IP</td>
 <td>internal</td>
-<td>Direct connection preserves IP</td>
+<td>Allowed — direct connection preserves IP</td>
 </tr>
 <tr>
-<td>Cloudflare (external IP)</td>
+<td>Cloudflare (untrusted IP)</td>
 <td>Real IP</td>
 <td>external</td>
-<td>real_ip extracts from X-Forwarded-For</td>
+<td>403 — IP not in allowlist</td>
 </tr>
 <tr>
-<td>Cloudflare (trusted IP)</td>
+<td>Cloudflare (allowlisted IP)</td>
 <td>Real IP</td>
 <td>internal</td>
-<td>If IP is in geo block</td>
+<td>Allowed — IP is in geo block</td>
 </tr>
 <tr>
 <td>Tailscale</td>
 <td>172.x.x.x</td>
 <td>internal</td>
-<td>No headers, but Docker IP is "internal"</td>
+<td>Allowed — Docker IP is in "internal" range</td>
 </tr>
 </tbody>
 </table>
@@ -1416,6 +1759,8 @@
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/manual.js"></script>
       
     
   </body>

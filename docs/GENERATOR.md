@@ -112,7 +112,7 @@ curl -X POST https://your-genmaster/api/generator/disarm \
 
 ### Boot Arming Policy
 
-Operator-selectable behavior for what happens to the relay's armed state when GenMaster restarts. Configure in **Generator → Boot Arming Policy** in the UI, or via the `BOOT_ARMING_POLICY` env var.
+Operator-selectable behavior for what happens to the relay's armed state when GenMaster restarts. Configure in **Generator → Boot Arming Policy** in the UI. The setting is stored in the database and persists across reboots.
 
 | Policy | Behavior on GenMaster boot | When to use |
 |--------|---------------------------|-------------|

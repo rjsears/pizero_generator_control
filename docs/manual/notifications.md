@@ -186,7 +186,7 @@ Docker container health and status alerts. By default these are off (0/5 enabled
 | **Container Stopped** | warning | A container has stopped unexpectedly. |
 | **Container Unhealthy** | warning | A container's healthcheck has failed. |
 
-##### Generator Events (9 events)
+##### Generator Events (10 events)
 
 ![Generator Events expanded](images/screenshots/notifications-11-generator-events-expanded.png)
 
@@ -194,13 +194,16 @@ The core operational events around the generator itself.
 
 | Event | Severity | Triggers when |
 |-------|----------|---------------|
-| **Failsafe Triggered** | critical | GenSlave's failsafe fired and forced the relay off. |
+| **Failsafe Triggered** | critical | GenSlave's failsafe fired and forced the relay off due to communication loss. |
 | **Generator Relay Disabled** | warning | The relay was disarmed (automatic operations now blocked). |
 | **Generator Relay Enabled** | info | The relay was armed (automatic operations now allowed). |
 | **Generator Started** | info | The generator entered the running state. |
 | **Generator Stopped** | info | The generator entered the stopped state. |
 | **Max Runtime — Cooldown Active** | warning | Max runtime hit; cooldown window in progress. |
-| (3 more) | varies | Additional generator state-change events — expand on the live page to see your build's full list (count is `4/9 enabled` by default). |
+| **Max Runtime — Manual Reset Required** | critical | Max runtime hit and the policy requires manual re-arm before the generator can run again. |
+| **Override Disabled** | info | Manual override turned off (returning to automatic Victron control). |
+| **Override Enabled** | warning | Manual override turned on (Victron signal ignored). |
+| **Relay Disarmed on Boot (Fail-Safe)** | warning | The fail-safe boot policy automatically disarmed the relay after a GenMaster restart. See [Boot Arming Policy](generator.md#boot-arming-policy). |
 
 ##### GenMaster Events (4 events)
 

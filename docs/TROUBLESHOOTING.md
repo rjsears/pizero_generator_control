@@ -237,7 +237,7 @@ curl http://genslave:8001/api/health \
 
 **Check heartbeat status:**
 ```bash
-curl http://genslave:8001/api/failsafe/status \
+curl http://genslave:8001/api/failsafe \
   -H "X-API-Key: YOUR_SECRET"
 ```
 
@@ -518,13 +518,26 @@ docker volume prune
 
 ### Permission Denied
 
-```bash
-# Fix Docker socket permissions
-sudo chmod 666 /var/run/docker.sock
+If you see `permission denied while trying to connect to the Docker daemon socket` (or `Got permission denied while trying to connect to the Docker daemon`), choose ONE of the following based on your situation:
 
-# Or add user to docker group
-sudo usermod -aG docker $USER
+**For one-off commands** (recommended for occasional admin):
+
+```bash
+sudo docker compose ...    # or `sudo docker ...`
 ```
+
+**For daily use on a trusted workstation** (lets you run `docker` without sudo):
+
+```bash
+sudo usermod -aG docker $USER
+# Log out and log back in for the group change to take effect.
+```
+
+!!! warning "Do NOT `chmod 666 /var/run/docker.sock`"
+    Making the Docker socket world-writable lets any local user — including any compromised low-privilege process — control Docker, which is effectively root on the host. This is a common piece of bad advice on Stack Overflow; ignore it.
+
+!!! info "Why is `docker` group membership 'effectively root'?"
+    Anyone who can talk to the Docker daemon can spin up a privileged container that mounts the host's `/` and gives them a root shell. Only add yourself (or a service user) to the `docker` group on machines where you'd already be trusted as root.
 
 ---
 

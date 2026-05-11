@@ -139,6 +139,31 @@ When expanded:
 !!! tip "Recommended cadence"
     Most generator manufacturers recommend a 15–30 minute run at least once every two weeks. If your generator gets regular Victron-triggered runs, you may not need an explicit exercise schedule.
 
+## Boot Arming Policy
+
+Controls what happens to the **arming state** when GenMaster reboots. The current policy is shown as a badge on the collapsible header.
+
+![Boot Arming Policy collapsed](images/screenshots/generator-05-boot-arming-policy-collapsed.png)
+
+Click the row to expand and choose between two policies.
+
+![Boot Arming Policy expanded](images/screenshots/generator-05-boot-arming-policy-expanded.png)
+
+| Option | Behavior |
+|--------|----------|
+| **Fail-Safe on Boot** *(recommended, default)* | Every time GenMaster restarts, the relay is automatically **disarmed**. The generator will **not** start automatically until you log in and re-arm it. A `boot_disarmed_failsafe` notification is fired so you know to do it. |
+| **Preserve State Across Reboots** | GenMaster remembers the prior armed state across reboots. After a power outage the system can auto-resume operation with **no operator interaction**. |
+
+!!! warning "Switching to Preserve State requires explicit confirmation"
+    Selecting **Preserve State Across Reboots** opens a confirmation modal. Read it carefully — auto-resuming operation after an outage means the generator can run unattended. Only enable it if your installation has a properly configured ATS, weatherproof enclosure, fuel and CO safety measures, and you accept the consequences.
+
+![Preserve State warning modal](images/screenshots/generator-06-preserve-state-warning-modal.png)
+
+You can switch back to **Fail-Safe** at any time without a confirmation prompt.
+
+!!! info "GenSlave drops are handled automatically"
+    Mid-operation GenSlave drops (network blips, slave reboots, etc.) are independent of this setting. GenSlave reads the armed state from every heartbeat and matches whatever GenMaster's database says, so it re-arms on its own when communication is restored. Boot Arming Policy applies **only** to GenMaster's own reboots.
+
 ## What's next
 
 - Set up **scheduled runs** for predictable maintenance windows: see [Schedule](schedule.md).

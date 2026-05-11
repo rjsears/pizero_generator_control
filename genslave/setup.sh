@@ -294,23 +294,38 @@ create_env_file() {
     echo -e "${CYAN}║              API Secret Configuration                     ║${NC}"
     echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${YELLOW}The API secret is required for secure communication with GenMaster.${NC}"
-    echo -e "${YELLOW}You must copy this value from your GenMaster configuration.${NC}"
+    echo -e "${YELLOW}GenSlave's API requires authentication. There is no unauthenticated mode.${NC}"
     echo ""
-    echo -e "In GenMaster, find the value of ${CYAN}SLAVE_API_SECRET${NC} in your .env file"
-    echo -e "or generate a new key in GenMaster's Settings > GenSlave Configuration."
+    echo -e "You can either:"
+    echo -e "  ${CYAN}[A]${NC} Auto-generate a new secret here (recommended for fresh setups)"
+    echo -e "  ${CYAN}[B]${NC} Paste an existing secret from GenMaster's ${CYAN}SLAVE_API_SECRET${NC}"
     echo ""
 
     while true; do
-        read -p "Enter the API secret from GenMaster: " API_SECRET_INPUT
+        read -p "Press Enter to auto-generate, or paste an existing secret: " API_SECRET_INPUT
 
-        # Validate minimum length (16 characters)
+        if [[ -z "$API_SECRET_INPUT" ]]; then
+            # Auto-generate a 64-char hex secret (32 bytes of entropy)
+            API_SECRET_INPUT=$(openssl rand -hex 32)
+            echo ""
+            echo -e "${GREEN}✓ Generated new API secret:${NC}"
+            echo -e "  ${CYAN}${API_SECRET_INPUT}${NC}"
+            echo ""
+            echo -e "${YELLOW}IMPORTANT:${NC} Copy this value into GenMaster's ${CYAN}SLAVE_API_SECRET${NC}"
+            echo -e "in its ${CYAN}.env${NC} file (or set it via GenMaster's Settings > GenSlave"
+            echo -e "Configuration UI). GenMaster and GenSlave must share the same secret."
+            echo ""
+            read -p "Press Enter once you've recorded the secret to continue..."
+            break
+        fi
+
+        # Validate minimum length (16 characters) for pasted secrets
         if [[ ${#API_SECRET_INPUT} -lt 16 ]]; then
             log_error "API secret must be at least 16 characters long"
             continue
         fi
 
-        # Confirm the key
+        # Confirm the pasted key
         echo ""
         echo -e "API Secret: ${CYAN}${API_SECRET_INPUT}${NC}"
         read -p "Is this correct? (Y/n) " -n 1 -r

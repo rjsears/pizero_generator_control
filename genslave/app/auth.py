@@ -42,8 +42,14 @@ async def verify_api_key(api_key: Optional[str] = Security(API_KEY_HEADER)) -> s
     Reads the expected API secret from the database, allowing runtime updates
     without container restarts.
 
+    Authentication is mandatory. There is no unauthenticated mode. If no
+    secret is configured at runtime (which should be impossible — the
+    startup check in main.py refuses to boot without one), this dependency
+    returns 503 to fail loud rather than silently allow access.
+
     Raises:
-        HTTPException: If API key is missing or invalid
+        HTTPException: 503 if no secret is configured (misconfiguration);
+                       401 if header is missing; 403 if key is invalid.
 
     Returns:
         The validated API key
@@ -51,10 +57,24 @@ async def verify_api_key(api_key: Optional[str] = Security(API_KEY_HEADER)) -> s
     # Get the current API secret from database
     expected_secret = get_current_api_secret()
 
-    # If no API secret is configured, allow all requests (development mode)
+    # No secret should ever reach this code path — main.py refuses to start
+    # without one. If we get here, something corrupted the secret at runtime
+    # (DB rotation bug, manual edit, etc.). Refuse the request — never allow
+    # unauthenticated access to a generator controller.
     if not expected_secret:
-        logger.warning("API_SECRET not configured - authentication disabled")
-        return ""
+        logger.error(
+            "API request rejected - no API secret configured. This indicates "
+            "a runtime misconfiguration (the startup check should have "
+            "prevented this). Refusing all requests until the secret is "
+            "restored."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "GenSlave API authentication is misconfigured (no secret). "
+                "Service refuses all requests until an API secret is restored."
+            ),
+        )
 
     if not api_key:
         logger.warning("API request rejected - missing X-API-Key header")

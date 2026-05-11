@@ -1,6 +1,9 @@
-# Nginx Access Control and Real IP Configuration
+# Nginx Access Control
 
-This document explains the nginx access control configuration for GenMaster, including how traffic from different sources (LAN, Cloudflare Tunnel, and Tailscale) is handled.
+This document explains the **IP-based access control** layer of GenMaster's nginx reverse proxy: how the `geo` block evaluates client IPs, how traffic from different sources (LAN, Cloudflare Tunnel, Tailscale) is treated, and how to manage the allowlist from the GenMaster UI.
+
+!!! note "Real-IP and trusted-proxy configuration is documented separately"
+    For how nginx identifies the real client IP behind the cloudflared tunnel sidecar — including `set_real_ip_from`, the `CF-Connecting-IP` vs `X-Forwarded-For` decision, and the trust model — see [`SECURITY.md`](SECURITY.md#how-nginx-identifies-the-real-client-ip). This page assumes that real-IP is already correctly configured and focuses on what to do with the resulting `$remote_addr`.
 
 ## Overview
 
@@ -23,10 +26,10 @@ GenMaster can be accessed through three different paths:
 
 ### 2. Cloudflare Tunnel Access
 
-- **Path**: Client → Cloudflare Edge → cloudflared container → nginx container
-- **What nginx sees without real_ip config**: Docker network IP (172.x.x.x)
-- **What nginx sees with real_ip config**: Real client IP from X-Forwarded-For header
-- **Why real_ip is needed**: cloudflared container connects to nginx through Docker network
+- **Path**: Client → Cloudflare Edge → cloudflared sidecar (pinned at `172.30.0.10`) → nginx container
+- **What nginx sees without real_ip config**: Docker network IP (`172.30.0.10`, the cloudflared sidecar)
+- **What nginx sees with real_ip config**: Real client IP from the `CF-Connecting-IP` header
+- **Why real_ip is needed**: nginx must rewrite `$remote_addr` from the sidecar's IP to the real client so the `geo` block can apply the allowlist correctly. The trusted-proxy list is narrowed to **only** the pinned cloudflared IP — see [`SECURITY.md`](SECURITY.md#how-nginx-identifies-the-real-client-ip) for the rationale.
 
 ### 3. Tailscale Access
 
@@ -51,23 +54,6 @@ geo $access_level {
 ```
 
 This block evaluates the client's IP (after real_ip processing) and sets `$access_level` to either "internal" or "external".
-
-### The `real_ip` Configuration (Cloudflare)
-
-```nginx
-# Trust Docker/internal networks as proxies
-set_real_ip_from 172.16.0.0/12;
-set_real_ip_from 10.0.0.0/8;
-set_real_ip_from 192.168.0.0/16;
-set_real_ip_from 100.64.0.0/10;
-set_real_ip_from 127.0.0.1;
-
-# Extract real client IP from header
-real_ip_header X-Forwarded-For;
-real_ip_recursive on;
-```
-
-When a request comes from a trusted proxy IP (Docker network), nginx looks at the X-Forwarded-For header to find the real client IP.
 
 ## Why Tailscale Uses `network_mode: host`
 

@@ -95,8 +95,8 @@ Both GenMaster and GenSlave implement safety measures for power loss and reboot 
 
 GenMaster's behavior on reboot is controlled by an operator-configurable policy
 (`config.boot_arming_policy`), exposed in the UI under
-**Generator → Boot Arming Policy** and via the `BOOT_ARMING_POLICY`
-environment variable. There are two valid values:
+**Generator → Boot Arming Policy**. The setting is stored in the database
+and persists across reboots. There are two valid values:
 
 | Policy | What happens on GenMaster boot | When to use it |
 |--------|--------------------------------|----------------|
@@ -114,7 +114,7 @@ Unlike GenMaster, GenSlave has no per-policy choice. On reboot it always:
 
 1. Comes up with `_armed = False` and the relay physically OFF
 2. Treats the first heartbeat from GenMaster as authoritative for both armed
-   state and relay state — so within ~1 heartbeat cycle (~60s default) it
+   state and relay state — so within ~1 heartbeat cycle (~10s default) it
    ends up matching whatever GenMaster says
 3. If GenMaster is in `fail_safe` and disarmed itself on boot, GenSlave stays
    disarmed. If GenMaster is in `preserve_state` and was armed, GenSlave
