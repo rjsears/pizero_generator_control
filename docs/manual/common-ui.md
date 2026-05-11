@@ -74,7 +74,7 @@ Ends the current session immediately. You'll be redirected to the login page.
 
 ## Login page
 
-When you're not signed in, GenMaster redirects you to a simple username + password form. Default credentials are `admin / admin` on a fresh install — change them immediately under [Settings → Account](settings.md#account-1).
+When you're not signed in, GenMaster redirects you to a simple username + password form. Default credentials are `admin / admin` on a fresh install — change them immediately under [Settings → Account](settings.md#account).
 
 After three failed login attempts (configurable in [Security](settings.md#security)), the account locks for the configured Lockout Duration.
 

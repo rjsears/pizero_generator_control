@@ -8,7 +8,7 @@ The RPi Generator Control system is a distributed two-device architecture for au
 
 ## System Architecture
 
-![System Architecture](../images/genmaster_slave_arch.png)
+![System Architecture](images/genmaster_slave_arch.png)
 
 ---
 

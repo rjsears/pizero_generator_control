@@ -147,7 +147,7 @@ The RPi Generator Control system automates generator management for off-grid sol
 
 ##  System and Network Architecture
 
-![System Architecture](images/genmaster_slave_arch.png)
+![System Architecture](docs/images/genmaster_slave_arch.png)
 
 ### Component Overview
 

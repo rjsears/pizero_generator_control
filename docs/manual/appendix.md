@@ -51,7 +51,7 @@ Comprehensive reference material for GenMaster operators — troubleshooting tab
 |--------------|--------|
 | `genmaster_db` container not running | [Containers](containers.md) → start `genmaster_db`. |
 | `DATABASE_PASSWORD` mismatch | Verify in [Settings → Environment](settings.md#environment); should match `genmaster_db`'s `POSTGRES_PASSWORD`. |
-| Postgres data volume corrupt | Restore from backup downloaded earlier — see [Backup / restore](#backup--restore) below. |
+| Postgres data volume corrupt | Restore from backup downloaded earlier — see [Backup / restore](#backup-restore) below. |
 | Disk full | Check [System → Health](system.md) Host Disk metric; clear old logs/Docker images. |
 
 ### Web UI inaccessible
@@ -556,4 +556,4 @@ All authenticated endpoints require either:
 
 - **GitHub Issues**: [github.com/rjsears/pizero_generator_control/issues](https://github.com/rjsears/pizero_generator_control/issues) — bug reports, feature requests.
 - **GitHub Discussions**: [github.com/rjsears/pizero_generator_control/discussions](https://github.com/rjsears/pizero_generator_control/discussions) — community Q&A.
-- **In-app Help**: the [?] icon in the header opens the [Help & Documentation dialog](common-ui.md#help--documentation-) with quick links to API docs, this manual, and the repo.
+- **In-app Help**: the [?] icon in the header opens the [Help & Documentation dialog](common-ui.md#help-documentation) with quick links to API docs, this manual, and the repo.

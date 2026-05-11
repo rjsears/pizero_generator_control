@@ -62,7 +62,7 @@ The RPi Generator Control system automates generator management for off-grid sol
 
 The system uses a **master-slave architecture** with two Raspberry Pi devices:
 
-![System Architecture](../images/genmaster_slave_arch.png)
+![System Architecture](images/genmaster_slave_arch.png)
 
 [:octicons-arrow-right-24: Full Architecture Documentation](ARCHITECTURE.md)
 
