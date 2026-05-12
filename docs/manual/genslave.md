@@ -149,4 +149,5 @@ The most sensitive section on this page — it controls how GenMaster talks to G
 
 - Confirm the matching GenSlave-side `.env` is current: see [GenSlave Setup](../GENSLAVE.md).
 - Configure independent failsafe alerts with [Notifications](notifications.md).
+- Add or change WiFi profiles, set static IPs: see [Network Configuration](network-configuration.md).
 - Locked yourself out with a bad static-IP profile? See [Network Recovery](network-recovery.md).

@@ -32,6 +32,7 @@ theme:
     - navigation.path
     - navigation.top
     - toc.follow
+    - toc.integrate
     - search.suggest
     - search.highlight
     - content.code.copy
@@ -107,6 +108,7 @@ nav:
     - System: manual/system.md
     - Settings: manual/settings.md
     - Common UI: manual/common-ui.md
+    - Network Configuration: manual/network-configuration.md
     - Network Recovery: manual/network-recovery.md
     - Appendix: manual/appendix.md
   - User Guides:

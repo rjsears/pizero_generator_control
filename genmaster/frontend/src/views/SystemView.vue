@@ -2299,7 +2299,16 @@ onMounted(async () => {
                 <div class="flex items-center gap-3">
                   <WifiIcon class="h-5 w-5 text-purple-500" />
                   <div>
-                    <p class="font-medium text-primary">{{ network.name }}</p>
+                    <div class="flex items-center gap-2">
+                      <p class="font-medium text-primary">{{ network.name }}</p>
+                      <span
+                        v-if="network.ip_method === 'static'"
+                        class="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 font-mono"
+                        :title="network.static_address ? `Static IP: ${network.static_address}` : 'Static IP'"
+                      >
+                        Static{{ network.static_address ? ' ' + network.static_address : '' }}
+                      </span>
+                    </div>
                     <p class="text-xs text-muted">
                       {{ network.auto_connect ? 'Auto-connect enabled' : 'Manual connection' }}
                     </p>

@@ -103,4 +103,5 @@ A web-based shell into the GenMaster container (or host, depending on configurat
 
 - Restart specific services from [Containers](containers.md).
 - Adjust who can reach the GenMaster web UI: [Settings → Access Control](settings.md#access-control).
+- Add or change WiFi profiles, set static IPs: see [Network Configuration](network-configuration.md).
 - Recover from a bad WiFi static-IP change: [Network Recovery](network-recovery.md).

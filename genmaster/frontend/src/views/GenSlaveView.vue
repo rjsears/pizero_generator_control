@@ -1304,6 +1304,13 @@
                   <span v-if="network.auto_connect" class="text-xs px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
                     Auto
                   </span>
+                  <span
+                    v-if="network.ip_method === 'static'"
+                    class="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 font-mono"
+                    :title="network.static_address ? `Static IP: ${network.static_address}` : 'Static IP'"
+                  >
+                    Static{{ network.static_address ? ' ' + network.static_address : '' }}
+                  </span>
                 </div>
                 <button
                   @click="deleteSavedNetwork(network.name)"

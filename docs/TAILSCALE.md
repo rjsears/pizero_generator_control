@@ -420,4 +420,5 @@ If not needed:
 
 - [Cloudflare Setup](CLOUDFLARE.md) - Public web access
 - [GenSlave Setup](GENSLAVE.md) - Configure GenSlave networking
+- [Network Configuration](manual/network-configuration.md) - WiFi profiles, static IPs, when to choose Tailscale vs local IPs for the GenMaster↔GenSlave link
 - [Troubleshooting](TROUBLESHOOTING.md) - Common issues

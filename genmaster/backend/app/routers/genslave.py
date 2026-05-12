@@ -547,6 +547,14 @@ class WifiSavedNetwork(BaseModel):
     name: str = Field(description="Connection profile name")
     ssid: str = Field(description="Network SSID")
     auto_connect: bool = Field(description="Whether auto-connect is enabled")
+    ip_method: str = Field(
+        "dhcp",
+        description="IP addressing mode: 'dhcp', 'static', or pass-through for other nmcli modes",
+    )
+    static_address: Optional[str] = Field(
+        None,
+        description="Configured static address in CIDR form (only set when ip_method='static')",
+    )
 
 
 class WifiSavedListResponse(BaseModel):

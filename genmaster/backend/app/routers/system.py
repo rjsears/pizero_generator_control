@@ -1476,7 +1476,10 @@ async def list_host_saved_wifi() -> dict:
     """
     List saved WiFi network profiles on the Docker host.
 
-    Uses the host-tools sidecar container for instant execution.
+    Uses the host-tools sidecar container for instant execution. The
+    response includes ``ip_method`` (``dhcp`` / ``static``) and, for
+    static profiles, the configured ``static_address`` so the UI can
+    badge them.
     """
     result = {
         "success": False,
@@ -1484,7 +1487,20 @@ async def list_host_saved_wifi() -> dict:
         "error": None,
     }
 
-    script = 'nmcli -t -f NAME,TYPE,AUTOCONNECT connection show 2>/dev/null || echo "LIST_FAILED"'
+    # Single shell pass: list all WiFi profiles, then for each, fetch the
+    # ipv4.method and ipv4.addresses fields. Output one row per network
+    # with '|||' as separator (avoids clashing with ':' in SSIDs).
+    script = (
+        'nmcli -t -f NAME,TYPE,AUTOCONNECT connection show 2>/dev/null '
+        '| while IFS=: read -r name type autoconnect; do '
+        '  if [ "$type" = "802-11-wireless" ]; then '
+        '    method=$(nmcli -t -g ipv4.method connection show "$name" 2>/dev/null); '
+        '    addrs=$(nmcli -t -g ipv4.addresses connection show "$name" 2>/dev/null); '
+        '    printf "%s|||%s|||%s|||%s\\n" "$name" "$autoconnect" "$method" "$addrs"; '
+        '  fi; '
+        'done '
+        '|| echo "LIST_FAILED"'
+    )
 
     success, output_str = _exec_host_command(script)
 
@@ -1501,13 +1517,30 @@ async def list_host_saved_wifi() -> dict:
         if not line.strip() or "LIST_FAILED" in line:
             continue
 
-        parts = line.split(":")
-        if len(parts) >= 3 and parts[1] == "802-11-wireless":
-            networks.append({
-                "name": parts[0],
-                "ssid": parts[0],
-                "auto_connect": parts[2].lower() == "yes",
-            })
+        parts = line.split("|||")
+        if len(parts) < 4:
+            continue
+
+        name, autoconnect_str, nm_method, nm_addresses = parts[0], parts[1], parts[2], parts[3]
+
+        nm_method = (nm_method or "auto").strip()
+        if nm_method == "auto":
+            ip_method = "dhcp"
+            static_address = None
+        elif nm_method == "manual":
+            ip_method = "static"
+            static_address = (nm_addresses or "").strip() or None
+        else:
+            ip_method = nm_method
+            static_address = None
+
+        networks.append({
+            "name": name,
+            "ssid": name,
+            "auto_connect": autoconnect_str.lower() == "yes",
+            "ip_method": ip_method,
+            "static_address": static_address,
+        })
 
     result["networks"] = networks
     result["success"] = True

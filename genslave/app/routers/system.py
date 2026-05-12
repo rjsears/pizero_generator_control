@@ -1275,6 +1275,14 @@ class WifiSavedNetwork(BaseModel):
     name: str = Field(description="Connection profile name")
     ssid: str = Field(description="Network SSID")
     auto_connect: bool = Field(description="Whether auto-connect is enabled")
+    ip_method: str = Field(
+        "dhcp",
+        description="IP addressing mode: 'dhcp' (nmcli auto), 'static' (nmcli manual), or pass-through for other nmcli modes",
+    )
+    static_address: Optional[str] = Field(
+        None,
+        description="Configured static address in CIDR form (only set when ip_method='static')",
+    )
 
 
 class WifiSavedListResponse(BaseModel):
@@ -1297,6 +1305,37 @@ class WifiDeleteResponse(BaseModel):
     success: bool = Field(description="Whether the network was deleted successfully")
     message: str = Field(description="Status message")
     error: Optional[str] = Field(None, description="Error message if deletion failed")
+
+
+def _fetch_wifi_ip_config(name: str) -> tuple[str, Optional[str]]:
+    """Return ``(ip_method, static_address)`` for a saved nmcli profile.
+
+    ``ip_method`` is normalized to ``'dhcp'`` (nmcli ``auto``), ``'static'``
+    (nmcli ``manual``), or pass-through for other modes. ``static_address``
+    is ``None`` unless the profile is configured as static.
+    """
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["nmcli", "-t", "-g", "ipv4.method,ipv4.addresses", "connection", "show", name],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode != 0:
+            return "dhcp", None
+        lines = proc.stdout.strip().split("\n")
+        nm_method = lines[0].strip() if lines else "auto"
+        nm_addresses = lines[1].strip() if len(lines) > 1 else ""
+
+        if nm_method == "auto":
+            return "dhcp", None
+        if nm_method == "manual":
+            return "static", (nm_addresses or None)
+        return nm_method, None
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return "dhcp", None
 
 
 @router.get("/wifi/saved", response_model=WifiSavedListResponse)
@@ -1332,10 +1371,13 @@ async def list_saved_wifi_networks() -> WifiSavedListResponse:
 
             parts = line.split(":")
             if len(parts) >= 3 and parts[1] == "802-11-wireless":
+                ip_method, static_address = _fetch_wifi_ip_config(parts[0])
                 networks.append(WifiSavedNetwork(
                     name=parts[0],
                     ssid=parts[0],  # Usually same as name
                     auto_connect=parts[2].lower() == "yes",
+                    ip_method=ip_method,
+                    static_address=static_address,
                 ))
 
         result.networks = networks
