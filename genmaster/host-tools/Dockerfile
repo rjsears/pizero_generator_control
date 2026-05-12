@@ -22,5 +22,18 @@ RUN apk add --no-cache \
     docker-cli-compose \
     && rm -rf /var/cache/apk/*
 
+# Verify every critical binary GenMaster's backend depends on is present.
+# Without these, runtime endpoints fail silently with "sh: <tool>: not found"
+# and the operator has to chase the symptom across containers and Dockerfiles.
+# Fail the BUILD instead if a future package change ever drops one of these.
+RUN which nmcli \
+    && which ip \
+    && which iwgetid \
+    && which nsenter \
+    && which bash \
+    && which docker \
+    && docker compose version > /dev/null \
+    && echo "OK: all critical binaries present in host-tools image"
+
 # Keep container running - it just waits for exec commands
 CMD ["sleep", "infinity"]
