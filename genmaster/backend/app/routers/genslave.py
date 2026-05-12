@@ -22,8 +22,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from app.dependencies import get_current_user
-# network_check.check_subnet_compatibility is reserved for a future
-# "change currently-active network" endpoint; not used by Add Known Network.
 from app.services.slave_status_service import create_slave_client
 
 logger = logging.getLogger(__name__)

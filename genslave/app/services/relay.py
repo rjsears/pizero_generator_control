@@ -129,7 +129,6 @@ class RelayService:
                 "message": "Already disarmed",
             }
 
-        was_armed_at = self._armed_at
         self._armed = False
         self._armed_at = None
         self._armed_by = None

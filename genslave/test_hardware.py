@@ -99,7 +99,7 @@ def test_lcd():
         # Try to use a nice font, fall back to default
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 14)
-        except:
+        except (OSError, IOError):
             font = ImageFont.load_default()
 
         draw.text((80, 20), "GenSlave", fill=(34, 197, 94), font=font, anchor="mm")

@@ -12,13 +12,11 @@
 """Health check and heartbeat API endpoints."""
 
 import logging
-import time
 from typing import Literal, Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from app.config import settings
 from app.services.failsafe import failsafe_monitor
 from app.services.relay import relay_service
 

@@ -20,9 +20,6 @@ from typing import Any, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
-# network_check.check_subnet_compatibility is reserved for a future
-# "change currently-active network" endpoint; not used by Add Known Network.
-
 # Simple TTL cache for slow operations
 _cache: dict[str, dict[str, Any]] = {}
 CACHE_TTL_SECONDS = 30  # Cache external service status for 30 seconds

@@ -1550,7 +1550,6 @@ async def connect_wifi(request: WifiConnectRequest) -> WifiConnectResponse:
     Uses nmcli to connect to the specified network.
     Requires the SSID and optionally a password for secured networks.
     """
-    import shlex
     import subprocess
 
     result = WifiConnectResponse(success=False, message="", error=None)
@@ -1587,13 +1586,13 @@ async def connect_wifi(request: WifiConnectRequest) -> WifiConnectResponse:
             logger.info(f"Successfully connected WiFi to: {ssid}")
         elif "secrets were required" in output.lower() or "no secrets" in output.lower():
             result.error = "Password required for this network"
-            logger.warning(f"WiFi connection failed: password required")
+            logger.warning("WiFi connection failed: password required")
         elif "not found" in output.lower():
             result.error = f"Network '{ssid}' not found"
-            logger.warning(f"WiFi connection failed: network not found")
+            logger.warning("WiFi connection failed: network not found")
         elif "invalid" in output.lower():
             result.error = "Invalid password"
-            logger.warning(f"WiFi connection failed: invalid password")
+            logger.warning("WiFi connection failed: invalid password")
         else:
             result.error = output or "Connection failed"
             logger.warning(f"WiFi connection failed: {output}")
