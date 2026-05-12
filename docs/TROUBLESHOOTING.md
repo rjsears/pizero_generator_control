@@ -625,6 +625,12 @@ If you can't resolve an issue:
 
 ## Recovery Procedures
 
+### Lost Network After WiFi Change
+
+A bad static IP, gateway, or subnet on a saved WiFi profile can leave a device unreachable over the network. Recovery options (local console, `nmcli`, SD card edit, Ethernet fallback) are documented separately:
+
+→ See [Network Recovery](manual/network-recovery.md).
+
 ### Full System Reset
 
 If all else fails:

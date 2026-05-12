@@ -12,12 +12,15 @@
 """System information API endpoints."""
 
 import asyncio
+import ipaddress
 import platform
 import time
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from app.services.network_check import check_subnet_compatibility
 
 # Simple TTL cache for slow operations
 _cache: dict[str, dict[str, Any]] = {}
@@ -1415,6 +1418,58 @@ class WifiAddRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=63, description="WiFi password (WPA/WPA2)")
     auto_connect: bool = Field(True, description="Automatically connect when network is available")
 
+    # IP addressing — DHCP by default; "static" requires the three address fields.
+    ip_method: Literal["dhcp", "static"] = Field(
+        "dhcp",
+        description="IP addressing mode: 'dhcp' (auto) or 'static' (manual address)",
+    )
+    static_address: Optional[str] = Field(
+        None,
+        description="Static IPv4 address in CIDR form (e.g. '192.168.1.50/24'). Required when ip_method='static'.",
+    )
+    static_gateway: Optional[str] = Field(
+        None,
+        description="Default gateway IPv4 address. Required when ip_method='static'.",
+    )
+    static_dns: list[str] = Field(
+        default_factory=list,
+        description="Optional list of DNS server IPv4 addresses. If empty, NetworkManager defaults are used.",
+    )
+    # Set to True after the user has acknowledged a subnet-mismatch warning to
+    # bypass the cross-device subnet check on retry.
+    acknowledge_subnet_warning: bool = Field(
+        False,
+        description="Set to True to bypass the cross-device subnet sanity check after acknowledging the warning.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_static_fields(self) -> "WifiAddRequest":
+        if self.ip_method == "dhcp":
+            return self
+
+        if not self.static_address:
+            raise ValueError("static_address is required when ip_method='static'")
+        if not self.static_gateway:
+            raise ValueError("static_gateway is required when ip_method='static'")
+
+        try:
+            ipaddress.IPv4Interface(self.static_address)
+        except (ipaddress.AddressValueError, ValueError) as exc:
+            raise ValueError(f"static_address is not a valid IPv4 CIDR: {exc}") from exc
+
+        try:
+            ipaddress.IPv4Address(self.static_gateway)
+        except (ipaddress.AddressValueError, ValueError) as exc:
+            raise ValueError(f"static_gateway is not a valid IPv4 address: {exc}") from exc
+
+        for dns in self.static_dns:
+            try:
+                ipaddress.IPv4Address(dns)
+            except (ipaddress.AddressValueError, ValueError) as exc:
+                raise ValueError(f"static_dns entry {dns!r} is not a valid IPv4 address: {exc}") from exc
+
+        return self
+
 
 @router.get("/host/wifi/saved")
 async def list_host_saved_wifi() -> dict:
@@ -1468,9 +1523,18 @@ async def add_host_wifi(request: WifiAddRequest) -> dict:
     Uses the host-tools sidecar container for instant execution.
     Creates a saved WiFi connection profile that will automatically
     connect when the network becomes available.
+
+    When ``ip_method='static'`` is supplied, the assigned IP is checked
+    against GenSlave's reachable address (``settings.slave_api_url``) to
+    catch the case where GenMaster would land on a different subnet from
+    GenSlave and the two could no longer talk over the local network.
+    The check is skipped when the link is over Tailscale. To override the
+    warning, resubmit with ``acknowledge_subnet_warning=True``.
     """
     import logging
     import shlex
+
+    from app.config import settings
 
     logger = logging.getLogger(__name__)
 
@@ -1485,17 +1549,38 @@ async def add_host_wifi(request: WifiAddRequest) -> dict:
         result["error"] = "SSID cannot be empty"
         return result
 
+    # Cross-device subnet sanity check (only meaningful for static assignments).
+    if request.ip_method == "static" and not request.acknowledge_subnet_warning:
+        warning = check_subnet_compatibility(
+            proposed_address=request.static_address,
+            other_device_url_or_ip=settings.slave_api_url,
+            other_device_label="GenSlave",
+        )
+        if warning is not None:
+            raise HTTPException(status_code=409, detail=warning.to_dict())
+
     logger.info(f"Adding known WiFi network to host: {ssid}")
 
     safe_ssid = shlex.quote(ssid)
     safe_password = shlex.quote(request.password)
     auto_connect = "yes" if request.auto_connect else "no"
 
-    script = (
-        f"nmcli connection add type wifi con-name {safe_ssid} ssid {safe_ssid} "
-        f"wifi-sec.key-mgmt wpa-psk wifi-sec.psk {safe_password} "
-        f"connection.autoconnect {auto_connect} 2>&1"
-    )
+    script_parts = [
+        f"nmcli connection add type wifi con-name {safe_ssid} ssid {safe_ssid}",
+        f"wifi-sec.key-mgmt wpa-psk wifi-sec.psk {safe_password}",
+        f"connection.autoconnect {auto_connect}",
+    ]
+    if request.ip_method == "static":
+        script_parts.append(
+            f"ipv4.method manual "
+            f"ipv4.addresses {shlex.quote(request.static_address)} "
+            f"ipv4.gateway {shlex.quote(request.static_gateway)}"
+        )
+        if request.static_dns:
+            dns_value = shlex.quote(" ".join(request.static_dns))
+            script_parts.append(f"ipv4.dns {dns_value}")
+
+    script = " ".join(script_parts) + " 2>&1"
 
     success, output_str = _exec_host_command(script)
 
@@ -1508,8 +1593,15 @@ async def add_host_wifi(request: WifiAddRequest) -> dict:
 
     if "successfully added" in output_str.lower() or "connection" in output_str.lower():
         result["success"] = True
-        result["message"] = f"WiFi network '{ssid}' added successfully. It will auto-connect when available."
-        logger.info(f"Successfully added WiFi network to host: {ssid}")
+        ip_note = (
+            f" (static IP {request.static_address})"
+            if request.ip_method == "static" else ""
+        )
+        result["message"] = (
+            f"WiFi network '{ssid}'{ip_note} added successfully. "
+            f"It will auto-connect when available."
+        )
+        logger.info(f"Successfully added WiFi network to host: {ssid}{ip_note}")
     elif "already exists" in output_str.lower():
         result["error"] = f"Network '{ssid}' already exists. Delete it first to update."
     else:

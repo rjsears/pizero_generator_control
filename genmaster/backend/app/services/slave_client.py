@@ -401,7 +401,16 @@ class SlaveClient:
         """
         return await self._request("GET", "/api/system/wifi/saved")
 
-    async def add_wifi_network(self, ssid: str, password: str, auto_connect: bool = True) -> SlaveResponse:
+    async def add_wifi_network(
+        self,
+        ssid: str,
+        password: str,
+        auto_connect: bool = True,
+        ip_method: str = "dhcp",
+        static_address: Optional[str] = None,
+        static_gateway: Optional[str] = None,
+        static_dns: Optional[list[str]] = None,
+    ) -> SlaveResponse:
         """
         Add a known WiFi network to GenSlave for auto-connect.
 
@@ -409,16 +418,35 @@ class SlaveClient:
             ssid: WiFi network SSID.
             password: WiFi password.
             auto_connect: Whether to auto-connect when available.
+            ip_method: ``"dhcp"`` (default) or ``"static"``.
+            static_address: Static IPv4 address in CIDR form (required when
+                ``ip_method='static'``).
+            static_gateway: Default gateway IPv4 (required when
+                ``ip_method='static'``).
+            static_dns: Optional list of DNS servers.
 
         Returns:
             Response indicating success/failure.
         """
         # Don't log password
-        logger.info(f"Adding known WiFi network to GenSlave: {ssid}")
+        ip_note = (
+            f" (static {static_address})" if ip_method == "static" else ""
+        )
+        logger.info(f"Adding known WiFi network to GenSlave: {ssid}{ip_note}")
+        payload: dict = {
+            "ssid": ssid,
+            "password": password,
+            "auto_connect": auto_connect,
+            "ip_method": ip_method,
+        }
+        if ip_method == "static":
+            payload["static_address"] = static_address
+            payload["static_gateway"] = static_gateway
+            payload["static_dns"] = static_dns or []
         return await self._request(
             "POST",
             "/api/system/wifi/add",
-            json={"ssid": ssid, "password": password, "auto_connect": auto_connect},
+            json=payload,
         )
 
     async def delete_wifi_network(self, name: str) -> SlaveResponse:

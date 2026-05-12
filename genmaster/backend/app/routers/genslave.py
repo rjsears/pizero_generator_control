@@ -14,13 +14,15 @@
 
 """GenSlave management API endpoints."""
 
+import ipaddress
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.dependencies import get_current_user
+from app.services.network_check import check_subnet_compatibility
 from app.services.slave_status_service import create_slave_client
 
 logger = logging.getLogger(__name__)
@@ -478,6 +480,58 @@ class WifiAddRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=63, description="WiFi password (WPA/WPA2)")
     auto_connect: bool = Field(True, description="Automatically connect when network is available")
 
+    # IP addressing — DHCP by default; "static" requires the three address fields.
+    ip_method: Literal["dhcp", "static"] = Field(
+        "dhcp",
+        description="IP addressing mode: 'dhcp' (auto) or 'static' (manual address)",
+    )
+    static_address: Optional[str] = Field(
+        None,
+        description="Static IPv4 address in CIDR form (e.g. '192.168.1.50/24'). Required when ip_method='static'.",
+    )
+    static_gateway: Optional[str] = Field(
+        None,
+        description="Default gateway IPv4 address. Required when ip_method='static'.",
+    )
+    static_dns: list[str] = Field(
+        default_factory=list,
+        description="Optional list of DNS server IPv4 addresses. If empty, NetworkManager defaults are used.",
+    )
+    # Set to True after the user has acknowledged a subnet-mismatch warning to
+    # bypass the cross-device subnet check on retry.
+    acknowledge_subnet_warning: bool = Field(
+        False,
+        description="Set to True to bypass the cross-device subnet sanity check after acknowledging the warning.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_static_fields(self) -> "WifiAddRequest":
+        if self.ip_method == "dhcp":
+            return self
+
+        if not self.static_address:
+            raise ValueError("static_address is required when ip_method='static'")
+        if not self.static_gateway:
+            raise ValueError("static_gateway is required when ip_method='static'")
+
+        try:
+            ipaddress.IPv4Interface(self.static_address)
+        except (ipaddress.AddressValueError, ValueError) as exc:
+            raise ValueError(f"static_address is not a valid IPv4 CIDR: {exc}") from exc
+
+        try:
+            ipaddress.IPv4Address(self.static_gateway)
+        except (ipaddress.AddressValueError, ValueError) as exc:
+            raise ValueError(f"static_gateway is not a valid IPv4 address: {exc}") from exc
+
+        for dns in self.static_dns:
+            try:
+                ipaddress.IPv4Address(dns)
+            except (ipaddress.AddressValueError, ValueError) as exc:
+                raise ValueError(f"static_dns entry {dns!r} is not a valid IPv4 address: {exc}") from exc
+
+        return self
+
 
 class WifiAddResponse(BaseModel):
     """Response from adding a known WiFi network."""
@@ -553,13 +607,40 @@ async def add_genslave_wifi(request: WifiAddRequest):
 
     Creates a saved WiFi connection profile that will automatically
     connect when the network becomes available.
+
+    When ``ip_method='static'`` is supplied, the proposed IP is checked
+    against GenMaster's own current WiFi address to catch the case where
+    GenSlave would land on a different subnet from GenMaster and the two
+    could no longer talk over the local network. To override the warning,
+    resubmit with ``acknowledge_subnet_warning=True``.
     """
+    # Cross-device subnet sanity check — only meaningful for static
+    # assignments. Compares the proposed GenSlave IP against the IP
+    # GenMaster currently holds on its own WiFi interface.
+    if request.ip_method == "static" and not request.acknowledge_subnet_warning:
+        # Defer the import to avoid pulling routers/system at module load time.
+        from app.routers.system import get_host_wifi_info
+
+        host_wifi = await get_host_wifi_info()
+        host_ip = host_wifi.get("ip_address") if isinstance(host_wifi, dict) else None
+        warning = check_subnet_compatibility(
+            proposed_address=request.static_address,
+            other_device_url_or_ip=host_ip,
+            other_device_label="GenMaster",
+        )
+        if warning is not None:
+            raise HTTPException(status_code=409, detail=warning.to_dict())
+
     client = await create_slave_client()
     try:
         response = await client.add_wifi_network(
             ssid=request.ssid,
             password=request.password,
             auto_connect=request.auto_connect,
+            ip_method=request.ip_method,
+            static_address=request.static_address,
+            static_gateway=request.static_gateway,
+            static_dns=request.static_dns,
         )
 
         if not response.success:

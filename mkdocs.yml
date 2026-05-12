@@ -107,6 +107,7 @@ nav:
     - System: manual/system.md
     - Settings: manual/settings.md
     - Common UI: manual/common-ui.md
+    - Network Recovery: manual/network-recovery.md
     - Appendix: manual/appendix.md
   - User Guides:
     - Generator Controls: GENERATOR.md

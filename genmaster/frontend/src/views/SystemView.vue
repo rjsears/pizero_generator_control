@@ -155,6 +155,16 @@ const addNetworkAutoConnect = ref(true)
 const addingNetwork = ref(false)
 const addNetworkError = ref(null)
 
+// Static IP fields (only used when addNetworkIpMethod === 'static')
+const addNetworkIpMethod = ref('dhcp') // 'dhcp' | 'static'
+const addNetworkStaticAddress = ref('') // e.g. "192.168.1.50/24"
+const addNetworkStaticGateway = ref('') // e.g. "192.168.1.1"
+const addNetworkStaticDns = ref('') // comma- or space-separated list
+
+// Cross-device subnet sanity-check warning state (returned by backend with 409)
+const subnetWarning = ref(null)
+const showSubnetWarningModal = ref(false)
+
 // Saved networks state
 const savedNetworks = ref([])
 const loadingSavedNetworks = ref(false)
@@ -648,21 +658,26 @@ async function connectToWifi() {
 // Add Known WiFi Network Functions
 // =========================================================================
 
-async function openAddNetworkModal() {
-  showAddNetworkModal.value = true
+function _resetAddNetworkForm() {
   addNetworkSsid.value = ''
   addNetworkPassword.value = ''
   addNetworkAutoConnect.value = true
+  addNetworkIpMethod.value = 'dhcp'
+  addNetworkStaticAddress.value = ''
+  addNetworkStaticGateway.value = ''
+  addNetworkStaticDns.value = ''
   addNetworkError.value = null
+}
+
+async function openAddNetworkModal() {
+  showAddNetworkModal.value = true
+  _resetAddNetworkForm()
   await loadSavedNetworks()
 }
 
 function closeAddNetworkModal() {
   showAddNetworkModal.value = false
-  addNetworkSsid.value = ''
-  addNetworkPassword.value = ''
-  addNetworkAutoConnect.value = true
-  addNetworkError.value = null
+  _resetAddNetworkForm()
 }
 
 async function loadSavedNetworks() {
@@ -681,7 +696,7 @@ async function loadSavedNetworks() {
   }
 }
 
-async function addKnownNetwork() {
+async function addKnownNetwork(acknowledgeWarning = false) {
   if (!addNetworkSsid.value.trim()) {
     addNetworkError.value = 'Please enter an SSID'
     return
@@ -690,30 +705,75 @@ async function addKnownNetwork() {
     addNetworkError.value = 'Please enter a password'
     return
   }
+  if (addNetworkIpMethod.value === 'static') {
+    if (!addNetworkStaticAddress.value.trim()) {
+      addNetworkError.value = 'Static address (CIDR, e.g. 192.168.1.50/24) is required'
+      return
+    }
+    if (!addNetworkStaticGateway.value.trim()) {
+      addNetworkError.value = 'Gateway IP is required'
+      return
+    }
+  }
 
   addingNetwork.value = true
   addNetworkError.value = null
 
+  const payload = {
+    ssid: addNetworkSsid.value.trim(),
+    password: addNetworkPassword.value,
+    auto_connect: addNetworkAutoConnect.value,
+    ip_method: addNetworkIpMethod.value,
+  }
+  if (addNetworkIpMethod.value === 'static') {
+    payload.static_address = addNetworkStaticAddress.value.trim()
+    payload.static_gateway = addNetworkStaticGateway.value.trim()
+    payload.static_dns = addNetworkStaticDns.value
+      .split(/[\s,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }
+  if (acknowledgeWarning) {
+    payload.acknowledge_subnet_warning = true
+  }
+
   try {
-    const response = await systemApi.addWifiNetwork({
-      ssid: addNetworkSsid.value.trim(),
-      password: addNetworkPassword.value,
-      auto_connect: addNetworkAutoConnect.value,
-    })
+    const response = await systemApi.addWifiNetwork(payload)
 
     if (response.data?.success) {
       notificationStore.success(response.data.message || `Added network "${addNetworkSsid.value}"`)
-      addNetworkSsid.value = ''
-      addNetworkPassword.value = ''
+      _resetAddNetworkForm()
       await loadSavedNetworks()
     } else {
       addNetworkError.value = response.data?.error || 'Failed to add network'
     }
   } catch (error) {
-    addNetworkError.value = error.response?.data?.detail || 'Failed to add network'
+    const detail = error.response?.data?.detail
+    if (error.response?.status === 409 && detail && detail.warning_code) {
+      // Backend detected a subnet mismatch (or couldn't verify) — open the
+      // confirmation modal. The user can ack and we resubmit with the flag set.
+      subnetWarning.value = detail
+      showSubnetWarningModal.value = true
+    } else {
+      addNetworkError.value = typeof detail === 'string' ? detail : (detail?.message || 'Failed to add network')
+    }
   } finally {
     addingNetwork.value = false
   }
+}
+
+function confirmSubnetWarning() {
+  showSubnetWarningModal.value = false
+  const ack = subnetWarning.value
+  subnetWarning.value = null
+  if (ack) {
+    addKnownNetwork(true)
+  }
+}
+
+function cancelSubnetWarning() {
+  showSubnetWarningModal.value = false
+  subnetWarning.value = null
 }
 
 async function deleteSavedNetwork(networkName) {
@@ -2112,7 +2172,7 @@ onMounted(async () => {
                 type="password"
                 placeholder="Enter network password"
                 class="input w-full"
-                @keyup.enter="addKnownNetwork"
+                @keyup.enter="addKnownNetwork()"
               />
             </div>
             <div class="flex items-center gap-2">
@@ -2124,8 +2184,78 @@ onMounted(async () => {
               />
               <label for="autoConnect" class="text-sm text-secondary">Auto-connect when network is available</label>
             </div>
+
+            <!-- IP Addressing -->
+            <div>
+              <label class="block text-sm font-medium text-secondary mb-2">IP Addressing</label>
+              <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 text-sm text-secondary">
+                  <input
+                    v-model="addNetworkIpMethod"
+                    type="radio"
+                    value="dhcp"
+                    name="addNetworkIpMethod"
+                    class="text-purple-500 focus:ring-purple-500"
+                  />
+                  DHCP (automatic)
+                </label>
+                <label class="flex items-center gap-2 text-sm text-secondary">
+                  <input
+                    v-model="addNetworkIpMethod"
+                    type="radio"
+                    value="static"
+                    name="addNetworkIpMethod"
+                    class="text-purple-500 focus:ring-purple-500"
+                  />
+                  Static IP
+                </label>
+              </div>
+            </div>
+
+            <div v-if="addNetworkIpMethod === 'static'" class="space-y-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700">
+              <div>
+                <label class="block text-sm font-medium text-secondary mb-1">Static Address (CIDR)</label>
+                <input
+                  v-model="addNetworkStaticAddress"
+                  type="text"
+                  placeholder="192.168.1.50/24"
+                  class="input w-full"
+                />
+                <p class="text-xs text-muted mt-1">Format: <code>address/prefix</code> &mdash; <code>/24</code> = 255.255.255.0</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-secondary mb-1">Gateway</label>
+                <input
+                  v-model="addNetworkStaticGateway"
+                  type="text"
+                  placeholder="192.168.1.1"
+                  class="input w-full"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-secondary mb-1">DNS (optional)</label>
+                <input
+                  v-model="addNetworkStaticDns"
+                  type="text"
+                  placeholder="1.1.1.1, 8.8.8.8"
+                  class="input w-full"
+                />
+                <p class="text-xs text-muted mt-1">Comma- or space-separated. Leave blank to use NetworkManager defaults.</p>
+              </div>
+              <p class="text-xs text-amber-600 dark:text-amber-400">
+                <strong>Test before saving</strong> &mdash; a wrong gateway will lock you out. See
+                <a
+                  href="https://rjsears.github.io/pizero_generator_control/manual/network-recovery/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="underline"
+                >Network Recovery</a>
+                if you need to recover from a misconfiguration.
+              </p>
+            </div>
+
             <button
-              @click="addKnownNetwork"
+              @click="addKnownNetwork()"
               :disabled="addingNetwork || !addNetworkSsid.trim() || !addNetworkPassword"
               class="w-full px-4 py-2 rounded-lg font-medium text-white bg-purple-500 hover:bg-purple-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
@@ -2197,6 +2327,46 @@ onMounted(async () => {
               class="btn-secondary"
             >
               Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Subnet-mismatch confirmation modal -->
+    <Teleport to="body">
+      <div v-if="showSubnetWarningModal && subnetWarning" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6">
+          <div class="flex items-start gap-3 mb-4">
+            <div class="p-3 rounded-full bg-amber-100 dark:bg-amber-500/20">
+              <ExclamationTriangleIcon class="h-6 w-6 text-amber-500" />
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-primary">
+                {{ subnetWarning.warning_code === 'subnet_mismatch' ? 'Subnet Mismatch' : 'Could Not Verify Subnet' }}
+              </h3>
+              <p class="text-sm text-muted">Cross-device reachability check</p>
+            </div>
+          </div>
+
+          <p class="text-sm text-secondary mb-3">{{ subnetWarning.message }}</p>
+
+          <div v-if="subnetWarning.warning_code === 'subnet_mismatch'" class="text-xs text-muted bg-gray-50 dark:bg-gray-900/40 rounded-lg p-3 mb-4 space-y-1">
+            <div><strong>Proposed:</strong> {{ subnetWarning.proposed_ip }} on {{ subnetWarning.proposed_network }}</div>
+            <div><strong>{{ subnetWarning.other_device_label }}:</strong> {{ subnetWarning.other_device_ip }} on {{ subnetWarning.other_device_network }}</div>
+          </div>
+
+          <p class="text-xs text-amber-600 dark:text-amber-400 mb-4">
+            They <strong>can</strong> still communicate over Tailscale if both have it running. If you don't have Tailscale, this configuration will break the link.
+          </p>
+
+          <div class="flex justify-end gap-2">
+            <button @click="cancelSubnetWarning" class="btn-secondary">Cancel</button>
+            <button
+              @click="confirmSubnetWarning"
+              class="px-4 py-2 rounded-lg font-medium text-white bg-amber-500 hover:bg-amber-600 transition-colors"
+            >
+              Apply anyway
             </button>
           </div>
         </div>
