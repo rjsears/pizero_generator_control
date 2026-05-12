@@ -16,6 +16,7 @@ RUN apk add --no-cache \
     wireless-tools \
     iproute2 \
     networkmanager \
+    networkmanager-cli \
     util-linux \
     util-linux-misc \
     bash \
