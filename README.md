@@ -64,7 +64,7 @@ While designed around Victron integration, the architecture is universal—any t
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=r-DO21-vejA" target="_blank">
-    <img src="images/genmaster_vid_overview.png" alt="Watch the demo video" width="600">
+    <img src="images/genmaster_yvid_overview.png" alt="Watch the demo video" width="600">
   </a>
 </p>
 
