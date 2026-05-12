@@ -17,6 +17,7 @@ RUN apk add --no-cache \
     iproute2 \
     networkmanager \
     util-linux \
+    util-linux-misc \
     bash \
     docker-cli \
     docker-cli-compose \
@@ -26,13 +27,29 @@ RUN apk add --no-cache \
 # Without these, runtime endpoints fail silently with "sh: <tool>: not found"
 # and the operator has to chase the symptom across containers and Dockerfiles.
 # Fail the BUILD instead if a future package change ever drops one of these.
-RUN which nmcli \
-    && which ip \
-    && which iwgetid \
-    && which nsenter \
-    && which bash \
-    && which docker \
-    && docker compose version > /dev/null \
+# The loop reports each binary individually so the CI log shows exactly
+# which one is missing instead of short-circuiting on the first failure.
+RUN set -e \
+    && echo "=== Verifying critical binaries ===" \
+    && missing="" \
+    && for cmd in nmcli ip iwgetid nsenter bash docker; do \
+        if path=$(which "$cmd" 2>/dev/null); then \
+            echo "OK: $cmd -> $path"; \
+        else \
+            echo "MISSING: $cmd"; \
+            missing="$missing $cmd"; \
+        fi; \
+    done \
+    && if docker compose version > /dev/null 2>&1; then \
+        echo "OK: docker compose"; \
+    else \
+        echo "MISSING: docker compose"; \
+        missing="$missing docker-compose"; \
+    fi \
+    && if [ -n "$missing" ]; then \
+        echo "BUILD FAILED: missing binaries:$missing"; \
+        exit 1; \
+    fi \
     && echo "OK: all critical binaries present in host-tools image"
 
 # Keep container running - it just waits for exec commands
