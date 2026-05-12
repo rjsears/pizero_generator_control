@@ -97,38 +97,25 @@ The IP you put there can be one of two kinds, and the choice has consequences.
 !!! tip "Advanced users: routed RFC 1918 subnets"
     If you control your own router and know what a static route is, you *can* put GenMaster on `192.168.1.0/24` and GenSlave on `192.168.2.0/24` and add routing entries on your router so the two subnets reach each other directly. Both subnets are RFC 1918 (private), so this works without NAT or a VPN.
 
-    **This is not the recommended path.** If the terms "static route," "next-hop," or "RFC 1918" aren't familiar, ignore this option and either put both Pis on the same subnet or use Tailscale. The configuration UI will warn you about cross-subnet setups — the warning is *overridable*, but only override it if you genuinely know how packets get from one subnet to the other on your network.
+    **This is not the recommended path.** If the terms "static route," "next-hop," or "RFC 1918" aren't familiar, ignore this option and either put both Pis on the same subnet or use Tailscale.
 
 ### Always use a literal IP, never a hostname
 
 The **GenSlave IP Address** field accepts anything, but you should always type a literal IPv4 address (e.g. `192.168.1.50` or `100.x.y.z`). Hostnames like `genslave.local` work *until* DNS breaks — and when DNS breaks, GenMaster loses its slave, the heartbeat stops, and the failsafe trips.
 
-Using an IP also makes the [subnet sanity check](#subnet-sanity-check) below more accurate — it can compare addresses without a DNS round-trip.
+## Cross-device reachability — what to watch for
 
-## Subnet sanity check
+**Add Known Network** is a profile-save action: it tells the device "remember this network so you can auto-connect when it's in range." It does **not** change the device's currently-active network, and it does **not** automatically check whether the proposed static IP will be on the same subnet as the other device. That's intentional — Add Known Network is for pre-staging profiles (e.g. before shipping a unit to a client site), where the current network has nothing to do with the target network.
 
-When you save a static-IP profile, the form checks whether the address you're assigning would put the two devices on different networks. The check is **only run for static assignments** — DHCP-configured profiles skip it. There are two possible warnings:
+The rule you have to eyeball yourself:
 
-### Subnet mismatch
+- When the saved profile eventually activates and both devices are connected to that network, they must either share the same subnet (so the local link works) **OR** have Tailscale running on both (so the tunnel works regardless of subnet).
+- If you assign GenMaster `192.168.1.10/24` and GenSlave `192.168.2.10/24` on the same network, and neither device has Tailscale, the two won't be able to reach each other. The heartbeat will fail, the failsafe will trip.
 
-<!-- TODO: capture network-config-03-subnet-warning.png — the Subnet Mismatch modal with proposed/other-device IPs visible -->
-![Subnet Mismatch warning](images/screenshots/network-config-03-subnet-warning.png)
+The Add Known Network form shows an inline advisory of this rule under the static-IP fields. Read it before saving.
 
-Triggered when:
-
-- The proposed IP and the other device's current IP fall in different networks (computed using the *prefix you chose* for the new assignment), AND
-- The other device is **not** already reachable on a Tailscale address (`100.64.0.0/10`)
-
-If you see this and don't have Tailscale running, **Cancel** and check your numbers — most likely you typo'd the subnet. If you understand exactly what you're doing (e.g. you're the routed-subnets operator above, or you're moving GenSlave to a new network and Tailscale is going to handle the link), click **Apply anyway**.
-
-### Could not verify subnet
-
-<!-- TODO: capture network-config-04-could-not-verify.png — the Could Not Verify modal (rare; surfaces only when SLAVE_API_URL contains an unresolvable hostname) -->
-![Could Not Verify Subnet warning](images/screenshots/network-config-04-could-not-verify.png)
-
-Triggered when GenMaster couldn't resolve the configured **GenSlave IP Address** to an actual IP — usually because someone put a hostname in there and DNS is broken or slow.
-
-This is your cue to fix the GenSlave IP Address field (use a literal IP — see above), then retry. The current configuration will be applied if you click **Apply anyway**, but you're flying blind on the subnet check.
+!!! info "Future feature"
+    GenMaster will eventually warn you automatically when an action changes the device's **currently-active** network into a subnet that breaks the link with the other device. That check isn't wired in yet (the implementation lives in `app/services/network_check.py`, ready for the future "change active network" feature). For now, when you save a profile, mentally check it against where the other device will be.
 
 ## Reading the saved networks list
 
@@ -155,7 +142,7 @@ Both Pis on `MyHomeNet` (`192.168.1.0/24`). Router is `192.168.1.1`.
 2. **GenMaster's settings:** Settings → GenSlave Configuration → GenSlave IP Address → `192.168.1.50`. Save.
 3. **GenMaster's own WiFi:** typically already configured during initial setup; if you need a backup network, System → Add Known Network with auto-connect off.
 
-The subnet check sees both on `192.168.1.0/24` — no warning fires.
+Both devices end up on `192.168.1.0/24` when this profile activates — local link works.
 
 ### Scenario 2 — Two sites, Tailscale link
 
@@ -165,7 +152,7 @@ GenMaster at home (`192.168.1.x`), GenSlave at a remote cabin (`192.168.50.x`). 
 2. **GenSlave's WiFi:** configure normally for the cabin's local network (DHCP is fine — it's a stable home network at the cabin).
 3. **GenMaster's settings:** GenSlave IP Address → `100.105.42.7` (the Tailscale IP, **not** the local IP). Save.
 
-The subnet check exempts Tailscale-range addresses, so no warning fires even though the two devices are on completely different LANs.
+The two devices are on completely different LANs but the link runs over Tailscale — local subnets don't matter.
 
 ### Scenario 3 — Same building, different VLANs (advanced)
 
@@ -173,7 +160,7 @@ GenMaster on the management VLAN (`192.168.10.0/24`), GenSlave on the IoT VLAN (
 
 1. **GenSlave's WiFi:** Add Network with static IP `192.168.20.50/24`, gateway `192.168.20.1`.
 2. **GenMaster's settings:** GenSlave IP Address → `192.168.20.50`.
-3. **The subnet check will warn you** that `192.168.10.x` and `192.168.20.x` are different networks. If you've correctly set up the router-side static routes, click **Apply anyway**. If you haven't, your router needs work first — see your router's docs.
+3. **Eyeball the subnets yourself.** `192.168.10.x` and `192.168.20.x` are different /24s. If you've correctly set up the router-side static routes between those VLANs, the local link works. If you haven't, the link will break — your router needs work first. See your router's docs.
 
 ## What's next
 

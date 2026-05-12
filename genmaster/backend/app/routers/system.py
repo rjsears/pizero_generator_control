@@ -20,7 +20,8 @@ from typing import Any, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
-from app.services.network_check import check_subnet_compatibility
+# network_check.check_subnet_compatibility is reserved for a future
+# "change currently-active network" endpoint; not used by Add Known Network.
 
 # Simple TTL cache for slow operations
 _cache: dict[str, dict[str, Any]] = {}
@@ -1557,17 +1558,14 @@ async def add_host_wifi(request: WifiAddRequest) -> dict:
     Creates a saved WiFi connection profile that will automatically
     connect when the network becomes available.
 
-    When ``ip_method='static'`` is supplied, the assigned IP is checked
-    against GenSlave's reachable address (``settings.slave_api_url``) to
-    catch the case where GenMaster would land on a different subnet from
-    GenSlave and the two could no longer talk over the local network.
-    The check is skipped when the link is over Tailscale. To override the
-    warning, resubmit with ``acknowledge_subnet_warning=True``.
+    ``ip_method='static'`` is supported for pre-configuring profiles
+    that will assign a fixed address when the network later becomes
+    active. No cross-device subnet check is performed here — this is a
+    profile-save action, not a network change. The check belongs on a
+    future "change currently-active network" endpoint.
     """
     import logging
     import shlex
-
-    from app.config import settings
 
     logger = logging.getLogger(__name__)
 
@@ -1581,16 +1579,6 @@ async def add_host_wifi(request: WifiAddRequest) -> dict:
     if not ssid:
         result["error"] = "SSID cannot be empty"
         return result
-
-    # Cross-device subnet sanity check (only meaningful for static assignments).
-    if request.ip_method == "static" and not request.acknowledge_subnet_warning:
-        warning = check_subnet_compatibility(
-            proposed_address=request.static_address,
-            other_device_url_or_ip=settings.slave_api_url,
-            other_device_label="GenSlave",
-        )
-        if warning is not None:
-            raise HTTPException(status_code=409, detail=warning.to_dict())
 
     logger.info(f"Adding known WiFi network to host: {ssid}")
 

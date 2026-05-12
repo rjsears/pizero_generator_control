@@ -15,7 +15,22 @@
 # https://github.com/rjsears
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-"""Cross-device subnet compatibility check for static-IP wifi configuration."""
+"""Cross-device subnet compatibility check for static-IP wifi configuration.
+
+INTENT: this helper is meant for actions that **change the device's
+currently-active network** — e.g. a hypothetical "switch to this saved
+profile now" action, or in-place editing of the active connection's
+static address. It compares a proposed IP against where the other device
+sits *right now* (GenMaster's wlan IP, or the SLAVE_API_URL pointing at
+GenSlave) and warns when the change would split the two devices across
+different subnets.
+
+NOT INTENDED for "Add Known Network" / profile pre-staging actions —
+those save a profile for future activation on a different network, so
+comparing against the current network is meaningless and produces false
+warnings. The Add Network endpoints intentionally do NOT call this
+helper for that reason.
+"""
 
 from __future__ import annotations
 

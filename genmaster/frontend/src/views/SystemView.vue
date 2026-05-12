@@ -49,6 +49,8 @@ import {
   Cog6ToothIcon,
   FireIcon,
   PowerIcon,
+  EyeIcon,
+  EyeSlashIcon,
 } from '@heroicons/vue/24/outline'
 
 const route = useRoute()
@@ -161,9 +163,8 @@ const addNetworkStaticAddress = ref('') // e.g. "192.168.1.50/24"
 const addNetworkStaticGateway = ref('') // e.g. "192.168.1.1"
 const addNetworkStaticDns = ref('') // comma- or space-separated list
 
-// Cross-device subnet sanity-check warning state (returned by backend with 409)
-const subnetWarning = ref(null)
-const showSubnetWarningModal = ref(false)
+// Password visibility toggle for the Add Network form
+const showAddNetworkPassword = ref(false)
 
 // Saved networks state
 const savedNetworks = ref([])
@@ -667,6 +668,7 @@ function _resetAddNetworkForm() {
   addNetworkStaticGateway.value = ''
   addNetworkStaticDns.value = ''
   addNetworkError.value = null
+  showAddNetworkPassword.value = false
 }
 
 async function openAddNetworkModal() {
@@ -696,7 +698,7 @@ async function loadSavedNetworks() {
   }
 }
 
-async function addKnownNetwork(acknowledgeWarning = false) {
+async function addKnownNetwork() {
   if (!addNetworkSsid.value.trim()) {
     addNetworkError.value = 'Please enter an SSID'
     return
@@ -733,9 +735,6 @@ async function addKnownNetwork(acknowledgeWarning = false) {
       .map((s) => s.trim())
       .filter(Boolean)
   }
-  if (acknowledgeWarning) {
-    payload.acknowledge_subnet_warning = true
-  }
 
   try {
     const response = await systemApi.addWifiNetwork(payload)
@@ -749,31 +748,10 @@ async function addKnownNetwork(acknowledgeWarning = false) {
     }
   } catch (error) {
     const detail = error.response?.data?.detail
-    if (error.response?.status === 409 && detail && detail.warning_code) {
-      // Backend detected a subnet mismatch (or couldn't verify) — open the
-      // confirmation modal. The user can ack and we resubmit with the flag set.
-      subnetWarning.value = detail
-      showSubnetWarningModal.value = true
-    } else {
-      addNetworkError.value = typeof detail === 'string' ? detail : (detail?.message || 'Failed to add network')
-    }
+    addNetworkError.value = typeof detail === 'string' ? detail : (detail?.message || 'Failed to add network')
   } finally {
     addingNetwork.value = false
   }
-}
-
-function confirmSubnetWarning() {
-  showSubnetWarningModal.value = false
-  const ack = subnetWarning.value
-  subnetWarning.value = null
-  if (ack) {
-    addKnownNetwork(true)
-  }
-}
-
-function cancelSubnetWarning() {
-  showSubnetWarningModal.value = false
-  subnetWarning.value = null
 }
 
 async function deleteSavedNetwork(networkName) {
@@ -2167,13 +2145,25 @@ onMounted(async () => {
             </div>
             <div>
               <label class="block text-sm font-medium text-secondary mb-1">Password</label>
-              <input
-                v-model="addNetworkPassword"
-                type="password"
-                placeholder="Enter network password"
-                class="input w-full"
-                @keyup.enter="addKnownNetwork()"
-              />
+              <div class="relative">
+                <input
+                  v-model="addNetworkPassword"
+                  :type="showAddNetworkPassword ? 'text' : 'password'"
+                  placeholder="Enter network password"
+                  class="input w-full pr-10"
+                  @keyup.enter="addKnownNetwork()"
+                />
+                <button
+                  type="button"
+                  @click="showAddNetworkPassword = !showAddNetworkPassword"
+                  class="absolute inset-y-0 right-0 px-3 flex items-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-r-md transition-colors"
+                  :title="showAddNetworkPassword ? 'Hide password' : 'Show password'"
+                  :aria-label="showAddNetworkPassword ? 'Hide password' : 'Show password'"
+                >
+                  <EyeSlashIcon v-if="showAddNetworkPassword" class="h-4 w-4 text-secondary" />
+                  <EyeIcon v-else class="h-4 w-4 text-secondary" />
+                </button>
+              </div>
             </div>
             <div class="flex items-center gap-2">
               <input
@@ -2251,6 +2241,9 @@ onMounted(async () => {
                   class="underline"
                 >Network Recovery</a>
                 if you need to recover from a misconfiguration.
+              </p>
+              <p class="text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded p-2">
+                <strong>Cross-device reachability:</strong> when this network is active, GenMaster and GenSlave must end up on the <strong>same subnet</strong> for the local link to work &mdash; OR Tailscale must be running on both devices. If they land on different subnets and neither has Tailscale, they won't be able to reach each other.
               </p>
             </div>
 
@@ -2342,44 +2335,5 @@ onMounted(async () => {
       </div>
     </Teleport>
 
-    <!-- Subnet-mismatch confirmation modal -->
-    <Teleport to="body">
-      <div v-if="showSubnetWarningModal && subnetWarning" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6">
-          <div class="flex items-start gap-3 mb-4">
-            <div class="p-3 rounded-full bg-amber-100 dark:bg-amber-500/20">
-              <ExclamationTriangleIcon class="h-6 w-6 text-amber-500" />
-            </div>
-            <div>
-              <h3 class="text-xl font-bold text-primary">
-                {{ subnetWarning.warning_code === 'subnet_mismatch' ? 'Subnet Mismatch' : 'Could Not Verify Subnet' }}
-              </h3>
-              <p class="text-sm text-muted">Cross-device reachability check</p>
-            </div>
-          </div>
-
-          <p class="text-sm text-secondary mb-3">{{ subnetWarning.message }}</p>
-
-          <div v-if="subnetWarning.warning_code === 'subnet_mismatch'" class="text-xs text-muted bg-gray-50 dark:bg-gray-900/40 rounded-lg p-3 mb-4 space-y-1">
-            <div><strong>Proposed:</strong> {{ subnetWarning.proposed_ip }} on {{ subnetWarning.proposed_network }}</div>
-            <div><strong>{{ subnetWarning.other_device_label }}:</strong> {{ subnetWarning.other_device_ip }} on {{ subnetWarning.other_device_network }}</div>
-          </div>
-
-          <p class="text-xs text-amber-600 dark:text-amber-400 mb-4">
-            They <strong>can</strong> still communicate over Tailscale if both have it running. If you don't have Tailscale, this configuration will break the link.
-          </p>
-
-          <div class="flex justify-end gap-2">
-            <button @click="cancelSubnetWarning" class="btn-secondary">Cancel</button>
-            <button
-              @click="confirmSubnetWarning"
-              class="px-4 py-2 rounded-lg font-medium text-white bg-amber-500 hover:bg-amber-600 transition-colors"
-            >
-              Apply anyway
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>

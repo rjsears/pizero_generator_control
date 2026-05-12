@@ -22,7 +22,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from app.dependencies import get_current_user
-from app.services.network_check import check_subnet_compatibility
+# network_check.check_subnet_compatibility is reserved for a future
+# "change currently-active network" endpoint; not used by Add Known Network.
 from app.services.slave_status_service import create_slave_client
 
 logger = logging.getLogger(__name__)
@@ -616,29 +617,12 @@ async def add_genslave_wifi(request: WifiAddRequest):
     Creates a saved WiFi connection profile that will automatically
     connect when the network becomes available.
 
-    When ``ip_method='static'`` is supplied, the proposed IP is checked
-    against GenMaster's own current WiFi address to catch the case where
-    GenSlave would land on a different subnet from GenMaster and the two
-    could no longer talk over the local network. To override the warning,
-    resubmit with ``acknowledge_subnet_warning=True``.
+    ``ip_method='static'`` is supported for pre-configuring profiles
+    that will assign a fixed address when the network later becomes
+    active. No cross-device subnet check is performed here — this is a
+    profile-save action, not a network change. The check belongs on a
+    future "change currently-active network" endpoint.
     """
-    # Cross-device subnet sanity check — only meaningful for static
-    # assignments. Compares the proposed GenSlave IP against the IP
-    # GenMaster currently holds on its own WiFi interface.
-    if request.ip_method == "static" and not request.acknowledge_subnet_warning:
-        # Defer the import to avoid pulling routers/system at module load time.
-        from app.routers.system import get_host_wifi_info
-
-        host_wifi = await get_host_wifi_info()
-        host_ip = host_wifi.get("ip_address") if isinstance(host_wifi, dict) else None
-        warning = check_subnet_compatibility(
-            proposed_address=request.static_address,
-            other_device_url_or_ip=host_ip,
-            other_device_label="GenMaster",
-        )
-        if warning is not None:
-            raise HTTPException(status_code=409, detail=warning.to_dict())
-
     client = await create_slave_client()
     try:
         response = await client.add_wifi_network(
