@@ -19,7 +19,7 @@ from typing import Literal, Optional
 
 import psutil
 from fastapi import APIRouter
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, root_validator
 
 from app.config import settings
 from app.services.database import db_service
@@ -1232,33 +1232,40 @@ class WifiAddRequest(BaseModel):
         description="Optional list of DNS server IPv4 addresses. If empty, NetworkManager defaults are used.",
     )
 
-    @model_validator(mode="after")
-    def _validate_static_fields(self) -> "WifiAddRequest":
-        if self.ip_method == "dhcp":
-            return self
+    # Pydantic v1 compatible — GenSlave is pinned to pydantic <2 to avoid the
+    # Rust build on arm/v6. Use root_validator (class-level, dict-based) instead
+    # of v2's model_validator(mode="after").
+    @root_validator(skip_on_failure=True)
+    def _validate_static_fields(cls, values):
+        if values.get("ip_method") == "dhcp":
+            return values
 
-        if not self.static_address:
+        static_address = values.get("static_address")
+        static_gateway = values.get("static_gateway")
+        static_dns = values.get("static_dns") or []
+
+        if not static_address:
             raise ValueError("static_address is required when ip_method='static'")
-        if not self.static_gateway:
+        if not static_gateway:
             raise ValueError("static_gateway is required when ip_method='static'")
 
         try:
-            ipaddress.IPv4Interface(self.static_address)
+            ipaddress.IPv4Interface(static_address)
         except (ipaddress.AddressValueError, ValueError) as exc:
             raise ValueError(f"static_address is not a valid IPv4 CIDR: {exc}") from exc
 
         try:
-            ipaddress.IPv4Address(self.static_gateway)
+            ipaddress.IPv4Address(static_gateway)
         except (ipaddress.AddressValueError, ValueError) as exc:
             raise ValueError(f"static_gateway is not a valid IPv4 address: {exc}") from exc
 
-        for dns in self.static_dns:
+        for dns in static_dns:
             try:
                 ipaddress.IPv4Address(dns)
             except (ipaddress.AddressValueError, ValueError) as exc:
                 raise ValueError(f"static_dns entry {dns!r} is not a valid IPv4 address: {exc}") from exc
 
-        return self
+        return values
 
 
 class WifiAddResponse(BaseModel):
