@@ -856,6 +856,29 @@ class StateMachine:
             state = await self._get_state(db)
             return state.slave_relay_armed or False
 
+    async def update_slave_physical_safety_from_poll(self, new_value: bool) -> None:
+        """Update the cached EPO state from a fast-poll response.
+
+        Called by slave_status_service after each successful relay-state
+        poll (every few seconds). Lets the UI react to EPO transitions
+        within sub-heartbeat-interval latency rather than waiting up to
+        ~60s for the next push-heartbeat to land.
+
+        Short-circuits when the value is unchanged so the steady-state
+        (no EPO transitions) imposes zero DB write traffic.
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            if state.slave_physical_safety_engaged == new_value:
+                return  # no transition, skip the write
+            old_value = state.slave_physical_safety_engaged
+            state.slave_physical_safety_engaged = new_value
+            await db.commit()
+            logger.info(
+                f"GenSlave EPO state synced from fast-poll: "
+                f"{old_value} -> {new_value}"
+            )
+
     async def set_armed_state(self, armed: bool, manual: bool = True) -> None:
         """
         Set the relay armed state in the database.

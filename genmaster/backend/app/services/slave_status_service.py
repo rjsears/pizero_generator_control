@@ -327,6 +327,19 @@ class SlaveStatusService:
                 # Only check if state_machine is available and relay state just changed
                 if self._state_machine and old_relay_state != new_relay_state:
                     await self._check_state_mismatch(new_relay_state)
+
+                # Sync GenSlave EPO state to the DB column on every poll
+                # (not only on heartbeat). Drops UI detection latency from
+                # ~60s push-heartbeat cadence to ~3-5s fast-poll cadence.
+                # The state machine method short-circuits on unchanged value
+                # so the steady state has zero extra DB write traffic.
+                if (
+                    self._state_machine
+                    and "physical_safety_engaged" in (relay_resp.data or {})
+                ):
+                    await self._state_machine.update_slave_physical_safety_from_poll(
+                        relay_resp.data["physical_safety_engaged"]
+                    )
             else:
                 logger.debug(f"Relay state poll failed: {relay_resp.error}")
 
