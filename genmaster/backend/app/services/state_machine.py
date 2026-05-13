@@ -19,11 +19,13 @@ from typing import TYPE_CHECKING, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models import Config, EventLog, GeneratorInfo, GeneratorRun, SystemState
 from app.schemas import (
     FullSystemStatus,
     GeneratorStatus,
+    HOAStatus,
     OverrideStatus,
     SlaveHealth,
     SystemHealth,
@@ -1044,11 +1046,42 @@ class StateMachine:
                 mock_mode=mock_mode,
             )
 
+    async def get_hoa_status(self) -> HOAStatus:
+        """Get HOA selector status from the running HOA monitor.
+
+        Imported lazily to avoid a top-level circular dependency between
+        state_machine and main.py (where the singleton is created).
+        Returns a synthesized 'auto/disabled' snapshot if the monitor
+        hasn't been started yet — keeps /api/system/status responsive
+        during the brief startup window before lifespan finishes.
+        """
+        from app.main import hoa_monitor
+
+        if hoa_monitor is None:
+            return HOAStatus(
+                state="auto",
+                raw_state="auto",
+                running=False,
+                enabled=settings.hoa_switch_enabled,
+                mock_mode=settings.is_mock_gpio,
+                boot_delay_active=False,
+                boot_delay_seconds=settings.hoa_boot_delay_seconds,
+                boot_complete_at=None,
+                raw_quiet_pressed=False,
+                raw_run_pressed=False,
+                gpio_quiet=settings.hoa_gpio_quiet,
+                gpio_run=settings.hoa_gpio_run,
+                state_change_count=0,
+                last_state_change_at=None,
+            )
+        return HOAStatus(**hoa_monitor.get_status())
+
     async def get_full_status(self, system_health: SystemHealth) -> FullSystemStatus:
         """Get complete system status."""
         return FullSystemStatus(
             generator=await self.get_generator_status(),
             victron=await self.get_victron_status(),
+            hoa=await self.get_hoa_status(),
             slave_health=await self.get_slave_health(),
             override=await self.get_override_status(),
             system_health=system_health,

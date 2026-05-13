@@ -72,6 +72,7 @@ from app.routers import (
 )
 from app.services.exercise_scheduler import ExerciseSchedulerService
 from app.services.gpio_monitor import GPIOMonitor
+from app.services.hoa_monitor import HOAMonitor
 from app.services.metrics_service import get_metrics_service
 from app.services.redis_cache import get_redis_cache
 from app.services.scheduler import SchedulerService
@@ -89,6 +90,7 @@ logger = logging.getLogger(__name__)
 # Global service instances (accessed by routers via dependency injection)
 state_machine: Optional[StateMachine] = None
 gpio_monitor: Optional[GPIOMonitor] = None
+hoa_monitor: Optional[HOAMonitor] = None
 scheduler_service: Optional[SchedulerService] = None
 exercise_scheduler_service: Optional[ExerciseSchedulerService] = None
 webhook_service: Optional[WebhookService] = None
@@ -203,7 +205,7 @@ async def sync_generator_info_to_database() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup/shutdown."""
-    global state_machine, gpio_monitor, scheduler_service, exercise_scheduler_service, webhook_service
+    global state_machine, gpio_monitor, hoa_monitor, scheduler_service, exercise_scheduler_service, webhook_service
 
     # =========================================================================
     # Startup
@@ -240,6 +242,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         gpio_monitor.start()
         logger.info(
             f"GPIO monitor started (mock mode: {gpio_monitor.mock_mode})"
+        )
+
+        # Initialize HOA selector monitoring (Quiet/Auto/Run on GPIO22+GPIO27).
+        # Stays in 'auto' for the first hoa_boot_delay_seconds after start so
+        # a stale switch position can't trigger an automatic run during a
+        # power-blip recovery. State-machine integration is Phase 4.
+        hoa_monitor = HOAMonitor()
+        hoa_monitor.start()
+        logger.info(
+            f"HOA monitor started (mock mode: {hoa_monitor.mock_mode}, "
+            f"enabled: {settings.hoa_switch_enabled})"
         )
 
         # Initialize unified slave status service (background polling + heartbeat)
@@ -333,6 +346,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("Slave status service stopped (unified: polling + heartbeat)")
 
         # Stop GPIO monitor
+        if hoa_monitor:
+            hoa_monitor.stop()
+
         if gpio_monitor:
             gpio_monitor.stop()
             logger.info("GPIO monitor stopped")

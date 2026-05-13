@@ -13,6 +13,7 @@
 
 from app.services.backup import BackupService
 from app.services.gpio_monitor import GPIOMonitor
+from app.services.hoa_monitor import HOAMonitor
 from app.services.scheduler import SchedulerService
 from app.services.slave_client import SlaveClient
 from app.services.slave_status_service import SlaveStatusService, get_slave_status_service
@@ -22,6 +23,7 @@ from app.services.webhook import WebhookService
 __all__ = [
     "BackupService",
     "GPIOMonitor",
+    "HOAMonitor",
     "SchedulerService",
     "SlaveClient",
     "SlaveStatusService",

@@ -86,6 +86,72 @@ class VictronStatus(BaseModel):
         }
 
 
+class HOAStatus(BaseModel):
+    """HOA (Quiet/Auto/Run) selector status."""
+
+    state: Literal["quiet", "auto", "run", "fault"] = Field(
+        description=(
+            "Current operational HOA position. Returns 'auto' during the "
+            "post-boot grace window regardless of physical switch position."
+        )
+    )
+    raw_state: Literal["quiet", "auto", "run", "fault"] = Field(
+        description=(
+            "Decoded switch state IGNORING the boot delay — for diagnostics. "
+            "Differs from `state` only while boot_delay_active is true."
+        )
+    )
+    running: bool = Field(description="Whether the HOA monitor is running")
+    enabled: bool = Field(
+        description="Whether the monitor is enabled via HOA_SWITCH_ENABLED"
+    )
+    mock_mode: bool = Field(description="Whether running in mock GPIO mode")
+    boot_delay_active: bool = Field(
+        description="True if we're inside the post-boot grace window"
+    )
+    boot_delay_seconds: int = Field(
+        description="Configured boot delay window length, in seconds"
+    )
+    boot_complete_at: Optional[int] = Field(
+        None,
+        description="Unix timestamp at which the boot delay window expires",
+    )
+    raw_quiet_pressed: bool = Field(
+        description="Raw GPIO22 read (Quiet contact closed to GND)"
+    )
+    raw_run_pressed: bool = Field(
+        description="Raw GPIO27 read (Run contact closed to GND)"
+    )
+    gpio_quiet: int = Field(description="GPIO pin number for the Quiet contact")
+    gpio_run: int = Field(description="GPIO pin number for the Run contact")
+    state_change_count: int = Field(
+        description="Number of state transitions since service start"
+    )
+    last_state_change_at: Optional[int] = Field(
+        None, description="Unix timestamp of the most recent state change"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "state": "auto",
+                "raw_state": "auto",
+                "running": True,
+                "enabled": True,
+                "mock_mode": False,
+                "boot_delay_active": False,
+                "boot_delay_seconds": 90,
+                "boot_complete_at": 1715630090,
+                "raw_quiet_pressed": False,
+                "raw_run_pressed": False,
+                "gpio_quiet": 22,
+                "gpio_run": 27,
+                "state_change_count": 0,
+                "last_state_change_at": None,
+            }
+        }
+
+
 class CombinedSystemHealth(BaseModel):
     """Combined health for GenMaster and GenSlave."""
 
@@ -103,6 +169,7 @@ class FullSystemStatus(BaseModel):
 
     generator: GeneratorStatus = Field(description="Generator status")
     victron: VictronStatus = Field(description="Victron relay input status")
+    hoa: HOAStatus = Field(description="HOA (Quiet/Auto/Run) selector status")
     slave_health: SlaveHealth = Field(description="GenSlave connection health")
     override: OverrideStatus = Field(description="Manual override status")
     system_health: SystemHealth = Field(description="GenMaster system health")

@@ -87,6 +87,19 @@ class Settings(BaseSettings):
     victron_gpio_pin: int = 17
     gpio_mock_mode: Optional[bool] = None  # Auto-detect if None
 
+    # HOA Selector (3-position rotary at GenMaster panel: Quiet/Auto/Run).
+    # GPIO22 and GPIO27 are placed adjacent to the existing GPIO17 Victron
+    # input so all three operator-side signals share a tight block of
+    # header pins (11/13/15) with one shared GND at pin 9.
+    hoa_switch_enabled: bool = True
+    hoa_gpio_quiet: int = 22
+    hoa_gpio_run: int = 27
+    # Wait this long after startup before honoring the switch position,
+    # so a stale physical position can't trigger an automatic run the
+    # instant the system recovers from a power blip. Set to 0 in .env
+    # while bench-testing if you don't want to wait between restarts.
+    hoa_boot_delay_seconds: int = 90
+
     @property
     def is_mock_gpio(self) -> bool:
         """Determine if GPIO should run in mock mode."""

@@ -149,6 +149,7 @@ from app.schemas import (
     AutomationArmStatus,
     CombinedSystemHealth,
     FullSystemStatus,
+    HOAStatus,
     SystemHealth,
     VictronStatus,
 )
@@ -253,6 +254,22 @@ async def get_victron_status(
         mock_mode=gpio_monitor.mock_mode if gpio_monitor else settings.is_mock_gpio
     )
     return status
+
+
+@router.get("/hoa", response_model=HOAStatus)
+async def get_hoa_status(
+    state_machine=Depends(get_state_machine),
+) -> HOAStatus:
+    """
+    Get HOA selector status.
+
+    Returns the current Quiet/Auto/Run position plus diagnostics:
+    boot-delay state, raw pin reads, change counter, etc. Use this
+    endpoint for the dedicated UI indicator and any operator
+    diagnostics page. The headline `state` field is also surfaced in
+    /api/system/status for callers that only need the summary.
+    """
+    return await state_machine.get_hoa_status()
 
 
 @router.get("/status", response_model=FullSystemStatus)
