@@ -163,6 +163,15 @@ services:
     container_name: genmaster_host_tools
     restart: unless-stopped
     network_mode: host
+    # pid: host so `nsenter -t 1 -m -u -n -i` inside the sidecar enters the
+    # HOST's init namespaces (host's PID 1 = systemd) instead of the
+    # container's own PID 1 (sleep infinity). Required for any code path
+    # that runs `systemctl ...`, writes to `/etc/systemd/system/`, or
+    # otherwise needs to act on the host's filesystem and process tree —
+    # e.g. WiFi watchdog install/enable, anything that copies files via
+    # nsenter into host paths. Without this, `systemctl: not found` and
+    # `/etc/systemd/system: nonexistent directory` errors at runtime.
+    pid: host
     privileged: true
     # Keep container tiny - it just sleeps waiting for exec commands.
     # Bumped to 64m to accommodate docker-cli + docker-cli-compose, used
@@ -177,6 +186,12 @@ services:
       # "Could not create NMClient object: Could not connect: No such file
       # or directory" because the container can't reach the system bus.
       - /var/run/dbus:/var/run/dbus
+      # Repo-level scripts directory (one level up from this compose file).
+      # The WiFi watchdog install endpoint reads `/scripts/wifi-watchdog.sh`
+      # and `/scripts/wifi-watchdog.service` from this mount and copies them
+      # to the host via nsenter. Without this mount, the install fails with
+      # "cat: can't open '/scripts/wifi-watchdog.service': No such file".
+      - ../scripts:/scripts:ro
       # Mount the compose project at the same dir name (genmaster) so that
       # `docker compose` sees the project name as "genmaster" — preserving
       # container/network/volume identity across recreates.
