@@ -56,6 +56,15 @@ export const useSystemStore = defineStore('system', () => {
   const victronInputActive = computed(() => victronStatus.value?.signal_state || false)
   const victronLastChange = computed(() => victronStatus.value?.last_change || null)
 
+  // GenSlave hardware E-stop (EPO) state. Populated by /health/slave on the
+  // periodic poll. True while the operator has the physical button pressed
+  // at the generator. The state machine refuses all start paths in this
+  // state; the UI mirrors it by disabling Start and switching the existing
+  // Emergency Stop card into a "triggered" visual.
+  const physicalSafetyEngaged = computed(
+    () => slaveHealth.value?.physical_safety_engaged === true,
+  )
+
   const overallHealth = computed(() => {
     if (!health.value) return 'unknown'
     if (cpuPercent.value > 90 || memoryPercent.value > 90 || diskPercent.value > 95) {
@@ -220,6 +229,7 @@ export const useSystemStore = defineStore('system', () => {
     slaveLastSeen,
     victronInputActive,
     victronLastChange,
+    physicalSafetyEngaged,
     overallHealth,
 
     // Actions

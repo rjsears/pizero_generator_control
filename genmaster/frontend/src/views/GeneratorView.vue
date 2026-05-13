@@ -89,6 +89,28 @@
       </div>
     </div>
 
+    <!-- EPO Triggered Banner — only visible when GenSlave hardware E-stop
+         is engaged. Top of the page so it's the first thing the operator
+         sees. The Emergency Stop card below also enters its triggered
+         state, but the banner is explicit and unmissable. -->
+    <div
+      v-if="epoEngaged"
+      class="rounded-xl border-2 border-red-500 bg-red-50 dark:bg-red-900/30 px-4 py-3 flex items-center gap-3 shadow-lg shadow-red-500/20 animate-pulse"
+      role="alert"
+    >
+      <ExclamationTriangleIcon class="h-7 w-7 text-red-500 flex-shrink-0" />
+      <div class="flex-1">
+        <p class="text-base font-bold text-red-700 dark:text-red-300">
+          GenSlave EPO Triggered — Emergency Stop Active
+        </p>
+        <p class="text-sm text-red-600 dark:text-red-400">
+          The hardware safety interlock at the generator is engaged. All
+          start paths are blocked until the E-stop is released. Releasing
+          the E-stop returns control to the system on the next heartbeat.
+        </p>
+      </div>
+    </div>
+
     <!-- Control Row: GenSlave | Generator Run Relay | Emergency Stop -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <!-- GenSlave Online Status -->
@@ -189,10 +211,32 @@
         </div>
       </Card>
 
-      <!-- Emergency Stop -->
+      <!-- Emergency Stop — also reflects GenSlave hardware EPO state.
+           When EPO is engaged at the generator, this card switches into a
+           "triggered" visual (lit red icon, full-width status text) so the
+           operator gets the same visual signal regardless of whether the
+           stop was clicked here or pressed at the generator. -->
       <Card :padding="false">
-        <div class="p-4">
-          <div class="flex items-center justify-between">
+        <div
+          :class="[
+            'p-4 transition-all',
+            epoEngaged ? 'bg-red-100 dark:bg-red-500/20 ring-2 ring-red-500' : ''
+          ]"
+        >
+          <div v-if="epoEngaged" class="flex items-center gap-3">
+            <div class="p-2 rounded-lg bg-red-500/30">
+              <ExclamationTriangleIcon class="h-5 w-5 text-red-600 dark:text-red-300" />
+            </div>
+            <div class="flex-1">
+              <p class="text-xs text-red-700 dark:text-red-300 uppercase tracking-wider font-semibold">
+                GenSlave EPO Triggered
+              </p>
+              <p class="text-sm font-bold text-red-700 dark:text-red-300">
+                Emergency Stop Active
+              </p>
+            </div>
+          </div>
+          <div v-else class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="p-2 rounded-lg bg-red-100 dark:bg-red-500/20">
                 <ExclamationTriangleIcon class="h-5 w-5 text-red-500" />
@@ -1341,7 +1385,13 @@ const estimatedCurrentFuel = computed(() => {
 const hostWifi = ref(null)
 
 // Computed properties
-const canStart = computed(() => generatorStore.canStart && relayArmed.value)
+// EPO (GenSlave hardware E-stop) wins over everything — when engaged, the
+// state machine refuses every start path. Mirror the precedence here so
+// the Start button can't even be clicked, matching backend Phase 4a.
+const epoEngaged = computed(() => systemStore.physicalSafetyEngaged)
+const canStart = computed(
+  () => generatorStore.canStart && relayArmed.value && !epoEngaged.value,
+)
 const canStop = computed(() => generatorStore.canStop)
 const actionLoading = computed(() => generatorStore.actionLoading)
 
