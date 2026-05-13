@@ -43,12 +43,9 @@ machine to react to changes (blocking runs in Quiet, etc.).
 import asyncio
 import logging
 import time
-from typing import Literal, Optional, TYPE_CHECKING
+from typing import Literal, Optional
 
 from app.config import settings
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
