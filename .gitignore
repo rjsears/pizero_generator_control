@@ -34,5 +34,14 @@ site/
 # Generated nginx config - contains domain-specific settings
 genmaster/nginx/nginx.conf
 
+#Generated Docker Compose File
+genmaster/docker-compose.yaml
+
 # Agent documentation (internal use only)
 docs/agents/
+
+genmaster/certbot/cloudflare.ini
+genmaster/certbot/*.ini
+genmaster/certbot/*.json
+genmaster/.genmaster_setup_state
+genmaster/.genmaster_setup_config
