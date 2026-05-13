@@ -211,32 +211,18 @@
         </div>
       </Card>
 
-      <!-- Emergency Stop — also reflects GenSlave hardware EPO state.
-           When EPO is engaged at the generator, this card switches into a
-           "triggered" visual (lit red icon, full-width status text) so the
-           operator gets the same visual signal regardless of whether the
-           stop was clicked here or pressed at the generator. -->
+      <!-- Emergency Stop. When the GenSlave hardware EPO is engaged the
+           operator can't usefully interact with this card (the stop is
+           already happening at the hardware), so we just dim the card and
+           disable interaction. The top-of-page banner explains why. -->
       <Card :padding="false">
         <div
           :class="[
-            'p-4 transition-all',
-            epoEngaged ? 'bg-red-100 dark:bg-red-500/20 ring-2 ring-red-500' : ''
+            'p-4 transition-opacity',
+            epoEngaged ? 'opacity-50 pointer-events-none' : ''
           ]"
         >
-          <div v-if="epoEngaged" class="flex items-center gap-3">
-            <div class="p-2 rounded-lg bg-red-500/30">
-              <ExclamationTriangleIcon class="h-5 w-5 text-red-600 dark:text-red-300" />
-            </div>
-            <div class="flex-1">
-              <p class="text-xs text-red-700 dark:text-red-300 uppercase tracking-wider font-semibold">
-                GenSlave EPO Triggered
-              </p>
-              <p class="text-sm font-bold text-red-700 dark:text-red-300">
-                Emergency Stop Active
-              </p>
-            </div>
-          </div>
-          <div v-else class="flex items-center justify-between">
+          <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="p-2 rounded-lg bg-red-100 dark:bg-red-500/20">
                 <ExclamationTriangleIcon class="h-5 w-5 text-red-500" />
@@ -248,10 +234,10 @@
             </div>
             <button
               @click="handleEmergencyStop"
-              :disabled="!generatorStore.isRunning || emergencyStopLoading"
+              :disabled="!generatorStore.isRunning || emergencyStopLoading || epoEngaged"
               :class="[
                 'px-4 py-2 rounded-lg font-bold text-sm text-white transition-all',
-                generatorStore.isRunning && !emergencyStopLoading
+                generatorStore.isRunning && !emergencyStopLoading && !epoEngaged
                   ? 'bg-red-500 hover:bg-red-600 shadow-lg'
                   : 'bg-gray-400 cursor-not-allowed'
               ]"
