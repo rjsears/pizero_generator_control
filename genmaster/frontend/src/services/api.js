@@ -88,7 +88,9 @@ export const systemApi = {
   audit: (params) => api.get('/system/audit', { params }),
   network: () => api.get('/system/network'),
   ssl: () => api.get('/system/ssl'),
-  sslRenew: () => api.post('/system/ssl/renew'),
+  // Long timeout: certbot's Cloudflare DNS challenge typically takes 30-60s
+  // (DNS propagation wait); the global 5s default would always time out here.
+  sslRenew: () => api.post('/system/ssl/renew', null, { timeout: 120000 }),
   cloudflare: () => api.get('/system/cloudflare'),
   tailscale: () => api.get('/system/tailscale'),
   hostWifi: () => api.get('/system/host/wifi'),

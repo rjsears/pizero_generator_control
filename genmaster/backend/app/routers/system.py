@@ -509,10 +509,16 @@ async def force_renew_ssl_certificate() -> dict:
                 detail=f"Certbot container is not running (status: {certbot_container.status})",
             )
 
-        # Run certbot renew --force-renewal
+        # Run certbot renew --force-renewal.
+        # --no-random-sleep-on-renew is REQUIRED here: certbot's default behavior
+        # is to insert a random sleep of 0-480s before renewal (to spread load on
+        # Let's Encrypt servers). For a UI-triggered request that's a hard failure
+        # — the API call times out, UI shows a generic error, and certbot keeps
+        # running in the background holding the global lock so the next attempt
+        # bails with "Another instance of Certbot is already running."
         logger.info("Starting forced SSL certificate renewal...")
         exec_result = certbot_container.exec_run(
-            cmd="certbot renew --force-renewal",
+            cmd="certbot renew --force-renewal --no-random-sleep-on-renew",
             demux=True,
         )
 

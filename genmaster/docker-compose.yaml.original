@@ -172,6 +172,11 @@ services:
     volumes:
       # Docker socket so this sidecar can drive docker (recreate genmaster)
       - /var/run/docker.sock:/var/run/docker.sock
+      # D-Bus system socket so nmcli inside the sidecar can talk to the host's
+      # NetworkManager daemon. Without this, every nmcli call fails with
+      # "Could not create NMClient object: Could not connect: No such file
+      # or directory" because the container can't reach the system bus.
+      - /var/run/dbus:/var/run/dbus
       # Mount the compose project at the same dir name (genmaster) so that
       # `docker compose` sees the project name as "genmaster" — preserving
       # container/network/volume identity across recreates.
@@ -191,7 +196,12 @@ services:
       - certbot_data:/var/www/certbot
       - ./certbot/${DNS_CREDENTIALS_FILE:-cloudflare.ini}:/credentials.ini:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --no-random-sleep-on-renew ${DNS_CERTBOT_FLAGS:-} --deploy-hook 'docker exec genmaster_nginx nginx -s reload' || true; sleep 12h & wait $${!}; done;"
+    # apk add docker-cli on startup so the deploy-hook (`docker exec ... nginx -s reload`)
+    # passes certbot's hook validation. Without this, certbot bails with
+    # "Unable to find deploy-hook command docker in the PATH" and renewals
+    # never even attempt — which would silently fail until the cert expires.
+    # apk is idempotent: second container start is a no-op.
+    entrypoint: /bin/sh -c "apk add --no-cache docker-cli >/dev/null 2>&1; trap exit TERM; while :; do certbot renew --no-random-sleep-on-renew ${DNS_CERTBOT_FLAGS:-} --deploy-hook 'docker exec genmaster_nginx nginx -s reload' || true; sleep 12h & wait $${!}; done;"
     networks:
       - genmaster-internal
       - genmaster-external

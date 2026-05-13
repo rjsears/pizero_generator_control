@@ -509,14 +509,36 @@ async function confirmSslRenew() {
   try {
     const response = await systemApi.sslRenew()
     if (response.data?.success) {
-      notificationStore.success('SSL certificate renewed successfully')
+      notificationStore.success(response.data.message || 'SSL certificate renewed successfully')
+      sslRenewDialog.value.open = false
       await loadHealthData()
     } else {
-      notificationStore.error(response.data?.message || 'Failed to renew certificate')
+      // Backend returned 200 but said success: false — surface the actual
+      // certbot error (renewal_output) when present so the operator can see
+      // what failed (Cloudflare auth, rate limit, lock conflict, etc.).
+      const details = (response.data?.renewal_output || '').trim()
+      const summary = response.data?.message || 'Failed to renew certificate'
+      const text = details ? `${summary}\n\n${details}` : summary
+      notificationStore.error(text)
+      // Keep the dialog open on failure so the operator can read context
+      // and retry without re-navigating.
     }
-    sslRenewDialog.value.open = false
   } catch (error) {
-    notificationStore.error('Failed to renew certificate')
+    // Network / HTTP error path. Surface whatever detail is available
+    // instead of a generic "Failed to renew certificate" — common cases:
+    // - 504 / timeout: certbot still running (lock held); wait or restart certbot
+    // - 500 with detail: backend exception (e.g., Docker SDK error)
+    // - 4xx: container not found / not running
+    let text = 'Failed to renew certificate'
+    if (error.code === 'ECONNABORTED') {
+      text = 'SSL renewal timed out (>120s). Certbot may still be running in the background — check `docker logs genmaster_certbot` and wait ~60s before retrying.'
+    } else if (error.response?.data?.detail) {
+      text = `Failed to renew certificate: ${error.response.data.detail}`
+    } else if (error.message) {
+      text = `Failed to renew certificate: ${error.message}`
+    }
+    notificationStore.error(text)
+    // Dialog stays open on error.
   } finally {
     sslRenewDialog.value.loading = false
   }
