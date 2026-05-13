@@ -79,6 +79,13 @@ class SystemState(Base):
     slave_connection_status: Mapped[str] = mapped_column(default="unknown")
     slave_relay_state: Mapped[Optional[bool]] = mapped_column(nullable=True)
     slave_relay_armed: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    # Cached state of the GenSlave hardware E-stop (EPO). True when the
+    # operator has pressed the physical safety button at the generator.
+    # Populated from the heartbeat reply (and parallel fast-poll endpoints)
+    # on every cycle. Nullable — None means "we haven't heard from GenSlave
+    # since boot." Used by the state machine (Phase 4) to block runs and by
+    # the UI (Phase 6) to surface the EPO indicator.
+    slave_physical_safety_engaged: Mapped[Optional[bool]] = mapped_column(nullable=True)
     manual_disarm_active: Mapped[bool] = mapped_column(default=False)
 
     # Runtime Lockout/Cooldown

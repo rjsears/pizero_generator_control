@@ -886,6 +886,15 @@ class StateMachine:
                     if "relay_state" in slave_status:
                         state.slave_relay_state = slave_status["relay_state"]
 
+                    # GenSlave hardware E-stop state. Added in Phase 2; older
+                    # GenSlave builds (pre-physical_safety_engaged) will omit
+                    # this key and we leave the cached value alone, so a
+                    # version skew during a rolling deploy degrades gracefully.
+                    if "physical_safety_engaged" in slave_status:
+                        state.slave_physical_safety_engaged = slave_status[
+                            "physical_safety_engaged"
+                        ]
+
                     # Handle armed state carefully — GenMaster is authoritative
                     # for the armed flag. The heartbeat reply from GenSlave can
                     # carry a stale `armed` value (the reply is composed before
@@ -1021,6 +1030,7 @@ class StateMachine:
                 last_heartbeat_received=state.last_heartbeat_received,
                 missed_heartbeat_count=state.missed_heartbeat_count,
                 relay_state=state.slave_relay_state,
+                physical_safety_engaged=state.slave_physical_safety_engaged,
             )
 
     async def get_victron_status(self, mock_mode: bool = False) -> VictronStatus:

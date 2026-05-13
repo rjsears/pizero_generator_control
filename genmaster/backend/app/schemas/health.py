@@ -44,6 +44,14 @@ class SlaveHealth(BaseModel):
     relay_state: Optional[bool] = Field(
         None, description="Current state of the GenSlave relay"
     )
+    physical_safety_engaged: Optional[bool] = Field(
+        None,
+        description=(
+            "True when the GenSlave hardware E-stop (EPO) is currently "
+            "pressed. None means we have not heard a heartbeat from GenSlave "
+            "since GenMaster boot."
+        ),
+    )
     latency_ms: Optional[float] = Field(
         None, description="Last measured round-trip latency in milliseconds"
     )
@@ -56,6 +64,7 @@ class SlaveHealth(BaseModel):
                 "last_heartbeat_received": 1705320001,
                 "missed_heartbeat_count": 0,
                 "relay_state": False,
+                "physical_safety_engaged": False,
                 "latency_ms": 45.2,
             }
         }
