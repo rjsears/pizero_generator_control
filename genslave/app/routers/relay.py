@@ -17,6 +17,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.services.hardware_safety import hardware_safety_monitor
 from app.services.relay import relay_service
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,14 @@ class RelayState(BaseModel):
     mock_mode: bool = Field(description="Whether running in mock mode")
     armed: bool = Field(description="Whether automation is armed")
     armed_at: Optional[int] = Field(None, description="Unix timestamp when armed")
+    physical_safety_engaged: bool = Field(
+        default=False,
+        description=(
+            "True when the hardware EPO is currently pressed. Surfaced here "
+            "so GenMaster's high-frequency relay-state poll sees EPO state "
+            "without waiting for the next heartbeat."
+        ),
+    )
 
 
 class RelayCommand(BaseModel):
@@ -83,9 +92,11 @@ async def get_relay_state() -> RelayState:
     """
     Get current relay state.
 
-    Returns the current state of the generator relay and arming status.
+    Returns the current state of the generator relay, arming status,
+    and whether the hardware EPO is currently engaged.
     """
     status = relay_service.get_status()
+    status["physical_safety_engaged"] = hardware_safety_monitor.is_engaged
     return RelayState(**status)
 
 

@@ -186,9 +186,12 @@ class HardwareSafetyMonitor:
             else:
                 self._released_at = now
                 logger.info(
-                    "Hardware safety RELEASED — E-stop returned to "
-                    "normal position. GenMaster decides whether to "
-                    "resume automation (no auto-resume by design)."
+                    "Hardware safety RELEASED — E-stop returned to normal "
+                    "position. The next inbound heartbeat from GenMaster "
+                    "will re-assert the desired run state; if a run is "
+                    "still being requested (Victron, scheduled, manual), "
+                    "the relay will turn back on automatically — up to one "
+                    "heartbeat interval of delay."
                 )
 
         # While engaged: continuously re-assert relay-off. GenMaster's

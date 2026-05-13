@@ -47,6 +47,7 @@ class FailsafeMonitor:
         self._running: bool = False
         self._task: Optional[asyncio.Task] = None
         self._relay_service = None  # Set by set_relay_service
+        self._hardware_safety_monitor = None  # Set by set_hardware_safety_monitor
         # Dynamic timeout: updated from GenMaster's heartbeat_interval * 3
         # Falls back to settings.FAILSAFE_TIMEOUT_SECONDS if not received
         self._dynamic_timeout: Optional[int] = None
@@ -55,6 +56,16 @@ class FailsafeMonitor:
     def set_relay_service(self, relay_service) -> None:
         """Set the relay service for failsafe actions."""
         self._relay_service = relay_service
+
+    def set_hardware_safety_monitor(self, hardware_safety_monitor) -> None:
+        """Set the hardware safety monitor so its engaged state can be
+        surfaced in the heartbeat reply and failsafe status responses.
+
+        Decoupled from set_relay_service so the failsafe loop itself
+        doesn't depend on hardware safety being present; missing monitor
+        just yields physical_safety_engaged = False in the responses.
+        """
+        self._hardware_safety_monitor = hardware_safety_monitor
 
     def record_heartbeat(self, data: dict) -> dict:
         """
@@ -163,6 +174,10 @@ class FailsafeMonitor:
                 logger.info(f"Command '{command}' received but not armed - ignoring")
 
         relay_state = self._relay_service.get_state() if self._relay_service else False
+        safety_engaged = bool(
+            self._hardware_safety_monitor
+            and self._hardware_safety_monitor.is_engaged
+        )
 
         return {
             "relay_state": relay_state,
@@ -170,6 +185,7 @@ class FailsafeMonitor:
             "failsafe_active": self._failsafe_triggered,
             "heartbeat_count": self._heartbeat_count,
             "armed": self._relay_service.is_armed if self._relay_service else False,
+            "physical_safety_engaged": safety_engaged,
         }
 
     def _get_uptime(self) -> int:
@@ -320,6 +336,11 @@ class FailsafeMonitor:
         if self._last_heartbeat:
             seconds_since_heartbeat = now - self._last_heartbeat
 
+        safety_engaged = bool(
+            self._hardware_safety_monitor
+            and self._hardware_safety_monitor.is_engaged
+        )
+
         return {
             "running": self._running,
             "last_heartbeat": self._last_heartbeat,
@@ -330,6 +351,7 @@ class FailsafeMonitor:
             "timeout_seconds": self._get_effective_timeout(),
             "heartbeat_interval": self._heartbeat_interval,
             "timeout_source": "genmaster" if self._dynamic_timeout else "config",
+            "physical_safety_engaged": safety_engaged,
         }
 
 

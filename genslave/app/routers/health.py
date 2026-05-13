@@ -18,6 +18,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.services.failsafe import failsafe_monitor
+from app.services.hardware_safety import hardware_safety_monitor
 from app.services.relay import relay_service
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,15 @@ class HeartbeatResponse(BaseModel):
     failsafe_active: bool = Field(description="Whether failsafe is triggered")
     heartbeat_count: int = Field(description="Total heartbeats received")
     armed: bool = Field(description="Whether automation is armed")
+    physical_safety_engaged: bool = Field(
+        default=False,
+        description=(
+            "True when the hardware EPO (E-stop) at GenSlave is currently "
+            "pressed. The relay is forced OFF in this state and cannot be "
+            "started by any software command until the operator physically "
+            "releases the switch."
+        ),
+    )
 
 
 class FailsafeStatus(BaseModel):
@@ -97,6 +107,46 @@ class FailsafeStatus(BaseModel):
     timeout_source: Literal["genmaster", "config"] = Field(
         default="config",
         description="Source of timeout value (genmaster=dynamic, config=default)"
+    )
+    physical_safety_engaged: bool = Field(
+        default=False,
+        description="True when the hardware EPO at GenSlave is currently pressed",
+    )
+
+
+class HardwareSafetyStatus(BaseModel):
+    """Hardware safety (EPO) monitor status — dedicated diagnostic surface
+    for GenMaster's UI and the operator-facing manual page."""
+
+    running: bool = Field(description="Whether the safety polling loop is running")
+    available: bool = Field(
+        description=(
+            "Whether the Auto Hat Mini library is responding. False in mock "
+            "mode or when the HAT is not present; engaged will always be False."
+        )
+    )
+    enabled: bool = Field(
+        description="Whether the monitor is enabled via HARDWARE_SAFETY_ENABLED config",
+    )
+    engaged: bool = Field(
+        description="True when the EPO is currently pressed (debounced)",
+    )
+    engaged_at: Optional[int] = Field(
+        None,
+        description="Unix timestamp of the most recent engagement (None if never engaged)",
+    )
+    released_at: Optional[int] = Field(
+        None,
+        description="Unix timestamp of the most recent release (None if never released)",
+    )
+    engagement_count: int = Field(
+        description="Total number of debounced engagement events since boot",
+    )
+    raw_input: bool = Field(
+        description=(
+            "Raw most-recent read of Auto Hat Mini IN1. Differs from engaged "
+            "only during the debounce window."
+        ),
     )
 
 
@@ -152,6 +202,20 @@ async def get_failsafe_status() -> FailsafeStatus:
     """
     status = failsafe_monitor.get_status()
     return FailsafeStatus(**status)
+
+
+@router.get("/api/safety", response_model=HardwareSafetyStatus)
+async def get_hardware_safety_status() -> HardwareSafetyStatus:
+    """
+    Get hardware safety (EPO) monitor status.
+
+    Dedicated endpoint for the EPO interlock state on Auto Hat Mini IN1.
+    Used by GenMaster for UI display ("E-Stop Triggered" banner, system
+    status card) and by diagnostics. The `engaged` flag is also surfaced
+    via heartbeat reply, /api/health, /api/relay/state, and /api/failsafe
+    so callers can choose the most convenient path.
+    """
+    return HardwareSafetyStatus(**hardware_safety_monitor.get_status())
 
 
 def _get_uptime() -> int:

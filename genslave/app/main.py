@@ -76,6 +76,11 @@ async def lifespan(app: FastAPI):
     # physical guarantee regardless of software.
     hardware_safety_monitor.set_relay_service(relay_service)
 
+    # Inject the safety monitor into the failsafe monitor so its engaged
+    # state can be surfaced in the heartbeat reply and /api/failsafe
+    # response — GenMaster reads these to know when the EPO is pressed.
+    failsafe_monitor.set_hardware_safety_monitor(hardware_safety_monitor)
+
     # Connect display to services
     display_service.set_services(
         failsafe_monitor, relay_service, safety_monitor=hardware_safety_monitor
@@ -181,6 +186,7 @@ async def public_health_check():
         "armed": relay_service.is_armed,
         "failsafe_active": failsafe_status["failsafe_triggered"],
         "mock_mode": relay_service.is_mock_mode,
+        "physical_safety_engaged": hardware_safety_monitor.is_engaged,
     }
 
 
