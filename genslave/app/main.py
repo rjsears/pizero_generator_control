@@ -23,6 +23,7 @@ from app.routers import relay_router, health_router, system_router
 from app.services.database import db_service
 from app.services.relay import relay_service
 from app.services.failsafe import failsafe_monitor
+from app.services.hardware_safety import hardware_safety_monitor
 from app.services.display import display_service
 from app.services.reboot_scheduler import reboot_scheduler
 
@@ -69,11 +70,22 @@ async def lifespan(app: FastAPI):
     # Connect failsafe monitor to relay service
     failsafe_monitor.set_relay_service(relay_service)
 
+    # Connect hardware safety monitor (E-stop on Auto Hat Mini IN1) to
+    # the relay service so engagement can immediately drop the relay
+    # command in software. The parallel hardware NC contact handles the
+    # physical guarantee regardless of software.
+    hardware_safety_monitor.set_relay_service(relay_service)
+
     # Connect display to services
-    display_service.set_services(failsafe_monitor, relay_service)
+    display_service.set_services(
+        failsafe_monitor, relay_service, safety_monitor=hardware_safety_monitor
+    )
 
     # Start failsafe monitor
     await failsafe_monitor.start()
+
+    # Start hardware safety monitor
+    await hardware_safety_monitor.start()
 
     # Start display service
     await display_service.start()
@@ -85,6 +97,7 @@ async def lifespan(app: FastAPI):
         f"GenSlave ready - "
         f"HAT: {'real' if not relay_service.is_mock_mode else 'mock'}, "
         f"Failsafe timeout: {settings.FAILSAFE_TIMEOUT_SECONDS}s, "
+        f"Hardware safety: {'enabled' if settings.HARDWARE_SAFETY_ENABLED else 'disabled'}, "
         f"API Auth: configured"
     )
 
@@ -98,6 +111,9 @@ async def lifespan(app: FastAPI):
 
     # Stop display service
     await display_service.stop()
+
+    # Stop hardware safety monitor
+    await hardware_safety_monitor.stop()
 
     # Stop failsafe monitor
     await failsafe_monitor.stop()

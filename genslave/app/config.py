@@ -35,6 +35,14 @@ class Settings:
     MOCK_HAT_MODE: bool = os.getenv("MOCK_HAT_MODE", "false").lower() == "true"
     RELAY_GPIO_PIN: int = int(os.getenv("RELAY_GPIO_PIN", "16"))
 
+    # Hardware safety interlock (E-stop on Auto Hat Mini IN1).
+    # Default ON; safe to leave on even if no switch is wired (input reads
+    # LOW = released and the monitor does nothing). Operator can set to
+    # "false" to disable polling entirely without rebuilding.
+    HARDWARE_SAFETY_ENABLED: bool = (
+        os.getenv("HARDWARE_SAFETY_ENABLED", "true").lower() == "true"
+    )
+
     # Database
     DATABASE_PATH: str = os.getenv(
         "DATABASE_PATH", "/opt/genslave/data/genslave.db"

@@ -69,6 +69,7 @@ class DisplayService:
         self._task: Optional[asyncio.Task] = None
         self._failsafe_monitor = None
         self._relay_service = None
+        self._safety_monitor = None
         self._last_update = None
 
         if DISPLAY_AVAILABLE:
@@ -86,10 +87,16 @@ class DisplayService:
                 logger.error(f"Failed to initialize display: {e}")
                 self._display = None
 
-    def set_services(self, failsafe_monitor, relay_service) -> None:
-        """Set references to other services for status display."""
+    def set_services(self, failsafe_monitor, relay_service, safety_monitor=None) -> None:
+        """Set references to other services for status display.
+
+        safety_monitor is optional so callers that don't yet pass it (or
+        installations with the feature disabled) still work — the line
+        falls back to the normal Generator status display.
+        """
         self._failsafe_monitor = failsafe_monitor
         self._relay_service = relay_service
+        self._safety_monitor = safety_monitor
 
     def _get_cpu_temp_f(self) -> float:
         """Get CPU temperature in Fahrenheit."""
@@ -187,6 +194,9 @@ class DisplayService:
             gen_text, gen_color = self._get_gen_status()
             cpu_temp = self._get_cpu_temp_f()
             ip_addr = self._get_ip_address()
+            safety_engaged = bool(
+                self._safety_monitor and self._safety_monitor.is_engaged
+            )
 
             # Line spacing for 4 lines on 80px height: ~19px per line
             y_pos = 1
@@ -195,10 +205,16 @@ class DisplayService:
             draw.text((2, y_pos), "GenMaster:", font=font, fill=self.WHITE)
             draw.text((90, y_pos), link_text, font=font, fill=link_color)
 
-            # Line 2: Generator status
+            # Line 2: Generator status — replaced by EPO indicator when the
+            # hardware safety interlock is engaged. The operator needs the
+            # most prominent signal that the generator cannot run, so the
+            # Generator label disappears entirely while EPO is on.
             y_pos += 19
-            draw.text((2, y_pos), "Generator:", font=font, fill=self.WHITE)
-            draw.text((83, y_pos), gen_text, font=font, fill=gen_color)
+            if safety_engaged:
+                draw.text((2, y_pos), "EPO SAFETY ON", font=font, fill=self.RED)
+            else:
+                draw.text((2, y_pos), "Generator:", font=font, fill=self.WHITE)
+                draw.text((83, y_pos), gen_text, font=font, fill=gen_color)
 
             # Line 3: CPU temp
             y_pos += 19
