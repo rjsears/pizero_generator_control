@@ -109,6 +109,14 @@ services:
       - GEN_INFO_LOAD_EXPECTED=${GEN_INFO_LOAD_EXPECTED:-}
       - GEN_INFO_FUEL_CONSUMPTION_50=${GEN_INFO_FUEL_CONSUMPTION_50:-}
       - GEN_INFO_FUEL_CONSUMPTION_100=${GEN_INFO_FUEL_CONSUMPTION_100:-}
+      # HOA Selector (Quiet/Auto/Run rotary on GenMaster panel — Pi 5 GPIO22/27).
+      # Defaults here match Pydantic defaults in app/config.py — set any of
+      # these in .env to override without rebuilding the image. Setting
+      # HOA_BOOT_DELAY_SECONDS=0 is convenient for bench testing.
+      - HOA_SWITCH_ENABLED=${HOA_SWITCH_ENABLED:-true}
+      - HOA_GPIO_QUIET=${HOA_GPIO_QUIET:-22}
+      - HOA_GPIO_RUN=${HOA_GPIO_RUN:-27}
+      - HOA_BOOT_DELAY_SECONDS=${HOA_BOOT_DELAY_SECONDS:-90}
     volumes:
       - genmaster_logs:/app/logs
       - genmaster_data:/app/data

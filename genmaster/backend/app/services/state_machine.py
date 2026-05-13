@@ -424,7 +424,24 @@ class StateMachine:
                 # not manual/scheduled/exercise starts
                 is_auto_start = trigger == "victron"
 
-                # Check each condition individually for clearer error messages
+                # Check each condition individually for clearer error messages.
+                # EPO is the absolute top of the precedence stack — block every
+                # trigger (manual, victron, scheduled, exercise) while the
+                # GenSlave hardware E-stop is engaged. The physical NC contact
+                # at the generator already breaks the relay output wire, so
+                # this guard's job is to keep software state consistent and
+                # surface a clear "blocked by EPO" event to the audit log.
+                if state.slave_physical_safety_engaged:
+                    await self.log_event(
+                        "RUN_BLOCKED_EPO_ENGAGED",
+                        {"trigger": trigger, "scheduled_run_id": scheduled_run_id},
+                        severity="WARNING",
+                    )
+                    raise ValueError(
+                        "Cannot start - GenSlave hardware safety interlock "
+                        "(EPO) is engaged. Release the E-stop at the generator "
+                        "to allow operation."
+                    )
                 if state.generator_running:
                     raise ValueError("Generator is already running")
                 if state.slave_connection_status == "disconnected":
@@ -710,6 +727,22 @@ class StateMachine:
 
             # Take action based on signal
             if signal_active and not state.generator_running:
+                # Check EPO. start_generator() would refuse anyway, but
+                # we pre-check here so the log message is "Victron request
+                # suppressed by EPO" rather than a generic ValueError trace.
+                # Same pattern as the lockout/cooldown checks below.
+                if state.slave_physical_safety_engaged:
+                    logger.warning(
+                        "Victron signal active but GenSlave EPO is engaged - "
+                        "suppressing run request until E-stop is released"
+                    )
+                    await self.log_event(
+                        "VICTRON_START_BLOCKED_EPO",
+                        {},
+                        severity="WARNING",
+                    )
+                    return
+
                 # Check runtime lockout
                 if state.runtime_lockout_active:
                     logger.warning(
@@ -1061,7 +1094,7 @@ class StateMachine:
             return HOAStatus(
                 state="auto",
                 raw_state="auto",
-                running=False,
+                hoa_monitor_running=False,
                 enabled=settings.hoa_switch_enabled,
                 mock_mode=settings.is_mock_gpio,
                 boot_delay_active=False,

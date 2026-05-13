@@ -101,7 +101,13 @@ class HOAStatus(BaseModel):
             "Differs from `state` only while boot_delay_active is true."
         )
     )
-    running: bool = Field(description="Whether the HOA monitor is running")
+    hoa_monitor_running: bool = Field(
+        description=(
+            "Whether the HOA monitor's polling loop is active. NOT related "
+            "to whether the generator is running — that lives on the "
+            "generator status object."
+        )
+    )
     enabled: bool = Field(
         description="Whether the monitor is enabled via HOA_SWITCH_ENABLED"
     )
@@ -136,7 +142,7 @@ class HOAStatus(BaseModel):
             "example": {
                 "state": "auto",
                 "raw_state": "auto",
-                "running": True,
+                "hoa_monitor_running": True,
                 "enabled": True,
                 "mock_mode": False,
                 "boot_delay_active": False,

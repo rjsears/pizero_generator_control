@@ -130,6 +130,12 @@ class SystemState(Base):
         """
         if self.generator_running:
             return False
+        # Hardware safety wins over everything. While the GenSlave EPO is
+        # pressed, every start path — manual, Victron, scheduled, exercise
+        # — is refused at this guard. Auto-resume on EPO release is handled
+        # via the next-heartbeat sync (see .claude/failsafe.md decision #7).
+        if self.slave_physical_safety_engaged:
+            return False
         if self.override_enabled and self.override_type == "force_stop":
             return False
         if self.slave_connection_status == "disconnected":

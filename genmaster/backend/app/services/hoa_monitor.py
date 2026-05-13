@@ -262,7 +262,7 @@ class HOAMonitor:
     def get_status(self) -> dict:
         """Diagnostic snapshot for /api/system/hoa and UI consumption."""
         return {
-            "running": self._running,
+            "hoa_monitor_running": self._running,
             "enabled": settings.hoa_switch_enabled,
             "mock_mode": self.mock_mode,
             "state": self.current_state,

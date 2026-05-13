@@ -210,7 +210,7 @@ class HardwareSafetyMonitor:
     def get_status(self) -> dict:
         """Return a snapshot for diagnostics / future heartbeat payload."""
         return {
-            "running": self._running,
+            "epo_monitor_running": self._running,
             "available": HAT_AVAILABLE,
             "enabled": settings.HARDWARE_SAFETY_ENABLED,
             "engaged": self._engaged,

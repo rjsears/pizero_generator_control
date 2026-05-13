@@ -118,7 +118,12 @@ class HardwareSafetyStatus(BaseModel):
     """Hardware safety (EPO) monitor status — dedicated diagnostic surface
     for GenMaster's UI and the operator-facing manual page."""
 
-    running: bool = Field(description="Whether the safety polling loop is running")
+    epo_monitor_running: bool = Field(
+        description=(
+            "Whether the EPO monitor's polling loop is active. NOT related "
+            "to whether the generator is running."
+        )
+    )
     available: bool = Field(
         description=(
             "Whether the Auto Hat Mini library is responding. False in mock "
