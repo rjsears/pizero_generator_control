@@ -115,6 +115,13 @@ class HOAMonitor:
         # Diagnostics
         self._state_change_count: int = 0
         self._last_state_change_at: Optional[int] = None
+        # Optional async callback the state machine registers to react to
+        # HOA transitions (Phase 4d). Invoked from the gpiozero polling
+        # thread; this module dispatches it on the asyncio loop captured
+        # at start() time. Always initialized to None so attribute access
+        # in _reevaluate() doesn't AttributeError before
+        # set_state_change_callback() has been called.
+        self._state_change_callback: Optional[HOAStateChangeCallback] = None
 
     # =========================================================================
     # Lifecycle
@@ -357,17 +364,32 @@ class HOAMonitor:
         # Dispatch to the state machine callback (Phase 4d) — only if one
         # is registered AND we're past the boot delay window. We pass the
         # raw old/new states (including "fault") so the consumer can
-        # decide its own treatment.
+        # decide its own treatment. The future returned by
+        # run_coroutine_threadsafe SILENTLY SWALLOWS uncaught exceptions
+        # in the scheduled coroutine, so we attach a done-callback that
+        # surfaces any exception into the log — otherwise a buggy handler
+        # disappears without trace.
         if (
             self._state_change_callback is not None
             and not self.is_boot_delay_active
             and self._loop is not None
         ):
             try:
-                asyncio.run_coroutine_threadsafe(
+                future = asyncio.run_coroutine_threadsafe(
                     self._state_change_callback(old_state, new_state),
                     self._loop,
                 )
+
+                def _log_unhandled(fut):
+                    try:
+                        fut.result()
+                    except Exception:
+                        logger.exception(
+                            f"HOA state-change callback failed for "
+                            f"{old_state} -> {new_state}"
+                        )
+
+                future.add_done_callback(_log_unhandled)
             except Exception as e:
                 logger.error(
                     f"Failed to schedule HOA state-change callback: {e}"
