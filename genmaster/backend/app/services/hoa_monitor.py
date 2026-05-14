@@ -43,7 +43,7 @@ machine to react to changes (blocking runs in Quiet, etc.).
 import asyncio
 import logging
 import time
-from typing import Literal, Optional
+from typing import Awaitable, Callable, Literal, Optional
 
 from app.config import settings
 
@@ -51,6 +51,12 @@ logger = logging.getLogger(__name__)
 
 
 HOAState = Literal["quiet", "auto", "run", "fault"]
+
+# Async callback fired by HOAMonitor on every debounced state transition.
+# Receives the previous and new states. Suppressed during the boot-delay
+# window so a stale switch position at boot doesn't trigger an immediate
+# action — the operator must move the switch AFTER boot to fire one.
+HOAStateChangeCallback = Callable[[str, str], Awaitable[None]]
 
 
 def _decode_state(quiet_pressed: bool, run_pressed: bool) -> HOAState:
@@ -259,6 +265,27 @@ class HOAMonitor:
         """
         return self._current_state
 
+    def set_state_change_callback(
+        self, callback: Optional[HOAStateChangeCallback]
+    ) -> None:
+        """Register an async callback fired on every debounced HOA
+        transition. Pass None to clear.
+
+        Signature: ``async def callback(old_state: str, new_state: str)``.
+
+        The callback is invoked from gpiozero's polling thread; this
+        monitor schedules it on the asyncio event loop captured at
+        start() time, so the callback runs in the normal async context
+        (with database access, etc.).
+
+        Boot-delay handling: callbacks are NOT fired for transitions
+        that occur during the post-boot grace window. Those transitions
+        are still logged (as "suppressed by boot delay" entries) but no
+        action is taken — preventing the system from acting on a stale
+        switch position the instant power is restored.
+        """
+        self._state_change_callback = callback
+
     def get_status(self) -> dict:
         """Diagnostic snapshot for /api/system/hoa and UI consumption."""
         return {
@@ -326,6 +353,25 @@ class HOAMonitor:
             )
         else:
             logger.info(f"HOA state changed: {old_state} → {new_state}")
+
+        # Dispatch to the state machine callback (Phase 4d) — only if one
+        # is registered AND we're past the boot delay window. We pass the
+        # raw old/new states (including "fault") so the consumer can
+        # decide its own treatment.
+        if (
+            self._state_change_callback is not None
+            and not self.is_boot_delay_active
+            and self._loop is not None
+        ):
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    self._state_change_callback(old_state, new_state),
+                    self._loop,
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to schedule HOA state-change callback: {e}"
+                )
 
     # =========================================================================
     # Mock controls (for dev/tests on non-Pi platforms)

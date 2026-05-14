@@ -29,12 +29,14 @@ class GeneratorRun(Base):
     __tablename__ = "generator_runs"
     __table_args__ = (
         CheckConstraint(
-            "trigger_type IN ('victron', 'manual', 'scheduled', 'exercise')",
+            "trigger_type IN ('victron', 'manual', 'scheduled', 'exercise', 'local_switch_genmaster')",
             name="chk_trigger_type",
         ),
         CheckConstraint(
             "stop_reason IS NULL OR stop_reason IN "
-            "('victron', 'manual', 'scheduled_end', 'exercise_end', 'comm_loss', 'override', 'error', 'max_runtime')",
+            "('victron', 'manual', 'scheduled_end', 'exercise_end', "
+            "'comm_loss', 'override', 'error', 'max_runtime', "
+            "'local_switch_genmaster_end', 'hoa_quiet')",
             name="chk_stop_reason",
         ),
         Index("idx_generator_runs_start_time", "start_time"),
