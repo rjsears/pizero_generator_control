@@ -62,6 +62,23 @@ export default {
   },
 
   /**
+   * Get current HOA Quiet override status.
+   * @returns {Promise<Object>}
+   */
+  getQuietOverride() {
+    return api.get('/system/quiet-override')
+  },
+
+  /**
+   * Enable a temporary HOA Quiet override.
+   * @param {number} durationMinutes - operator-selected duration (no default)
+   * @returns {Promise<Object>}
+   */
+  enableQuietOverride(durationMinutes) {
+    return api.post('/system/quiet-override', { duration_minutes: durationMinutes })
+  },
+
+  /**
    * Test slave connection
    * @returns {Promise<Object>}
    */

@@ -221,6 +221,51 @@ class ArmResponse(BaseModel):
     )
 
 
+class QuietOverrideRequest(BaseModel):
+    """Request to temporarily override HOA Quiet mode (Phase 4c).
+
+    Per failsafe.md decision #2: the operator chooses the duration
+    every time — there is no default and no "continuous" option (a
+    continuous override would defeat Quiet; use HOA Run for that).
+    """
+
+    duration_minutes: int = Field(
+        gt=0,
+        le=1440,
+        description=(
+            "How long to override Quiet, in minutes. Operator must "
+            "choose explicitly — no default. Max 1440 (24 hours)."
+        ),
+    )
+
+    class Config:
+        json_schema_extra = {"example": {"duration_minutes": 30}}
+
+
+class QuietOverrideStatus(BaseModel):
+    """Current HOA Quiet override status."""
+
+    active: bool = Field(
+        description="Whether a Quiet override window is currently in effect"
+    )
+    expires_at: Optional[int] = Field(
+        None,
+        description="Unix timestamp when the override expires (None if not active)",
+    )
+    seconds_remaining: int = Field(
+        description="Seconds until the override expires (0 if not active)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "active": True,
+                "expires_at": 1715630000,
+                "seconds_remaining": 1740,
+            }
+        }
+
+
 class WifiWatchdogStatus(BaseModel):
     """WiFi watchdog service status."""
 

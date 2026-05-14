@@ -23,6 +23,8 @@ export const useSystemStore = defineStore('system', () => {
   const slaveDetails = ref(null)
   const victronStatus = ref(null)
   const hoaStatus = ref(null)
+  // HOA Quiet override (Phase 4c): { active, expires_at, seconds_remaining }
+  const quietOverride = ref(null)
   const loading = ref(false)
   const error = ref(null)
 
@@ -73,6 +75,13 @@ export const useSystemStore = defineStore('system', () => {
   const hoaIsQuiet = computed(() => hoaState.value === 'quiet')
   const hoaIsRun = computed(() => hoaState.value === 'run')
   const hoaIsFault = computed(() => hoaState.value === 'fault')
+
+  // HOA Quiet override predicates. When active, automation triggers fire
+  // normally despite the HOA selector being in Quiet.
+  const quietOverrideActive = computed(() => quietOverride.value?.active === true)
+  const quietOverrideSecondsRemaining = computed(
+    () => quietOverride.value?.seconds_remaining || 0,
+  )
 
   // GenSlave hardware E-stop (EPO) state. Reads from the dedicated ref
   // populated by the fast-poll (every ~5s) in views that consume it.
@@ -206,6 +215,31 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  async function fetchQuietOverride() {
+    try {
+      const response = await systemService.getQuietOverride()
+      quietOverride.value = response.data
+    } catch {
+      // Keep last-known on transient errors.
+    }
+  }
+
+  async function enableQuietOverride(durationMinutes) {
+    const notifications = useNotificationStore()
+    try {
+      const response = await systemService.enableQuietOverride(durationMinutes)
+      quietOverride.value = response.data
+      notifications.success(
+        `Quiet override active for ${durationMinutes} minute${durationMinutes === 1 ? '' : 's'}`,
+      )
+      return true
+    } catch (err) {
+      const message = err.response?.data?.detail || 'Failed to enable Quiet override'
+      notifications.error(message)
+      return false
+    }
+  }
+
   async function rebootSystem() {
     const notifications = useNotificationStore()
 
@@ -249,6 +283,7 @@ export const useSystemStore = defineStore('system', () => {
     slaveDetails,
     victronStatus,
     hoaStatus,
+    quietOverride,
     loading,
     error,
     // Cached slave status state
@@ -275,6 +310,8 @@ export const useSystemStore = defineStore('system', () => {
     hoaIsQuiet,
     hoaIsRun,
     hoaIsFault,
+    quietOverrideActive,
+    quietOverrideSecondsRemaining,
     overallHealth,
 
     // Actions
@@ -286,6 +323,8 @@ export const useSystemStore = defineStore('system', () => {
     fetchSlaveDetails,
     fetchVictronStatus,
     fetchHoaStatus,
+    fetchQuietOverride,
+    enableQuietOverride,
     rebootSystem,
     testSlaveConnection,
     clearError,

@@ -445,13 +445,17 @@ class StateMachine:
 
                 # HOA Quiet guard. Sits below EPO in the precedence stack:
                 # while the HOA selector is in the Quiet position, automation
-                # triggers (Victron, scheduled, exercise) are suppressed but
-                # the operator can still start manually — Quiet is an
-                # operator-preference filter, not a safety lockout. Web UI
-                # operator override of Quiet is Phase 4c.
+                # triggers (Victron, scheduled, exercise) are suppressed —
+                # UNLESS the operator has an active web override (Phase 4c).
+                # Quiet is an operator-preference filter, not a safety
+                # lockout; manual starts always bypass it.
                 if trigger in ("victron", "scheduled", "exercise"):
                     from app.main import hoa_monitor
-                    if hoa_monitor is not None and hoa_monitor.current_state == "quiet":
+                    if (
+                        hoa_monitor is not None
+                        and hoa_monitor.current_state == "quiet"
+                        and not self._is_quiet_override_active(state)
+                    ):
                         await self.log_event(
                             "AUTO_RUN_SUPPRESSED_BY_QUIET",
                             {
@@ -464,8 +468,9 @@ class StateMachine:
                         raise ValueError(
                             f"Cannot start - HOA selector is in the Quiet "
                             f"position; automation triggers ({trigger}) are "
-                            f"suppressed. Use the web UI's manual start to "
-                            f"override, or turn the HOA selector to Auto."
+                            f"suppressed. Use the web UI's manual start or "
+                            f"the Quiet override, or turn the HOA selector "
+                            f"to Auto."
                         )
 
                 if state.generator_running:
@@ -777,16 +782,19 @@ class StateMachine:
                 # is informative ("suppressed by Quiet") rather than a generic
                 # ValueError trace from start_generator(). Quiet is an
                 # operator-preference filter that suppresses automation
-                # triggers; manual web starts still work.
+                # triggers; manual web starts still work, and an active
+                # Quiet override (Phase 4c) lets automation through.
                 from app.main import hoa_monitor
                 if (
                     hoa_monitor is not None
                     and hoa_monitor.current_state == "quiet"
+                    and not self._is_quiet_override_active(state)
                 ):
                     logger.info(
                         "Victron signal active but HOA selector is in Quiet "
                         "position - suppressing automation run. Operator can "
-                        "manually start via web UI if needed."
+                        "manually start via web UI, or use the Quiet "
+                        "override, if needed."
                     )
                     await self.log_event(
                         "AUTO_RUN_SUPPRESSED_BY_QUIET",
@@ -960,6 +968,95 @@ class StateMachine:
                 logger.error(
                     f"Failed to stop auto-run on HOA -> Quiet: {e}"
                 )
+
+    # =========================================================================
+    # HOA Quiet Override (Phase 4c)
+    # =========================================================================
+
+    def _is_quiet_override_active(self, state: SystemState) -> bool:
+        """Pure check — is the operator's Quiet override currently in effect?
+
+        True only if the flag is set AND the expiry timestamp is in the
+        future. Does NOT mutate state; the lazy clear of an expired flag
+        happens in get_quiet_override_status() (polled by the UI).
+
+        Used by the HOA Quiet guards in start_generator() and
+        handle_victron_signal_change() to let automation through while
+        an override window is open.
+        """
+        if not state.quiet_override_active:
+            return False
+        if state.quiet_override_expires_at is None:
+            return False
+        return int(time.time()) < state.quiet_override_expires_at
+
+    async def enable_quiet_override(self, duration_seconds: int) -> dict:
+        """Enable the Quiet override for an operator-selected duration.
+
+        Per failsafe.md decision #2 the duration is chosen by the
+        operator every time — there is no default and no "continuous"
+        option. The caller (the API endpoint) validates that
+        duration_seconds is positive and within a sane bound.
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            now = int(time.time())
+            expires_at = now + duration_seconds
+            state.quiet_override_active = True
+            state.quiet_override_expires_at = expires_at
+            await db.commit()
+
+        await self.log_event(
+            "QUIET_OVERRIDE_ENABLED",
+            {"duration_seconds": duration_seconds, "expires_at": expires_at},
+        )
+        logger.info(
+            f"Quiet override enabled for {duration_seconds}s "
+            f"(expires at unix {expires_at})"
+        )
+        return {
+            "active": True,
+            "expires_at": expires_at,
+            "seconds_remaining": duration_seconds,
+        }
+
+    async def get_quiet_override_status(self) -> dict:
+        """Return the current Quiet override status.
+
+        Lazily clears the flag when the window has passed — this method
+        is polled by the UI every few seconds, so it doubles as the
+        cleanup path. Quiet re-engages automatically once cleared.
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            now = int(time.time())
+            active = bool(
+                state.quiet_override_active
+                and state.quiet_override_expires_at is not None
+                and now < state.quiet_override_expires_at
+            )
+
+            # Lazy cleanup: flag set but window expired -> clear it so the
+            # DB and UI reflect that Quiet has re-engaged.
+            if state.quiet_override_active and not active:
+                state.quiet_override_active = False
+                state.quiet_override_expires_at = None
+                await db.commit()
+                logger.info(
+                    "Quiet override window expired — Quiet mode re-engaged"
+                )
+                await self.log_event("QUIET_OVERRIDE_EXPIRED", {})
+
+            seconds_remaining = (
+                max(0, state.quiet_override_expires_at - now)
+                if active and state.quiet_override_expires_at is not None
+                else 0
+            )
+            return {
+                "active": active,
+                "expires_at": state.quiet_override_expires_at if active else None,
+                "seconds_remaining": seconds_remaining,
+            }
 
     # =========================================================================
     # Override Operations

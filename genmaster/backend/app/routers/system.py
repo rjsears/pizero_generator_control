@@ -150,6 +150,8 @@ from app.schemas import (
     CombinedSystemHealth,
     FullSystemStatus,
     HOAStatus,
+    QuietOverrideRequest,
+    QuietOverrideStatus,
     SystemHealth,
     VictronStatus,
 )
@@ -270,6 +272,42 @@ async def get_hoa_status(
     /api/system/status for callers that only need the summary.
     """
     return await state_machine.get_hoa_status()
+
+
+@router.get("/quiet-override", response_model=QuietOverrideStatus)
+async def get_quiet_override(
+    state_machine=Depends(get_state_machine),
+) -> QuietOverrideStatus:
+    """
+    Get the current HOA Quiet override status.
+
+    Polled by the UI to show the operator how much time is left on an
+    active override. This call also lazily clears an expired override
+    flag, so Quiet re-engages cleanly once the window passes.
+    """
+    status = await state_machine.get_quiet_override_status()
+    return QuietOverrideStatus(**status)
+
+
+@router.post("/quiet-override", response_model=QuietOverrideStatus)
+async def enable_quiet_override(
+    request: QuietOverrideRequest,
+    state_machine=Depends(get_state_machine),
+) -> QuietOverrideStatus:
+    """
+    Temporarily override HOA Quiet mode for an operator-selected window.
+
+    While the override is active, automation triggers (Victron,
+    scheduled, exercise) fire normally even though the HOA selector is
+    physically in the Quiet position. When the window expires Quiet
+    re-engages automatically.
+
+    Per failsafe.md decision #2 the duration is chosen by the operator
+    on every request — there is no default and no "continuous" option.
+    """
+    duration_seconds = request.duration_minutes * 60
+    result = await state_machine.enable_quiet_override(duration_seconds)
+    return QuietOverrideStatus(**result)
 
 
 @router.get("/status", response_model=FullSystemStatus)

@@ -68,6 +68,15 @@ class SystemState(Base):
     override_enabled: Mapped[bool] = mapped_column(default=False)
     override_type: Mapped[str] = mapped_column(default="none")
 
+    # HOA Quiet Override (Phase 4c) — operator-initiated temporary bypass
+    # of the HOA Quiet selector position. While active AND not expired,
+    # automation triggers fire normally despite the selector being in
+    # Quiet. Duration is operator-selected every time (no default, no
+    # "continuous" option — failsafe.md decision #2). The state machine
+    # lazily clears the flag once the window passes.
+    quiet_override_active: Mapped[bool] = mapped_column(default=False)
+    quiet_override_expires_at: Mapped[Optional[int]] = mapped_column(nullable=True)
+
     # Victron Input
     victron_signal_state: Mapped[bool] = mapped_column(default=False)
     victron_last_change: Mapped[Optional[int]] = mapped_column(nullable=True)

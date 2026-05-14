@@ -117,22 +117,51 @@
          apply, EPO is on top (correct precedence). -->
     <div
       v-if="hoaIsQuiet"
-      class="rounded-xl border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/30 px-4 py-3 flex items-center gap-3"
+      :class="[
+        'rounded-xl border-2 px-4 py-3 flex items-center gap-3',
+        quietOverrideActive
+          ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
+          : 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+      ]"
       role="status"
     >
-      <InformationCircleIcon class="h-7 w-7 text-blue-500 flex-shrink-0" />
+      <InformationCircleIcon
+        :class="[
+          'h-7 w-7 flex-shrink-0',
+          quietOverrideActive ? 'text-emerald-500' : 'text-blue-500'
+        ]"
+      />
       <div class="flex-1">
-        <p class="text-base font-bold text-blue-700 dark:text-blue-300">
-          Quiet Mode Active
-        </p>
-        <p class="text-sm text-blue-600 dark:text-blue-400">
-          The HOA selector at GenMaster is in the Quiet position. Automatic
-          generator runs (Victron, scheduled, exercise) are suppressed.
-          Manual web starts still work — use them if you need power despite
-          Quiet preference. Turn the selector to Auto to resume normal
-          automation.
-        </p>
+        <template v-if="quietOverrideActive">
+          <p class="text-base font-bold text-emerald-700 dark:text-emerald-300">
+            Quiet Override Active — {{ quietOverrideMinutesRemaining }} min remaining
+          </p>
+          <p class="text-sm text-emerald-600 dark:text-emerald-400">
+            The HOA selector is in Quiet, but you've temporarily overridden it.
+            Automatic generator runs (Victron, scheduled, exercise) are firing
+            normally. Quiet re-engages automatically when the override window
+            expires.
+          </p>
+        </template>
+        <template v-else>
+          <p class="text-base font-bold text-blue-700 dark:text-blue-300">
+            Quiet Mode Active
+          </p>
+          <p class="text-sm text-blue-600 dark:text-blue-400">
+            The HOA selector at GenMaster is in the Quiet position. Automatic
+            generator runs (Victron, scheduled, exercise) are suppressed.
+            Manual web starts still work. Turn the selector to Auto to resume
+            normal automation, or temporarily override Quiet with the button.
+          </p>
+        </template>
       </div>
+      <button
+        v-if="!quietOverrideActive"
+        @click="showQuietOverrideModal = true"
+        class="flex-shrink-0 px-3 py-2 rounded-lg text-sm font-semibold bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+      >
+        Override
+      </button>
     </div>
     <div
       v-else-if="hoaIsRun"
@@ -1205,6 +1234,34 @@
       </template>
     </Modal>
 
+    <!-- Quiet Override Modal -->
+    <Modal v-model="showQuietOverrideModal" title="Override Quiet Mode">
+      <div class="space-y-4">
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          Temporarily override the HOA Quiet selector. While the override
+          is active, automatic generator runs (Victron, scheduled,
+          exercise) will fire normally. Quiet re-engages automatically
+          when the window expires.
+        </p>
+        <p class="text-sm font-medium text-gray-800 dark:text-gray-200">
+          Choose how long the override should last:
+        </p>
+        <div class="grid grid-cols-3 gap-2">
+          <button
+            v-for="opt in quietOverrideDurations"
+            :key="opt.minutes"
+            @click="applyQuietOverride(opt.minutes)"
+            class="px-3 py-3 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-500 font-semibold text-sm text-gray-800 dark:text-gray-200 transition-colors"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+      </div>
+      <template #footer>
+        <Button variant="secondary" @click="showQuietOverrideModal = false">Cancel</Button>
+      </template>
+    </Modal>
+
     <!-- Fuel Reset Confirm Modal -->
     <Modal v-model="showFuelResetConfirm" title="Reset Fuel Tracking">
       <p class="text-gray-600 dark:text-gray-400">This will reset the total fuel usage counter to zero. Continue?</p>
@@ -1441,6 +1498,32 @@ const epoEngaged = computed(() => systemStore.physicalSafetyEngaged)
 const hoaIsQuiet = computed(() => systemStore.hoaIsQuiet)
 const hoaIsRun = computed(() => systemStore.hoaIsRun)
 const hoaIsFault = computed(() => systemStore.hoaIsFault)
+
+// HOA Quiet override (Phase 4c). When active, the Quiet banner switches
+// to a green "override active" variant and automation runs normally.
+const quietOverrideActive = computed(() => systemStore.quietOverrideActive)
+const quietOverrideMinutesRemaining = computed(() =>
+  Math.ceil(systemStore.quietOverrideSecondsRemaining / 60),
+)
+const showQuietOverrideModal = ref(false)
+// Operator picks one of these every time — no default pre-selected, per
+// failsafe.md decision #2 (and no "continuous" option by design).
+const quietOverrideDurations = [
+  { minutes: 15, label: '15 min' },
+  { minutes: 30, label: '30 min' },
+  { minutes: 60, label: '1 hour' },
+  { minutes: 120, label: '2 hours' },
+  { minutes: 240, label: '4 hours' },
+  { minutes: 480, label: '8 hours' },
+]
+
+async function applyQuietOverride(minutes) {
+  const ok = await systemStore.enableQuietOverride(minutes)
+  if (ok) {
+    showQuietOverrideModal.value = false
+    await systemStore.fetchQuietOverride()
+  }
+}
 
 const canStart = computed(
   () => generatorStore.canStart && relayArmed.value && !epoEngaged.value,
@@ -2104,6 +2187,7 @@ onMounted(async () => {
       systemStore.fetchSlaveStatusCached(),  // Use cached endpoint for instant response
       systemStore.fetchVictronStatus(),  // Victron/GPIO17 status for responsive UI
       systemStore.fetchHoaStatus(),  // HOA selector state (Quiet/Auto/Run/Fault)
+      systemStore.fetchQuietOverride(),  // HOA Quiet override window status
       fetchRelayState(),  // Uses cached endpoint
     ]).finally(() => {
       fastPollInProgress = false
