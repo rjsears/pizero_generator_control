@@ -111,6 +111,64 @@
       </div>
     </div>
 
+    <!-- HOA Selector Banner — visible only when the rotary is NOT in Auto.
+         Auto is the default position so no banner; Quiet/Run/Fault all
+         deserve operator awareness. Sits below the EPO banner so when both
+         apply, EPO is on top (correct precedence). -->
+    <div
+      v-if="hoaIsQuiet"
+      class="rounded-xl border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/30 px-4 py-3 flex items-center gap-3"
+      role="status"
+    >
+      <InformationCircleIcon class="h-7 w-7 text-blue-500 flex-shrink-0" />
+      <div class="flex-1">
+        <p class="text-base font-bold text-blue-700 dark:text-blue-300">
+          Quiet Mode Active
+        </p>
+        <p class="text-sm text-blue-600 dark:text-blue-400">
+          The HOA selector at GenMaster is in the Quiet position. Automatic
+          generator runs (Victron, scheduled, exercise) are suppressed.
+          Manual web starts still work — use them if you need power despite
+          Quiet preference. Turn the selector to Auto to resume normal
+          automation.
+        </p>
+      </div>
+    </div>
+    <div
+      v-else-if="hoaIsRun"
+      class="rounded-xl border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-4 py-3 flex items-center gap-3"
+      role="status"
+    >
+      <BoltIcon class="h-7 w-7 text-emerald-500 flex-shrink-0" />
+      <div class="flex-1">
+        <p class="text-base font-bold text-emerald-700 dark:text-emerald-300">
+          Run Mode Active
+        </p>
+        <p class="text-sm text-emerald-600 dark:text-emerald-400">
+          The HOA selector at GenMaster is in the Run position — operator
+          is explicitly requesting the generator. Return the selector to
+          Auto to release manual control back to automation.
+        </p>
+      </div>
+    </div>
+    <div
+      v-else-if="hoaIsFault"
+      class="rounded-xl border-2 border-amber-500 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 flex items-center gap-3"
+      role="alert"
+    >
+      <ExclamationTriangleIcon class="h-7 w-7 text-amber-500 flex-shrink-0" />
+      <div class="flex-1">
+        <p class="text-base font-bold text-amber-700 dark:text-amber-300">
+          HOA Selector Fault
+        </p>
+        <p class="text-sm text-amber-600 dark:text-amber-400">
+          Both Quiet and Run contacts are closed at the same time —
+          mechanically impossible. Likely a wiring short or stuck contact.
+          The system is treating this as Auto until resolved.
+        </p>
+      </div>
+    </div>
+
     <!-- Control Row: GenSlave | Generator Run Relay | Emergency Stop -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <!-- GenSlave Online Status -->
@@ -1214,6 +1272,7 @@ import {
   CalendarIcon,
   CalendarDaysIcon,
   HandRaisedIcon,
+  BoltIcon,
   BoltSlashIcon,
   ClockIcon,
   FireIcon,
@@ -1375,6 +1434,15 @@ const hostWifi = ref(null)
 // state machine refuses every start path. Mirror the precedence here so
 // the Start button can't even be clicked, matching backend Phase 4a.
 const epoEngaged = computed(() => systemStore.physicalSafetyEngaged)
+
+// HOA selector banners. Auto is the default (no banner). Quiet/Run/Fault
+// each get a banner with appropriate severity styling. Backend Phase 4b
+// suppresses automation triggers when state is Quiet; manual starts still
+// work, so the Start button stays enabled when HOA is Quiet.
+const hoaIsQuiet = computed(() => systemStore.hoaIsQuiet)
+const hoaIsRun = computed(() => systemStore.hoaIsRun)
+const hoaIsFault = computed(() => systemStore.hoaIsFault)
+
 const canStart = computed(
   () => generatorStore.canStart && relayArmed.value && !epoEngaged.value,
 )
@@ -2030,6 +2098,7 @@ onMounted(async () => {
       generatorStore.fetchStatus(),
       systemStore.fetchSlaveStatusCached(),  // Use cached endpoint for instant response
       systemStore.fetchVictronStatus(),  // Victron/GPIO17 status for responsive UI
+      systemStore.fetchHoaStatus(),  // HOA selector state (Quiet/Auto/Run/Fault)
       fetchRelayState(),  // Uses cached endpoint
     ]).finally(() => {
       fastPollInProgress = false

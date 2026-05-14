@@ -22,6 +22,7 @@ export const useSystemStore = defineStore('system', () => {
   const slaveHealth = ref(null)
   const slaveDetails = ref(null)
   const victronStatus = ref(null)
+  const hoaStatus = ref(null)
   const loading = ref(false)
   const error = ref(null)
 
@@ -62,6 +63,16 @@ export const useSystemStore = defineStore('system', () => {
 
   const victronInputActive = computed(() => victronStatus.value?.signal_state || false)
   const victronLastChange = computed(() => victronStatus.value?.last_change || null)
+
+  // HOA selector (Quiet/Auto/Run/Fault). hoaState is the headline string;
+  // hoaIsQuiet / hoaIsRun / hoaIsFault are convenience predicates the UI uses
+  // to decide which (if any) banner to show. Defaults to 'auto' until the
+  // first poll lands, matching backend behavior (boot delay also reports
+  // 'auto').
+  const hoaState = computed(() => hoaStatus.value?.state || 'auto')
+  const hoaIsQuiet = computed(() => hoaState.value === 'quiet')
+  const hoaIsRun = computed(() => hoaState.value === 'run')
+  const hoaIsFault = computed(() => hoaState.value === 'fault')
 
   // GenSlave hardware E-stop (EPO) state. Reads from the dedicated ref
   // populated by the fast-poll (every ~5s) in views that consume it.
@@ -185,6 +196,16 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  async function fetchHoaStatus() {
+    try {
+      const response = await systemService.getHoaStatus()
+      hoaStatus.value = response.data
+    } catch {
+      // Don't clear on transient errors — keep last-known state so the UI
+      // doesn't flash back to 'auto' on a single failed poll.
+    }
+  }
+
   async function rebootSystem() {
     const notifications = useNotificationStore()
 
@@ -227,6 +248,7 @@ export const useSystemStore = defineStore('system', () => {
     slaveHealth,
     slaveDetails,
     victronStatus,
+    hoaStatus,
     loading,
     error,
     // Cached slave status state
@@ -249,6 +271,10 @@ export const useSystemStore = defineStore('system', () => {
     victronInputActive,
     victronLastChange,
     physicalSafetyEngaged,
+    hoaState,
+    hoaIsQuiet,
+    hoaIsRun,
+    hoaIsFault,
     overallHealth,
 
     // Actions
@@ -259,6 +285,7 @@ export const useSystemStore = defineStore('system', () => {
     fetchSlaveRelayCached,
     fetchSlaveDetails,
     fetchVictronStatus,
+    fetchHoaStatus,
     rebootSystem,
     testSlaveConnection,
     clearError,

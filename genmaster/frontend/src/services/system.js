@@ -53,6 +53,15 @@ export default {
   },
 
   /**
+   * Get HOA selector status (Quiet/Auto/Run/Fault) — GenMaster GPIO22+27.
+   * Returns the full HOAStatus diagnostic payload.
+   * @returns {Promise<Object>}
+   */
+  getHoaStatus() {
+    return api.get('/system/hoa')
+  },
+
+  /**
    * Test slave connection
    * @returns {Promise<Object>}
    */

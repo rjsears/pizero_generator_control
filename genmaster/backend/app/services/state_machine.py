@@ -442,6 +442,32 @@ class StateMachine:
                         "(EPO) is engaged. Release the E-stop at the generator "
                         "to allow operation."
                     )
+
+                # HOA Quiet guard. Sits below EPO in the precedence stack:
+                # while the HOA selector is in the Quiet position, automation
+                # triggers (Victron, scheduled, exercise) are suppressed but
+                # the operator can still start manually — Quiet is an
+                # operator-preference filter, not a safety lockout. Web UI
+                # operator override of Quiet is Phase 4c.
+                if trigger in ("victron", "scheduled", "exercise"):
+                    from app.main import hoa_monitor
+                    if hoa_monitor is not None and hoa_monitor.current_state == "quiet":
+                        await self.log_event(
+                            "AUTO_RUN_SUPPRESSED_BY_QUIET",
+                            {
+                                "trigger": trigger,
+                                "scheduled_run_id": scheduled_run_id,
+                                "hoa_state": "quiet",
+                            },
+                            severity="WARNING",
+                        )
+                        raise ValueError(
+                            f"Cannot start - HOA selector is in the Quiet "
+                            f"position; automation triggers ({trigger}) are "
+                            f"suppressed. Use the web UI's manual start to "
+                            f"override, or turn the HOA selector to Auto."
+                        )
+
                 if state.generator_running:
                     raise ValueError("Generator is already running")
                 if state.slave_connection_status == "disconnected":
@@ -739,6 +765,28 @@ class StateMachine:
                     await self.log_event(
                         "VICTRON_START_BLOCKED_EPO",
                         {},
+                        severity="WARNING",
+                    )
+                    return
+
+                # Check HOA Quiet. Same pre-check pattern as EPO so the log
+                # is informative ("suppressed by Quiet") rather than a generic
+                # ValueError trace from start_generator(). Quiet is an
+                # operator-preference filter that suppresses automation
+                # triggers; manual web starts still work.
+                from app.main import hoa_monitor
+                if (
+                    hoa_monitor is not None
+                    and hoa_monitor.current_state == "quiet"
+                ):
+                    logger.info(
+                        "Victron signal active but HOA selector is in Quiet "
+                        "position - suppressing automation run. Operator can "
+                        "manually start via web UI if needed."
+                    )
+                    await self.log_event(
+                        "AUTO_RUN_SUPPRESSED_BY_QUIET",
+                        {"trigger": "victron", "hoa_state": "quiet"},
                         severity="WARNING",
                     )
                     return
