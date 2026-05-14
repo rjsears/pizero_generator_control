@@ -437,6 +437,9 @@ class StateMachine:
                         {"trigger": trigger, "scheduled_run_id": scheduled_run_id},
                         severity="WARNING",
                     )
+                    await self._trigger_system_notification(
+                        "manual_run_blocked_by_safety", {"trigger": trigger}
+                    )
                     raise ValueError(
                         "Cannot start - GenSlave hardware safety interlock "
                         "(EPO) is engaged. Release the E-stop at the generator "
@@ -464,6 +467,9 @@ class StateMachine:
                                 "hoa_state": "quiet",
                             },
                             severity="WARNING",
+                        )
+                        await self._trigger_system_notification(
+                            "auto_run_suppressed_by_quiet", {"trigger": trigger}
                         )
                         raise ValueError(
                             f"Cannot start - HOA selector is in the Quiet "
@@ -801,6 +807,9 @@ class StateMachine:
                         {"trigger": "victron", "hoa_state": "quiet"},
                         severity="WARNING",
                     )
+                    await self._trigger_system_notification(
+                        "auto_run_suppressed_by_quiet", {"trigger": "victron"}
+                    )
                     return
 
                 # Check runtime lockout
@@ -874,6 +883,19 @@ class StateMachine:
             f"State machine handling HOA transition: {old_state} -> {new_state}"
         )
 
+        # Quiet engaged/released notifications track the selector position
+        # itself, independent of any run-state transition below. Fire them
+        # first so they go out even when one of the CASE branches returns
+        # early.
+        if new_state == "quiet" and old_state != "quiet":
+            await self._trigger_system_notification(
+                "quiet_mode_engaged_genmaster", {}
+            )
+        elif old_state == "quiet" and new_state != "quiet":
+            await self._trigger_system_notification(
+                "quiet_mode_released_genmaster", {}
+            )
+
         # Snapshot the current run state without holding the session
         # across calls to start/stop_generator (which open their own
         # sessions and acquire the state-machine lock).
@@ -890,6 +912,9 @@ class StateMachine:
             )
             try:
                 await self.stop_generator("local_switch_genmaster_end")
+                await self._trigger_system_notification(
+                    "manual_run_ended_genmaster_switch", {}
+                )
             except Exception as e:
                 logger.error(f"Failed to stop local-switch run on HOA leave-Run: {e}")
             return
@@ -931,6 +956,9 @@ class StateMachine:
                 )
                 try:
                     await self.start_generator("local_switch_genmaster")
+                    await self._trigger_system_notification(
+                        "manual_run_started_genmaster_switch", {}
+                    )
                 except ValueError as e:
                     logger.warning(
                         f"HOA Run requested but start refused: {e}"
@@ -1009,6 +1037,10 @@ class StateMachine:
         await self.log_event(
             "QUIET_OVERRIDE_ENABLED",
             {"duration_seconds": duration_seconds, "expires_at": expires_at},
+        )
+        await self._trigger_system_notification(
+            "quiet_override_enabled",
+            {"duration_minutes": duration_seconds // 60},
         )
         logger.info(
             f"Quiet override enabled for {duration_seconds}s "
@@ -1155,6 +1187,16 @@ class StateMachine:
                 f"GenSlave EPO state synced from fast-poll: "
                 f"{old_value} -> {new_value}"
             )
+
+        # Fire the operator notification on the EPO transition. Done after
+        # the session closes so a slow notification target can't hold a DB
+        # connection open. _trigger_system_notification is exception-safe.
+        await self._trigger_system_notification(
+            "hardware_safety_engaged_genslave"
+            if new_value
+            else "hardware_safety_released_genslave",
+            {},
+        )
 
     async def set_armed_state(self, armed: bool, manual: bool = True) -> None:
         """
