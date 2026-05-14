@@ -563,6 +563,7 @@ class StateMachine:
                     "manual": "Manual start",
                     "scheduled": "Scheduled run",
                     "exercise": "Exercise run",
+                    "local_switch_genmaster": "Hardware switch (HOA Run)",
                 }
                 await self._trigger_system_notification(
                     "generator_started",
@@ -680,10 +681,13 @@ class StateMachine:
                     "victron": "Victron signal off",
                     "manual": "Manual stop",
                     "scheduled_end": "Scheduled run ended",
+                    "exercise_end": "Exercise run ended",
                     "comm_loss": "Communication loss",
                     "override": "Override activated",
                     "error": "Error occurred",
                     "max_runtime": "Max runtime exceeded",
+                    "local_switch_genmaster_end": "HOA selector returned to Auto",
+                    "hoa_quiet": "HOA selector flipped to Quiet during run",
                 }
                 duration_seconds = run.duration_seconds if run else 0
                 # Format runtime as human-readable

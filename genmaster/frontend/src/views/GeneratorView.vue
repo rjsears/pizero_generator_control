@@ -1489,6 +1489,7 @@ const triggerLabel = computed(() => {
     manual: 'Manual Start',
     scheduled: 'Scheduled Run',
     exercise: 'Exercise Run',
+    local_switch_genmaster: 'HOA Switch (Run)',
     idle: 'Idle',
   }
   return labels[generatorTrigger.value] || generatorTrigger.value
@@ -1500,6 +1501,8 @@ const triggerBadgeClass = computed(() => {
     manual: 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300',
     scheduled: 'bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-300',
     exercise: 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300',
+    // Match the green Run banner color for visual consistency.
+    local_switch_genmaster: 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300',
     idle: 'bg-gray-100 dark:bg-gray-500/20 text-gray-700 dark:text-gray-300',
   }
   return classes[generatorTrigger.value] || classes.idle
@@ -1511,6 +1514,9 @@ const triggerIcon = computed(() => {
     manual: HandRaisedIcon,
     scheduled: CalendarIcon,
     exercise: ClockIcon,
+    // Cog evokes a rotary mechanism — same visual language as the
+    // physical HOA selector switch the operator turned.
+    local_switch_genmaster: CogIcon,
     idle: BoltSlashIcon,
   }
   return icons[generatorTrigger.value] || BoltSlashIcon

@@ -332,6 +332,7 @@ function formatTrigger(trigger) {
     scheduled: 'Scheduled Run',
     victron: 'Victron Auto-Start',
     exercise: 'Exercise Run',
+    local_switch_genmaster: 'HOA Switch',
     api: 'API',
   }
   return triggers[trigger] || trigger || 'Unknown'
@@ -347,6 +348,8 @@ function formatStatus(endReason) {
     comm_loss: 'Comm Loss',
     override: 'Override',
     error: 'Error',
+    local_switch_genmaster_end: 'HOA → Auto',
+    hoa_quiet: 'HOA → Quiet',
   }
   return statuses[endReason] || endReason
 }
@@ -361,6 +364,8 @@ function formatEndReason(endReason) {
     comm_loss: 'Communication lost with GenSlave',
     override: 'Overridden by higher priority',
     error: 'Error occurred',
+    local_switch_genmaster_end: 'HOA selector returned to Auto',
+    hoa_quiet: 'HOA selector flipped to Quiet during run',
   }
   return reasons[endReason] || endReason
 }
@@ -386,6 +391,8 @@ function getStatusBadgeClass(endReason) {
     comm_loss: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
     override: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
     error: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    local_switch_genmaster_end: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+    hoa_quiet: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
   }
   return classes[endReason] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
 }
@@ -395,7 +402,8 @@ function getTriggerBgColor(trigger) {
     manual: 'bg-blue-100 dark:bg-blue-900/30',
     scheduled: 'bg-green-100 dark:bg-green-900/30',
     victron: 'bg-amber-100 dark:bg-amber-900/30',
-    exercise: 'bg-purple-100 dark:bg-purple-900/30',
+    exercise: 'bg-cyan-100 dark:bg-cyan-900/30',
+    local_switch_genmaster: 'bg-emerald-100 dark:bg-emerald-900/30',
   }
   return colors[trigger] || 'bg-gray-100 dark:bg-gray-900/30'
 }
@@ -405,7 +413,8 @@ function getTriggerIconColor(trigger) {
     manual: 'text-blue-600 dark:text-blue-400',
     scheduled: 'text-green-600 dark:text-green-400',
     victron: 'text-amber-600 dark:text-amber-400',
-    exercise: 'text-purple-600 dark:text-purple-400',
+    exercise: 'text-cyan-600 dark:text-cyan-400',
+    local_switch_genmaster: 'text-emerald-600 dark:text-emerald-400',
   }
   return colors[trigger] || 'text-gray-600 dark:text-gray-400'
 }
@@ -451,12 +460,26 @@ const DefaultIcon = {
   }
 }
 
+// HOA selector — circle (rotary base) with an indicator arm pointing
+// up-right toward the Run position. Visually distinct from the Manual
+// hand icon so operators can tell at a glance which physical interface
+// initiated the run.
+const HOAIcon = {
+  render() {
+    return h('svg', { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '2' }, [
+      h('circle', { cx: '12', cy: '12', r: '8', 'stroke-linecap': 'round' }),
+      h('path', { 'stroke-linecap': 'round', d: 'M12 12 L 17.5 8' })
+    ])
+  }
+}
+
 function getTriggerIcon(trigger) {
   const icons = {
     manual: ManualIcon,
     scheduled: ScheduledIcon,
     victron: VictronIcon,
     exercise: ExerciseIcon,
+    local_switch_genmaster: HOAIcon,
   }
   return icons[trigger] || DefaultIcon
 }
