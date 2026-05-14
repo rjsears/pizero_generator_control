@@ -1272,7 +1272,6 @@ import {
   CalendarIcon,
   CalendarDaysIcon,
   HandRaisedIcon,
-  BoltIcon,
   BoltSlashIcon,
   ClockIcon,
   FireIcon,
