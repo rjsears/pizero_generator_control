@@ -500,6 +500,20 @@ DEFAULT_SYSTEM_NOTIFICATION_EVENTS = [
             "selector to Auto."
         ),
     },
+    {
+        "event_type": "genmaster_boot_hardware_state",
+        "display_name": "GenMaster Boot — Hardware Switch State",
+        "description": (
+            "Fired once at GenMaster startup when the EPO is engaged or "
+            "the HOA selector is not in Auto"
+        ),
+        "icon": "InformationCircleIcon",
+        "category": "genmaster",
+        "severity": "warning",
+        "enabled": True,
+        "default_title": "GenMaster Online — Hardware Switch State",
+        "default_message": "{state_message}",
+    },
 ]
 
 

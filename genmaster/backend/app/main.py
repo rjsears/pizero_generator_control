@@ -11,6 +11,7 @@
 
 """FastAPI application entry point with service lifecycle management."""
 
+import asyncio
 import logging
 import os
 import time
@@ -73,6 +74,7 @@ from app.routers import (
 from app.services.exercise_scheduler import ExerciseSchedulerService
 from app.services.gpio_monitor import GPIOMonitor
 from app.services.hoa_monitor import HOAMonitor
+from app.services.manual_run_reminder import ManualRunReminderService
 from app.services.metrics_service import get_metrics_service
 from app.services.redis_cache import get_redis_cache
 from app.services.scheduler import SchedulerService
@@ -91,6 +93,7 @@ logger = logging.getLogger(__name__)
 state_machine: Optional[StateMachine] = None
 gpio_monitor: Optional[GPIOMonitor] = None
 hoa_monitor: Optional[HOAMonitor] = None
+manual_run_reminder_service: Optional[ManualRunReminderService] = None
 scheduler_service: Optional[SchedulerService] = None
 exercise_scheduler_service: Optional[ExerciseSchedulerService] = None
 webhook_service: Optional[WebhookService] = None
@@ -205,7 +208,7 @@ async def sync_generator_info_to_database() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup/shutdown."""
-    global state_machine, gpio_monitor, hoa_monitor, scheduler_service, exercise_scheduler_service, webhook_service
+    global state_machine, gpio_monitor, hoa_monitor, manual_run_reminder_service, scheduler_service, exercise_scheduler_service, webhook_service
 
     # =========================================================================
     # Startup
@@ -278,6 +281,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await exercise_scheduler_service.start()
         logger.info("Exercise scheduler service started")
 
+        # Initialize manual-run reminder service (Phase 5b) — periodic
+        # "your manual run is still going" nudge while a manual/HOA-Run
+        # generator run is active.
+        manual_run_reminder_service = ManualRunReminderService(state_machine)
+        await manual_run_reminder_service.start()
+        logger.info("Manual run reminder service started")
+
         # Sync generator info from environment variables
         await sync_generator_info_to_database()
 
@@ -313,6 +323,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             },
         )
 
+        # Fire the one-shot boot-state hardware notification (Phase 5b)
+        # after a short delay so the first GenSlave poll/heartbeat has
+        # populated the EPO state. Fire-and-forget — a slow or failed
+        # notification target must not block or fail startup.
+        async def _delayed_boot_hardware_notification():
+            await asyncio.sleep(20)
+            try:
+                await state_machine.fire_boot_hardware_state_notification()
+            except Exception as e:
+                logger.warning(
+                    f"Boot hardware-state notification failed: {e}"
+                )
+
+        asyncio.create_task(_delayed_boot_hardware_notification())
+
         logger.info("=" * 60)
         logger.info("GenMaster startup complete!")
         logger.info("=" * 60)
@@ -335,6 +360,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         metrics_svc = get_metrics_service()
         await metrics_svc.stop()
         logger.info("Metrics service stopped")
+
+        # Stop manual-run reminder service
+        if manual_run_reminder_service:
+            await manual_run_reminder_service.stop()
+            logger.info("Manual run reminder service stopped")
 
         # Stop exercise scheduler first
         if exercise_scheduler_service:

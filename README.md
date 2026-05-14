@@ -415,7 +415,6 @@ DATABASE_PASSWORD=<generated-password>
 DATABASE_NAME=genmaster
 
 # GenSlave Communication
-GENSLAVE_ENABLED=true
 SLAVE_API_URL=http://genslave.local:8001
 SLAVE_API_SECRET=<shared-secret>
 
@@ -822,17 +821,6 @@ curl http://localhost:8000/api/dev/gpio/state
 # Toggle signal
 curl -X POST http://localhost:8000/api/dev/gpio/toggle
 ```
-
-### UI-Only Testing
-
-To test the web interface without GenSlave:
-
-```bash
-# Set in .env
-GENSLAVE_ENABLED=false
-```
-
-This disables heartbeat service and suppresses slave offline warnings.
 
 ---
 

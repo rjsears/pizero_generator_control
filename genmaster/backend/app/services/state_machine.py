@@ -997,6 +997,81 @@ class StateMachine:
                     f"Failed to stop auto-run on HOA -> Quiet: {e}"
                 )
 
+    async def fire_boot_hardware_state_notification(self) -> None:
+        """One-shot startup notification describing the EPO + HOA state
+        the system came up in (Phase 5b).
+
+        Only fires when something is non-normal — EPO engaged or HOA not
+        in Auto. A fully-normal boot (EPO released, HOA Auto) produces no
+        notification.
+
+        Called from main.py's lifespan via a short delayed task so the
+        first GenSlave poll/heartbeat has had time to populate the EPO
+        state. Uses the HOA monitor's *raw* state (the actual physical
+        switch position) rather than its boot-delay-suppressed reported
+        state — the boot delay governs whether we ACT on the switch, but
+        this notification is purely informational.
+        """
+        from app.main import hoa_monitor
+
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            epo_engaged = bool(state.slave_physical_safety_engaged)
+
+        hoa_state = "auto"
+        if hoa_monitor is not None:
+            hoa_state = hoa_monitor.raw_state
+
+        # Fully-normal boot — no news is good news.
+        if not epo_engaged and hoa_state == "auto":
+            logger.info(
+                "Boot hardware state normal (EPO released, HOA Auto) — "
+                "no boot-state notification"
+            )
+            return
+
+        if epo_engaged and hoa_state == "run":
+            msg = (
+                "GenMaster is back online. The HOA selector is in RUN, but "
+                "the GenSlave EPO is engaged — the generator will NOT start. "
+                "Release the E-stop at the generator to allow it to run."
+            )
+        elif epo_engaged and hoa_state == "quiet":
+            msg = (
+                "GenMaster is back online. The HOA selector is in QUIET and "
+                "the GenSlave EPO is engaged — the generator cannot run from "
+                "any source until the E-stop is released."
+            )
+        elif epo_engaged:
+            msg = (
+                "GenMaster is back online. The GenSlave EPO is engaged — no "
+                "generator runs (automatic or manual) will occur until the "
+                "E-stop at the generator is released."
+            )
+        elif hoa_state == "run":
+            msg = (
+                "GenMaster is back online. The HOA selector is in RUN — the "
+                "generator will start shortly, after the boot-delay window. "
+                "Turn the selector to Auto if this is not intended."
+            )
+        elif hoa_state == "quiet":
+            msg = (
+                "GenMaster is back online. The HOA selector is in QUIET — "
+                "automatic generator runs are suppressed. Turn the selector "
+                "to Auto to resume normal automation."
+            )
+        else:  # hoa_state == "fault"
+            msg = (
+                "GenMaster is back online. The HOA selector is reporting a "
+                "FAULT (both contacts closed) — check the switch wiring. "
+                "The system is treating it as Auto until resolved."
+            )
+
+        await self._trigger_system_notification(
+            "genmaster_boot_hardware_state", {"state_message": msg}
+        )
+        logger.info(f"Boot hardware-state notification fired: {msg}")
+
     # =========================================================================
     # HOA Quiet Override (Phase 4c)
     # =========================================================================

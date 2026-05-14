@@ -432,6 +432,36 @@ async def rotate_api_key(
                    f"Manually set slave_api_secret to '{new_key}' in GenMaster config.",
         )
 
+    # Step 3: Persist the new key back to .env. Without this, the rotated
+    # key lives only in the DB — and on the next container recreate,
+    # sync_env_to_database() would read the STALE .env secret and
+    # overwrite the rotated DB value, silently breaking GenSlave auth.
+    # Non-fatal: the rotation already succeeded on both sides; a failed
+    # .env write just means the operator must update .env manually before
+    # the next recreate.
+    try:
+        from app.routers.env_config import read_env_file, write_env_file
+
+        env_vars = read_env_file()
+        env_vars["SLAVE_API_SECRET"] = new_key
+        write_env_file(env_vars)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(
+            f"API key rotated on both sides, but failed to persist new "
+            f"SLAVE_API_SECRET to .env: {e}. Update .env manually before "
+            f"the next container recreate, or the old key will be restored."
+        )
+        return {
+            "success": True,
+            "message": (
+                "API key rotated on GenSlave and GenMaster, but failed to "
+                "write .env. Update SLAVE_API_SECRET in .env manually to "
+                "make the change survive a container recreate."
+            ),
+        }
+
     return {
         "success": True,
         "message": "API key rotated successfully on both GenSlave and GenMaster",

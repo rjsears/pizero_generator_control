@@ -92,6 +92,14 @@ class Config(Base):
     #    operator interaction.
     boot_arming_policy: Mapped[str] = mapped_column(default="fail_safe")
 
+    # Manual Run Reminder (Phase 5b)
+    # While a manual or HOA-Run-switch generator run is active, fire a
+    # periodic reminder notification so the operator doesn't forget the
+    # generator is running. Interval is in hours (failsafe.md decision #1
+    # default: 2h). Set the enabled flag to false to suppress entirely.
+    manual_run_reminder_enabled: Mapped[bool] = mapped_column(default=True)
+    manual_run_reminder_interval_hours: Mapped[int] = mapped_column(default=2)
+
     # Metadata
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()
