@@ -31,6 +31,13 @@ export const useSystemStore = defineStore('system', () => {
   const slaveCacheAge = ref(null)
   const slaveLastError = ref(null)
 
+  // GenSlave hardware E-stop (EPO) — populated from the cached relay-state
+  // poll in views that fetch it (currently GeneratorView's 5s fast poll).
+  // Updated whenever a poll response carries `physical_safety_engaged`. Kept
+  // as a dedicated ref rather than reading from slaveHealth because
+  // slaveHealth is a one-shot startup fetch and never refreshes.
+  const slavePhysicalSafetyEngaged = ref(false)
+
   // Getters
   // Note: Backend returns ram_percent, disk_percent, temperature_celsius
   const cpuPercent = computed(() => health.value?.cpu_percent || 0)
@@ -56,14 +63,25 @@ export const useSystemStore = defineStore('system', () => {
   const victronInputActive = computed(() => victronStatus.value?.signal_state || false)
   const victronLastChange = computed(() => victronStatus.value?.last_change || null)
 
-  // GenSlave hardware E-stop (EPO) state. Populated by /health/slave on the
-  // periodic poll. True while the operator has the physical button pressed
-  // at the generator. The state machine refuses all start paths in this
-  // state; the UI mirrors it by disabling Start and switching the existing
-  // Emergency Stop card into a "triggered" visual.
+  // GenSlave hardware E-stop (EPO) state. Reads from the dedicated ref
+  // populated by the fast-poll (every ~5s) in views that consume it.
+  // True while the operator has the physical button pressed at the
+  // generator. The state machine refuses all start paths in this state;
+  // the UI mirrors it by disabling Start and dimming the Emergency Stop
+  // card.
   const physicalSafetyEngaged = computed(
-    () => slaveHealth.value?.physical_safety_engaged === true,
+    () => slavePhysicalSafetyEngaged.value === true,
   )
+
+  // Setter for the EPO state — called from view-level poll handlers when
+  // a cached relay response carries `physical_safety_engaged`. Defensive:
+  // ignores non-boolean values so a malformed response can't flip the UI
+  // into a phantom EPO state.
+  function setSlavePhysicalSafetyEngaged(value) {
+    if (typeof value === 'boolean') {
+      slavePhysicalSafetyEngaged.value = value
+    }
+  }
 
   const overallHealth = computed(() => {
     if (!health.value) return 'unknown'
@@ -216,6 +234,7 @@ export const useSystemStore = defineStore('system', () => {
     slaveStale,
     slaveCacheAge,
     slaveLastError,
+    slavePhysicalSafetyEngaged,
 
     // Getters
     cpuPercent,
@@ -243,5 +262,6 @@ export const useSystemStore = defineStore('system', () => {
     rebootSystem,
     testSlaveConnection,
     clearError,
+    setSlavePhysicalSafetyEngaged,
   }
 })

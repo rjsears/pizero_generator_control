@@ -1541,6 +1541,14 @@ async function fetchRelayState() {
       console.warn('Relay state response missing armed field:', data)
       // Keep previous value if response is malformed
     }
+
+    // Pull GenSlave EPO state from the same cached response. Phase 2 added
+    // this field to /api/relay/state, so it travels here for free with no
+    // extra HTTP request. Drives the EPO banner and dimmed Emergency Stop
+    // card without needing a manual page refresh.
+    if (data && typeof data.physical_safety_engaged === 'boolean') {
+      systemStore.setSlavePhysicalSafetyEngaged(data.physical_safety_engaged)
+    }
   } catch (err) {
     console.error('Failed to fetch relay state:', err)
     // Don't reset to false on error - keep previous value
