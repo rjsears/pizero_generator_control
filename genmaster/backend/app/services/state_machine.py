@@ -909,7 +909,11 @@ class StateMachine:
             else:
                 # No active run — start one via the local switch trigger.
                 # start_generator() enforces all guards (EPO, lockout, etc.)
-                # so we just catch the ValueError it raises if blocked.
+                # and raises ValueError on policy refusals; broader excs
+                # (DB integrity errors from a stale migration, network
+                # failures, etc.) get caught + logged separately so they
+                # don't get silently swallowed by the gpiozero-thread
+                # dispatch path.
                 logger.info(
                     "HOA flipped to Run; starting generator via local switch"
                 )
@@ -923,6 +927,13 @@ class StateMachine:
                         "HOA_RUN_START_REFUSED",
                         {"reason": str(e)},
                         severity="WARNING",
+                    )
+                except Exception:
+                    logger.exception(
+                        "HOA Run start raised an unexpected exception; "
+                        "the generator did NOT start. This is usually a DB "
+                        "constraint mismatch (migration not applied?) or a "
+                        "network failure to GenSlave."
                     )
             return
 
