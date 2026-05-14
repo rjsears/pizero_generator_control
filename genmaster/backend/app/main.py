@@ -259,6 +259,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         hoa_monitor.set_state_change_callback(
             state_machine.handle_hoa_state_change
         )
+        # Reconcile any stale Quiet override left over from before a
+        # reboot. The HOA->state-machine callback that normally
+        # auto-clears the override is suppressed during the boot-delay
+        # window, so do it here, immediately — reads only the HOA
+        # monitor's raw GPIO state, which is valid the moment start()
+        # returns.
+        await state_machine.reconcile_quiet_override_on_boot()
         logger.info(
             f"HOA monitor started (mock mode: {hoa_monitor.mock_mode}, "
             f"enabled: {settings.hoa_switch_enabled})"

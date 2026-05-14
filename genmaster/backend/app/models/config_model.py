@@ -100,6 +100,10 @@ class Config(Base):
     manual_run_reminder_enabled: Mapped[bool] = mapped_column(default=True)
     manual_run_reminder_interval_hours: Mapped[int] = mapped_column(default=2)
 
+    # NOTE: hoa_boot_delay_seconds is NOT a DB config column — it's an
+    # env-var-only setting (app/config.py Settings). Listed here only so
+    # future readers don't go looking for it in the DB. Default 30s.
+
     # Metadata
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()

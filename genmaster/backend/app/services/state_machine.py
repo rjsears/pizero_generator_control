@@ -1171,6 +1171,33 @@ class StateMachine:
                 "seconds_remaining": seconds_remaining,
             }
 
+    async def reconcile_quiet_override_on_boot(self) -> None:
+        """Clear a stale Quiet override at GenMaster startup if the HOA
+        selector is no longer in Quiet.
+
+        Closes the boot-delay edge case: the HOA->state-machine callback
+        (which normally auto-clears the override when the selector leaves
+        Quiet) is suppressed during the post-boot grace window. So if an
+        override was active when GenMaster went down and the operator has
+        since turned the selector out of Quiet, that override would
+        otherwise linger until natural expiry. This check runs once at
+        startup, immediately (no grace-window wait — it only reads the
+        HOA monitor's raw GPIO state, available the moment the monitor
+        starts).
+
+        If HOA *is* still in Quiet at boot, a persisted override is left
+        intact — it was set deliberately and its expiry still applies.
+        """
+        from app.main import hoa_monitor
+
+        hoa_state = "auto"
+        if hoa_monitor is not None:
+            hoa_state = hoa_monitor.raw_state
+
+        if hoa_state != "quiet":
+            # Idempotent — only acts (and only logs) if one was active.
+            await self.clear_quiet_override("boot_hoa_not_quiet")
+
     async def clear_quiet_override(self, reason: str = "operator_cancel") -> dict:
         """Explicitly clear an active Quiet override.
 

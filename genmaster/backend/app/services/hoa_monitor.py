@@ -29,7 +29,7 @@ and a closed contact reads LOW. State is decoded from the pair:
 
 Boot delay: when GenMaster starts up, the switch may have been in Run or
 Quiet for some time without the system reacting (because the system was
-off). Per decision #3 we wait `hoa_boot_delay_seconds` (default 90s)
+off). Per decision #3 we wait `hoa_boot_delay_seconds` (default 30s)
 before honoring the state; during the window the monitor reports
 `auto` regardless of the physical reading. This prevents a stale switch
 position from triggering an automatic run the instant the system

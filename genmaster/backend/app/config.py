@@ -98,7 +98,7 @@ class Settings(BaseSettings):
     # so a stale physical position can't trigger an automatic run the
     # instant the system recovers from a power blip. Set to 0 in .env
     # while bench-testing if you don't want to wait between restarts.
-    hoa_boot_delay_seconds: int = 90
+    hoa_boot_delay_seconds: int = 30
 
     @property
     def is_mock_gpio(self) -> bool:

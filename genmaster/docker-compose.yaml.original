@@ -115,7 +115,7 @@ services:
       - HOA_SWITCH_ENABLED=${HOA_SWITCH_ENABLED:-true}
       - HOA_GPIO_QUIET=${HOA_GPIO_QUIET:-22}
       - HOA_GPIO_RUN=${HOA_GPIO_RUN:-27}
-      - HOA_BOOT_DELAY_SECONDS=${HOA_BOOT_DELAY_SECONDS:-90}
+      - HOA_BOOT_DELAY_SECONDS=${HOA_BOOT_DELAY_SECONDS:-30}
     volumes:
       - genmaster_logs:/app/logs
       - genmaster_data:/app/data
