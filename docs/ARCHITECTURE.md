@@ -255,7 +255,6 @@ GenMaster can run in LXC containers for testing without real GPIO hardware.
 - GenMaster automatically detects when NOT running on a Raspberry Pi
 - Falls back to mock GPIO mode (checks `/proc/cpuinfo` for "Raspberry Pi")
 - Development API becomes available at `/api/dev/*`
-- Set `GENSLAVE_ENABLED=false` in `.env` for UI-only testing (disables heartbeat)
 
 ### Development API Endpoints
 

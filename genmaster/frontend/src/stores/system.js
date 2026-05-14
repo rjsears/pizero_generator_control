@@ -240,6 +240,20 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  async function cancelQuietOverride() {
+    const notifications = useNotificationStore()
+    try {
+      const response = await systemService.cancelQuietOverride()
+      quietOverride.value = response.data
+      notifications.success('Quiet override cancelled — Quiet Mode re-engaged')
+      return true
+    } catch (err) {
+      const message = err.response?.data?.detail || 'Failed to cancel Quiet override'
+      notifications.error(message)
+      return false
+    }
+  }
+
   async function rebootSystem() {
     const notifications = useNotificationStore()
 
@@ -325,6 +339,7 @@ export const useSystemStore = defineStore('system', () => {
     fetchHoaStatus,
     fetchQuietOverride,
     enableQuietOverride,
+    cancelQuietOverride,
     rebootSystem,
     testSlaveConnection,
     clearError,

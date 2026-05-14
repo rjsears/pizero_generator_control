@@ -162,6 +162,13 @@
       >
         Override
       </button>
+      <button
+        v-else
+        @click="applyCancelQuietOverride"
+        class="flex-shrink-0 px-3 py-2 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+      >
+        Cancel Override
+      </button>
     </div>
     <div
       v-else-if="hoaIsRun"
@@ -1521,6 +1528,13 @@ async function applyQuietOverride(minutes) {
   const ok = await systemStore.enableQuietOverride(minutes)
   if (ok) {
     showQuietOverrideModal.value = false
+    await systemStore.fetchQuietOverride()
+  }
+}
+
+async function applyCancelQuietOverride() {
+  const ok = await systemStore.cancelQuietOverride()
+  if (ok) {
     await systemStore.fetchQuietOverride()
   }
 }

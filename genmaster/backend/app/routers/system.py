@@ -310,6 +310,21 @@ async def enable_quiet_override(
     return QuietOverrideStatus(**result)
 
 
+@router.delete("/quiet-override", response_model=QuietOverrideStatus)
+async def cancel_quiet_override(
+    state_machine=Depends(get_state_machine),
+) -> QuietOverrideStatus:
+    """
+    Cancel an active HOA Quiet override immediately.
+
+    Operator-facing "Cancel Override" action — re-engages Quiet right
+    away rather than waiting for the window to expire. Idempotent: safe
+    to call when no override is active.
+    """
+    result = await state_machine.clear_quiet_override("operator_cancel")
+    return QuietOverrideStatus(**result)
+
+
 @router.get("/status", response_model=FullSystemStatus)
 async def get_full_status(
     state_machine=Depends(get_state_machine),

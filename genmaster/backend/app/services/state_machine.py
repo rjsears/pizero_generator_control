@@ -895,6 +895,12 @@ class StateMachine:
             await self._trigger_system_notification(
                 "quiet_mode_released_genmaster", {}
             )
+            # A Quiet override only makes sense while Quiet is active.
+            # Once the operator turns the selector out of Quiet, any
+            # active override is moot — clear it so it doesn't dangle
+            # (and so the UI doesn't show a stale countdown). Idempotent,
+            # so calling it when no override is active is harmless.
+            await self.clear_quiet_override("hoa_left_quiet")
 
         # Snapshot the current run state without holding the session
         # across calls to start/stop_generator (which open their own
@@ -1164,6 +1170,32 @@ class StateMachine:
                 "expires_at": state.quiet_override_expires_at if active else None,
                 "seconds_remaining": seconds_remaining,
             }
+
+    async def clear_quiet_override(self, reason: str = "operator_cancel") -> dict:
+        """Explicitly clear an active Quiet override.
+
+        Two callers:
+          * the operator clicking "Cancel Override" in the web UI
+            (reason="operator_cancel")
+          * the state machine when the HOA selector leaves Quiet — the
+            override is moot once Quiet itself is gone, so it shouldn't
+            dangle (reason="hoa_left_quiet")
+
+        Idempotent — safe to call when no override is active; only logs
+        an event when it actually cleared something.
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            was_active = state.quiet_override_active
+            state.quiet_override_active = False
+            state.quiet_override_expires_at = None
+            await db.commit()
+
+        if was_active:
+            await self.log_event("QUIET_OVERRIDE_CANCELLED", {"reason": reason})
+            logger.info(f"Quiet override cleared (reason: {reason})")
+
+        return {"active": False, "expires_at": None, "seconds_remaining": 0}
 
     # =========================================================================
     # Override Operations

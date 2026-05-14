@@ -79,6 +79,14 @@ export default {
   },
 
   /**
+   * Cancel an active HOA Quiet override immediately (re-engages Quiet).
+   * @returns {Promise<Object>}
+   */
+  cancelQuietOverride() {
+    return api.delete('/system/quiet-override')
+  },
+
+  /**
    * Test slave connection
    * @returns {Promise<Object>}
    */
