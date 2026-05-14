@@ -877,7 +877,7 @@ class StateMachine:
                 "HOA left Run position; stopping local-switch manual run"
             )
             try:
-                await self.stop_generator("local_switch_genmaster_off")
+                await self.stop_generator("local_switch_genmaster_end")
             except Exception as e:
                 logger.error(f"Failed to stop local-switch run on HOA leave-Run: {e}")
             return

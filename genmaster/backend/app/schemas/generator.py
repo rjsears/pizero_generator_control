@@ -26,7 +26,14 @@ class GeneratorStatus(BaseModel):
     runtime_seconds: Optional[int] = Field(
         None, description="Current runtime in seconds"
     )
-    trigger: Literal["idle", "victron", "manual", "scheduled", "exercise"] = Field(
+    trigger: Literal[
+        "idle",
+        "victron",
+        "manual",
+        "scheduled",
+        "exercise",
+        "local_switch_genmaster",
+    ] = Field(
         description="What triggered the current run"
     )
     current_run_id: Optional[int] = Field(None, description="ID of the current run")
@@ -95,9 +102,26 @@ class GeneratorRunHistory(BaseModel):
     started_at: int = Field(description="Unix timestamp when run started")
     ended_at: Optional[int] = Field(None, description="Unix timestamp when run ended")
     duration_minutes: Optional[float] = Field(None, description="Duration in minutes")
-    trigger_type: Literal["victron", "manual", "scheduled", "exercise"]
+    trigger_type: Literal[
+        "victron",
+        "manual",
+        "scheduled",
+        "exercise",
+        "local_switch_genmaster",
+    ]
     end_reason: Optional[
-        Literal["victron", "manual", "scheduled_end", "exercise_end", "comm_loss", "override", "error", "max_runtime"]
+        Literal[
+            "victron",
+            "manual",
+            "scheduled_end",
+            "exercise_end",
+            "comm_loss",
+            "override",
+            "error",
+            "max_runtime",
+            "local_switch_genmaster_end",
+            "hoa_quiet",
+        ]
     ] = Field(None, description="Why the run ended")
     scheduled_run_id: Optional[int] = None
     notes: Optional[str] = None
