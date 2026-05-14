@@ -829,6 +829,123 @@ class StateMachine:
                         f"{state.run_trigger} - not stopping"
                     )
 
+    async def handle_hoa_state_change(
+        self, old_state: str, new_state: str
+    ) -> None:
+        """React to a debounced HOA selector position change (Phase 4d).
+
+        Implements the mid-run transition matrix from
+        ``.claude/failsafe.md`` §6 / decisions #4-6:
+
+          * Run -> anything: if the generator is running with the
+            ``local_switch_genmaster`` trigger, stop it. (Operator
+            chose to leave Run, so the manual run is over.)
+          * anything -> Run: start a manual run via
+            ``local_switch_genmaster`` if no run is active. If a run
+            is already in progress (e.g. Victron-triggered), keep it
+            running but reclassify the trigger so it persists past
+            Victron's release. (Decision #5.)
+          * anything -> Quiet during an automation-triggered run
+            (victron / scheduled / exercise): stop the run.
+            (Decision #6.) Manual + local-switch runs are not
+            interrupted by Quiet — Quiet is an operator-preference
+            filter for automation, not a stop command.
+
+        Boot delay is handled in ``HOAMonitor`` — by the time we get
+        here, the operator has actually moved the switch since boot.
+
+        Fault state ("both contacts closed") is treated identically to
+        Auto for state-machine purposes — no transition action fires.
+        The yellow banner in the UI alerts the operator to fix wiring.
+        """
+        logger.info(
+            f"State machine handling HOA transition: {old_state} -> {new_state}"
+        )
+
+        # Snapshot the current run state without holding the session
+        # across calls to start/stop_generator (which open their own
+        # sessions and acquire the state-machine lock).
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            was_running = state.generator_running
+            current_trigger = state.run_trigger
+
+        # CASE 1: operator left the Run position. If the active run
+        # was started by the local switch, stop it now.
+        if old_state == "run" and was_running and current_trigger == "local_switch_genmaster":
+            logger.info(
+                "HOA left Run position; stopping local-switch manual run"
+            )
+            try:
+                await self.stop_generator("local_switch_genmaster_off")
+            except Exception as e:
+                logger.error(f"Failed to stop local-switch run on HOA leave-Run: {e}")
+            return
+
+        # CASE 2: operator moved the switch TO the Run position.
+        if new_state == "run":
+            if was_running:
+                # Reclassify an existing automation-triggered run so it
+                # continues past the auto trigger's release. We update
+                # the system_state row directly; the run_history row's
+                # trigger_type is the original value (manual reclassify
+                # would lose the audit trail of who started it).
+                logger.info(
+                    f"HOA flipped to Run while generator running with "
+                    f"trigger={current_trigger}; reclassifying current "
+                    f"run trigger to local_switch_genmaster"
+                )
+                async with AsyncSessionLocal() as db:
+                    state = await self._get_state(db)
+                    state.run_trigger = "local_switch_genmaster"
+                    await db.commit()
+                await self.log_event(
+                    "MANUAL_RUN_RECLASSIFIED_BY_HOA",
+                    {
+                        "old_trigger": current_trigger,
+                        "new_trigger": "local_switch_genmaster",
+                    },
+                )
+            else:
+                # No active run — start one via the local switch trigger.
+                # start_generator() enforces all guards (EPO, lockout, etc.)
+                # so we just catch the ValueError it raises if blocked.
+                logger.info(
+                    "HOA flipped to Run; starting generator via local switch"
+                )
+                try:
+                    await self.start_generator("local_switch_genmaster")
+                except ValueError as e:
+                    logger.warning(
+                        f"HOA Run requested but start refused: {e}"
+                    )
+                    await self.log_event(
+                        "HOA_RUN_START_REFUSED",
+                        {"reason": str(e)},
+                        severity="WARNING",
+                    )
+            return
+
+        # CASE 3: operator moved the switch TO Quiet during an
+        # automation-triggered run. Stop the run; Phase 4b's Quiet
+        # guard will then block any new auto triggers until the
+        # selector leaves Quiet.
+        if (
+            new_state == "quiet"
+            and was_running
+            and current_trigger in ("victron", "scheduled", "exercise")
+        ):
+            logger.info(
+                f"HOA flipped to Quiet during {current_trigger}-triggered run; "
+                f"stopping the auto-run"
+            )
+            try:
+                await self.stop_generator("hoa_quiet")
+            except Exception as e:
+                logger.error(
+                    f"Failed to stop auto-run on HOA -> Quiet: {e}"
+                )
+
     # =========================================================================
     # Override Operations
     # =========================================================================

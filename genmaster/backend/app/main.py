@@ -247,9 +247,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Initialize HOA selector monitoring (Quiet/Auto/Run on GPIO22+GPIO27).
         # Stays in 'auto' for the first hoa_boot_delay_seconds after start so
         # a stale switch position can't trigger an automatic run during a
-        # power-blip recovery. State-machine integration is Phase 4.
+        # power-blip recovery.
         hoa_monitor = HOAMonitor()
         hoa_monitor.start()
+        # Wire HOA transitions into the state machine (Phase 4d). Suppressed
+        # automatically during the boot delay window so a stale switch
+        # position at boot doesn't trigger an unexpected start.
+        hoa_monitor.set_state_change_callback(
+            state_machine.handle_hoa_state_change
+        )
         logger.info(
             f"HOA monitor started (mock mode: {hoa_monitor.mock_mode}, "
             f"enabled: {settings.hoa_switch_enabled})"
