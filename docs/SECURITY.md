@@ -60,28 +60,7 @@ The full operator-facing guide to the switches is at [Hardware Switches](manual/
 
 ## Network architecture & trust boundaries
 
-```
-                       [ Public internet ]
-                              |
-                              v
-                  [ Cloudflare edge ]   ← only path to public domain
-                              |          ← TLS terminates here
-                              v
-                    cloudflared sidecar  ← only TRUSTED PROXY
-                              |
-                              v
-                          nginx           ← TLS again (Let's Encrypt)
-                              |
-                              v
-                      GenMaster API
-                              |
-              ┌───────────────┼───────────────┐
-              v               v               v
-           Postgres        Redis          GenSlave (over Tailscale)
-                                              |
-                                              v
-                                          Pi Zero
-```
+![Secure, layered path from the public internet to the generator control system](manual/images/screenshots/network_boundries.png)
 
 The trust boundaries this enforces:
 
