@@ -13,7 +13,7 @@
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.generator import GeneratorStatus
 from app.schemas.health import SlaveHealth
@@ -264,6 +264,65 @@ class QuietOverrideStatus(BaseModel):
                 "seconds_remaining": 1740,
             }
         }
+
+
+class GpioAssignmentsRequest(BaseModel):
+    """Request to reassign GenMaster's input GPIO pins.
+
+    BCM pin numbers. The 40-pin header exposes BCM 0-27; that range
+    naturally excludes the power/ground pins (which aren't BCM numbers).
+    All three functions must use distinct pins.
+    """
+
+    victron_gpio_pin: int = Field(
+        ge=0, le=27, description="BCM pin for the Victron / Cerbo GX request input"
+    )
+    hoa_gpio_quiet: int = Field(
+        ge=0, le=27, description="BCM pin for the HOA selector's Quiet contact"
+    )
+    hoa_gpio_run: int = Field(
+        ge=0, le=27, description="BCM pin for the HOA selector's Run contact"
+    )
+
+    @model_validator(mode="after")
+    def _pins_must_be_distinct(self) -> "GpioAssignmentsRequest":
+        pins = [self.victron_gpio_pin, self.hoa_gpio_quiet, self.hoa_gpio_run]
+        if len(set(pins)) != 3:
+            raise ValueError(
+                "Each function must use a distinct GPIO pin — Victron, "
+                "HOA Quiet, and HOA Run cannot share a pin."
+            )
+        return self
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "victron_gpio_pin": 17,
+                "hoa_gpio_quiet": 22,
+                "hoa_gpio_run": 27,
+            }
+        }
+
+
+class GpioAssignmentsResponse(BaseModel):
+    """Current GenMaster GPIO pin assignments + pending-restart state.
+
+    The `*_gpio_*` fields are the values currently in `.env` — i.e. what
+    a restart would load, and what the editor form should pre-fill. The
+    `running_*` fields are what the live monitors are actually bound to
+    right now. They differ only when a save has happened without a
+    restart yet, in which case `pending_restart` is true.
+    """
+
+    victron_gpio_pin: int = Field(description="Victron pin in .env (loads on restart)")
+    hoa_gpio_quiet: int = Field(description="HOA Quiet pin in .env (loads on restart)")
+    hoa_gpio_run: int = Field(description="HOA Run pin in .env (loads on restart)")
+    running_victron_gpio_pin: int = Field(description="Victron pin the live monitor is bound to")
+    running_hoa_gpio_quiet: int = Field(description="HOA Quiet pin the live monitor is bound to")
+    running_hoa_gpio_run: int = Field(description="HOA Run pin the live monitor is bound to")
+    pending_restart: bool = Field(
+        description="True when .env pins differ from the running pins — restart needed to apply"
+    )
 
 
 class WifiWatchdogStatus(BaseModel):

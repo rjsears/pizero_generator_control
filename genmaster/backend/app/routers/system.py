@@ -145,10 +145,13 @@ def _exec_host_command_detached(command: str) -> tuple[bool, str]:
 
 
 from app.config import settings
+from app.routers.env_config import read_env_file, write_env_file
 from app.schemas import (
     AutomationArmStatus,
     CombinedSystemHealth,
     FullSystemStatus,
+    GpioAssignmentsRequest,
+    GpioAssignmentsResponse,
     HOAStatus,
     QuietOverrideRequest,
     QuietOverrideStatus,
@@ -287,6 +290,87 @@ async def get_quiet_override(
     """
     status = await state_machine.get_quiet_override_status()
     return QuietOverrideStatus(**status)
+
+
+def _build_gpio_assignments_response() -> GpioAssignmentsResponse:
+    """Assemble the current GPIO-assignment state.
+
+    `running_*` = what the live monitors are bound to (the settings
+    object, loaded at container start). The plain fields = what `.env`
+    currently holds (what a restart would load). They diverge only when
+    a save happened without a restart — that's `pending_restart`.
+
+    If a key is absent from `.env`, the effective value is whatever the
+    running config is (came from the compose default or .env at start),
+    so we fall back to the running value — meaning "no pending change".
+    """
+    env_vars = read_env_file()
+
+    def _env_int(key: str, fallback: int) -> int:
+        raw = env_vars.get(key)
+        if raw in (None, ""):
+            return fallback
+        try:
+            return int(raw)
+        except (ValueError, TypeError):
+            return fallback
+
+    running_victron = settings.victron_gpio_pin
+    running_quiet = settings.hoa_gpio_quiet
+    running_run = settings.hoa_gpio_run
+
+    env_victron = _env_int("VICTRON_GPIO_PIN", running_victron)
+    env_quiet = _env_int("HOA_GPIO_QUIET", running_quiet)
+    env_run = _env_int("HOA_GPIO_RUN", running_run)
+
+    pending = (
+        env_victron != running_victron
+        or env_quiet != running_quiet
+        or env_run != running_run
+    )
+
+    return GpioAssignmentsResponse(
+        victron_gpio_pin=env_victron,
+        hoa_gpio_quiet=env_quiet,
+        hoa_gpio_run=env_run,
+        running_victron_gpio_pin=running_victron,
+        running_hoa_gpio_quiet=running_quiet,
+        running_hoa_gpio_run=running_run,
+        pending_restart=pending,
+    )
+
+
+@router.get("/gpio-assignments", response_model=GpioAssignmentsResponse)
+async def get_gpio_assignments() -> GpioAssignmentsResponse:
+    """
+    Get GenMaster's GPIO pin assignments.
+
+    Returns the values currently in `.env` (what a restart would load)
+    alongside what the live monitors are actually bound to, plus a
+    `pending_restart` flag that is true when the two diverge.
+    """
+    return _build_gpio_assignments_response()
+
+
+@router.post("/gpio-assignments", response_model=GpioAssignmentsResponse)
+async def update_gpio_assignments(
+    request: GpioAssignmentsRequest,
+) -> GpioAssignmentsResponse:
+    """
+    Reassign GenMaster's GPIO pins.
+
+    Writes the three pin values to `.env`. The schema has already
+    validated they're in the BCM 0-27 range and all distinct. GPIO pins
+    cannot be hot-reassigned — the monitors bind their pins at startup —
+    so the change does not take effect until GenMaster is restarted. The
+    response's `pending_restart` flag reflects that.
+    """
+    env_vars = read_env_file()
+    env_vars["VICTRON_GPIO_PIN"] = str(request.victron_gpio_pin)
+    env_vars["HOA_GPIO_QUIET"] = str(request.hoa_gpio_quiet)
+    env_vars["HOA_GPIO_RUN"] = str(request.hoa_gpio_run)
+    write_env_file(env_vars)
+    return _build_gpio_assignments_response()
 
 
 @router.post("/quiet-override", response_model=QuietOverrideStatus)

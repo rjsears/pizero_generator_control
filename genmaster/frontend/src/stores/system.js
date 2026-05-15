@@ -25,6 +25,9 @@ export const useSystemStore = defineStore('system', () => {
   const hoaStatus = ref(null)
   // HOA Quiet override (Phase 4c): { active, expires_at, seconds_remaining }
   const quietOverride = ref(null)
+  // GenMaster GPIO assignments (Phase 6b): { victron_gpio_pin, hoa_gpio_quiet,
+  // hoa_gpio_run, running_*, pending_restart }
+  const gpioAssignments = ref(null)
   const loading = ref(false)
   const error = ref(null)
 
@@ -152,6 +155,12 @@ export const useSystemStore = defineStore('system', () => {
     try {
       const response = await systemService.getSlaveHealth()
       slaveHealth.value = response.data
+      // Unify EPO state: /health/slave carries physical_safety_engaged,
+      // so feed the same ref the GeneratorView relay-cached poll feeds.
+      // This lets the physicalSafetyEngaged computed work for any view
+      // that calls fetchSlaveHealth (e.g. SystemView's Hardware tab),
+      // not just GeneratorView.
+      setSlavePhysicalSafetyEngaged(response.data?.physical_safety_engaged)
     } catch {
       slaveHealth.value = { online: false }
     }
@@ -254,6 +263,39 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  async function fetchGpioAssignments() {
+    try {
+      const response = await systemService.getGpioAssignments()
+      gpioAssignments.value = response.data
+    } catch {
+      // Keep last-known on transient errors.
+    }
+  }
+
+  async function saveGpioAssignments(payload) {
+    const notifications = useNotificationStore()
+    try {
+      const response = await systemService.updateGpioAssignments(payload)
+      gpioAssignments.value = response.data
+      notifications.success(
+        'GPIO assignments saved — restart GenMaster for the change to take effect',
+      )
+      return true
+    } catch (err) {
+      // A 422 from the schema validator returns detail as an array of
+      // error objects; a plain rejection returns a string. Handle both.
+      const detail = err.response?.data?.detail
+      let message = 'Failed to save GPIO assignments'
+      if (typeof detail === 'string') {
+        message = detail
+      } else if (Array.isArray(detail) && detail[0]?.msg) {
+        message = detail[0].msg
+      }
+      notifications.error(message)
+      return false
+    }
+  }
+
   async function rebootSystem() {
     const notifications = useNotificationStore()
 
@@ -298,6 +340,7 @@ export const useSystemStore = defineStore('system', () => {
     victronStatus,
     hoaStatus,
     quietOverride,
+    gpioAssignments,
     loading,
     error,
     // Cached slave status state
@@ -340,6 +383,8 @@ export const useSystemStore = defineStore('system', () => {
     fetchQuietOverride,
     enableQuietOverride,
     cancelQuietOverride,
+    fetchGpioAssignments,
+    saveGpioAssignments,
     rebootSystem,
     testSlaveConnection,
     clearError,

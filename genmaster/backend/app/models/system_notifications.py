@@ -729,6 +729,11 @@ class SystemNotificationGlobalSettings(Base):
     max_notifications_per_hour: Mapped[int] = mapped_column(Integer, default=50)
     notifications_this_hour: Mapped[int] = mapped_column(Integer, default=0)
     hour_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # True once the "rate limit exceeded" alert has been sent for the
+    # current hour window. Prevents that alert from firing on every
+    # subsequent suppressed notification — it goes out at most once per
+    # window and resets when the window rolls over.
+    rate_limit_alert_sent: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Emergency Contact - notified if rate limit exceeded
     emergency_contact_id: Mapped[Optional[int]] = mapped_column(

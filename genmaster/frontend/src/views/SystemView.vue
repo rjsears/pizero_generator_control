@@ -11,7 +11,7 @@
   -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 -->
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSystemStore } from '../stores/system'
 import { useNotificationStore } from '../stores/notifications'
@@ -64,6 +64,7 @@ const activeTab = ref('health')
 const tabs = [
   { id: 'health', name: 'Health', icon: SignalIcon, iconColor: 'text-emerald-500', bgActive: 'bg-emerald-500/15 dark:bg-emerald-500/20', textActive: 'text-emerald-700 dark:text-emerald-400', borderActive: 'border-emerald-500/30' },
   { id: 'network', name: 'Network', icon: GlobeAltIcon, iconColor: 'text-purple-500', bgActive: 'bg-purple-500/15 dark:bg-purple-500/20', textActive: 'text-purple-700 dark:text-purple-400', borderActive: 'border-purple-500/30' },
+  { id: 'hardware', name: 'Hardware', icon: CpuChipIcon, iconColor: 'text-blue-500', bgActive: 'bg-blue-500/15 dark:bg-blue-500/20', textActive: 'text-blue-700 dark:text-blue-400', borderActive: 'border-blue-500/30' },
   { id: 'terminal', name: 'Terminal', icon: CommandLineIcon, iconColor: 'text-amber-500', bgActive: 'bg-amber-500/15 dark:bg-amber-500/20', textActive: 'text-amber-700 dark:text-amber-400', borderActive: 'border-amber-500/30' },
 ]
 
@@ -797,11 +798,122 @@ async function deleteSavedNetwork(networkName) {
   }
 }
 
+// =========================================================================
+// Hardware tab — EPO / HOA / Quiet-override status
+// =========================================================================
+// All three values come from the system store. fetchSlaveHealth feeds the
+// EPO state (physicalSafetyEngaged); fetchHoaStatus + fetchQuietOverride
+// feed the HOA position and override window. Polled every 5s while the
+// Hardware tab is open so an operator at the bench sees switch changes
+// without refreshing.
+const hardwareRefreshInterval = ref(null)
+
+const epoEngaged = computed(() => systemStore.physicalSafetyEngaged)
+const hoaState = computed(() => systemStore.hoaState)
+const quietOverrideActive = computed(() => systemStore.quietOverrideActive)
+const quietOverrideMinutesRemaining = computed(() =>
+  Math.ceil(systemStore.quietOverrideSecondsRemaining / 60),
+)
+
+async function loadHardwareData() {
+  await Promise.all([
+    systemStore.fetchSlaveHealth().catch(() => {}),
+    systemStore.fetchHoaStatus().catch(() => {}),
+    systemStore.fetchQuietOverride().catch(() => {}),
+  ])
+}
+
+function startHardwarePolling() {
+  if (hardwareRefreshInterval.value) return
+  hardwareRefreshInterval.value = setInterval(() => {
+    if (!document.hidden) loadHardwareData()
+  }, 5000)
+}
+
+function stopHardwarePolling() {
+  if (hardwareRefreshInterval.value) {
+    clearInterval(hardwareRefreshInterval.value)
+    hardwareRefreshInterval.value = null
+  }
+}
+
+// --- GPIO Assignments panel ---------------------------------------------
+// GPIO assignments only change when the operator saves them here, so they
+// are NOT part of the 5s poll — fetched once on tab open + after a save.
+// The form is pre-filled from the .env values (what a restart would load).
+const gpioForm = ref({ victron_gpio_pin: null, hoa_gpio_quiet: null, hoa_gpio_run: null })
+const gpioSaving = ref(false)
+
+const gpioPendingRestart = computed(
+  () => systemStore.gpioAssignments?.pending_restart === true,
+)
+
+// Live conflict detection — the three functions can't share a pin.
+const gpioConflict = computed(() => {
+  const pins = [
+    gpioForm.value.victron_gpio_pin,
+    gpioForm.value.hoa_gpio_quiet,
+    gpioForm.value.hoa_gpio_run,
+  ].filter((p) => p !== null && p !== '' && !Number.isNaN(p))
+  return pins.length === 3 && new Set(pins).size !== 3
+})
+
+// All three must be valid BCM pins (0-27) and present.
+const gpioInRange = computed(() =>
+  ['victron_gpio_pin', 'hoa_gpio_quiet', 'hoa_gpio_run'].every((k) => {
+    const v = gpioForm.value[k]
+    return typeof v === 'number' && !Number.isNaN(v) && v >= 0 && v <= 27
+  }),
+)
+
+const gpioCanSave = computed(
+  () => gpioInRange.value && !gpioConflict.value && !gpioSaving.value,
+)
+
+async function loadGpioAssignments() {
+  await systemStore.fetchGpioAssignments().catch(() => {})
+}
+
+async function saveGpioAssignments() {
+  if (!gpioCanSave.value) return
+  gpioSaving.value = true
+  await systemStore.saveGpioAssignments({
+    victron_gpio_pin: gpioForm.value.victron_gpio_pin,
+    hoa_gpio_quiet: gpioForm.value.hoa_gpio_quiet,
+    hoa_gpio_run: gpioForm.value.hoa_gpio_run,
+  })
+  gpioSaving.value = false
+}
+
+// Sync the form from the store whenever the store's copy changes — only
+// happens on explicit fetch (tab open / after save), never on the 5s
+// poll, so in-progress edits are never clobbered.
+watch(
+  () => systemStore.gpioAssignments,
+  (val) => {
+    if (val) {
+      gpioForm.value = {
+        victron_gpio_pin: val.victron_gpio_pin,
+        hoa_gpio_quiet: val.hoa_gpio_quiet,
+        hoa_gpio_run: val.hoa_gpio_run,
+      }
+    }
+  },
+  { immediate: true },
+)
+
 // Watch for tab changes
 watch(activeTab, (newTab) => {
   if (newTab === 'network' && networkInfo.value.interfaces.length === 0) {
     loadNetworkInfo()
     loadSslInfo()
+  }
+  if (newTab === 'hardware') {
+    loadHardwareData()
+    loadGpioAssignments()
+    startHardwarePolling()
+  } else {
+    stopHardwarePolling()
   }
 })
 
@@ -819,6 +931,15 @@ onMounted(async () => {
     loadNetworkInfo()
     loadSslInfo()
   }
+  if (activeTab.value === 'hardware') {
+    loadHardwareData()
+    loadGpioAssignments()
+    startHardwarePolling()
+  }
+})
+
+onUnmounted(() => {
+  stopHardwarePolling()
 })
 </script>
 
@@ -1869,6 +1990,223 @@ onMounted(async () => {
           </Card>
         </div>
       </template>
+    </template>
+
+    <!-- Hardware Tab -->
+    <template v-if="activeTab === 'hardware'">
+      <div class="mt-8 space-y-6">
+        <!-- Hardware Switch Status -->
+        <div>
+          <h2 class="text-lg font-bold text-primary mb-1">Hardware Switch Status</h2>
+          <p class="text-sm text-muted mb-4">
+            Live state of the physical safety and selector switches. EPO is
+            the hardware E-stop at the generator (GenSlave); the HOA selector
+            is the Quiet/Auto/Run rotary on the GenMaster panel.
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- EPO Interlock -->
+            <Card :padding="false">
+              <div class="p-4">
+                <div class="flex items-center gap-3 mb-4">
+                  <div
+                    :class="[
+                      'p-2 rounded-lg',
+                      epoEngaged ? 'bg-red-100 dark:bg-red-500/20' : 'bg-emerald-100 dark:bg-emerald-500/20'
+                    ]"
+                  >
+                    <ExclamationTriangleIcon
+                      :class="['h-5 w-5', epoEngaged ? 'text-red-500' : 'text-emerald-500']"
+                    />
+                  </div>
+                  <div class="flex-1">
+                    <h3 class="font-semibold text-primary">EPO Interlock</h3>
+                    <p class="text-xs text-muted">GenSlave hardware E-stop</p>
+                  </div>
+                  <span
+                    :class="[
+                      'px-2 py-1 rounded-full text-xs font-medium',
+                      epoEngaged
+                        ? 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400'
+                        : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                    ]"
+                  >
+                    {{ epoEngaged ? 'ENGAGED' : 'RELEASED' }}
+                  </span>
+                </div>
+                <p class="text-sm text-secondary">
+                  {{ epoEngaged
+                    ? 'The E-stop at the generator is pressed. The generator cannot run from any source until it is physically released.'
+                    : 'The E-stop is in its normal position. The generator is free to run.' }}
+                </p>
+              </div>
+            </Card>
+
+            <!-- HOA Selector -->
+            <Card :padding="false">
+              <div class="p-4">
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-500/20">
+                    <Cog6ToothIcon class="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div class="flex-1">
+                    <h3 class="font-semibold text-primary">HOA Selector</h3>
+                    <p class="text-xs text-muted">GenMaster panel switch</p>
+                  </div>
+                  <span
+                    class="px-2 py-1 rounded-full text-xs font-medium"
+                    :class="{
+                      'bg-gray-100 dark:bg-gray-500/20 text-gray-700 dark:text-gray-400': hoaState === 'auto',
+                      'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400': hoaState === 'quiet',
+                      'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400': hoaState === 'run',
+                      'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400': hoaState === 'fault',
+                    }"
+                  >
+                    {{ hoaState.toUpperCase() }}
+                  </span>
+                </div>
+                <p class="text-sm text-secondary">
+                  <template v-if="hoaState === 'auto'">Normal automation — Victron and scheduled runs operate as configured.</template>
+                  <template v-else-if="hoaState === 'quiet'">Automatic runs are suppressed. Manual starts and the Quiet override still work.</template>
+                  <template v-else-if="hoaState === 'run'">Operator is manually requesting the generator via the panel switch.</template>
+                  <template v-else>Both contacts are closed simultaneously — likely a wiring fault. Treated as Auto until resolved.</template>
+                </p>
+              </div>
+            </Card>
+
+            <!-- Quiet Override -->
+            <Card :padding="false">
+              <div class="p-4">
+                <div class="flex items-center gap-3 mb-4">
+                  <div
+                    :class="[
+                      'p-2 rounded-lg',
+                      quietOverrideActive ? 'bg-emerald-100 dark:bg-emerald-500/20' : 'bg-gray-100 dark:bg-gray-500/20'
+                    ]"
+                  >
+                    <ClockIcon
+                      :class="['h-5 w-5', quietOverrideActive ? 'text-emerald-500' : 'text-gray-400']"
+                    />
+                  </div>
+                  <div class="flex-1">
+                    <h3 class="font-semibold text-primary">Quiet Override</h3>
+                    <p class="text-xs text-muted">Temporary Quiet bypass</p>
+                  </div>
+                  <span
+                    :class="[
+                      'px-2 py-1 rounded-full text-xs font-medium',
+                      quietOverrideActive
+                        ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-gray-100 dark:bg-gray-500/20 text-gray-700 dark:text-gray-400'
+                    ]"
+                  >
+                    {{ quietOverrideActive ? 'ACTIVE' : 'INACTIVE' }}
+                  </span>
+                </div>
+                <p class="text-sm text-secondary">
+                  {{ quietOverrideActive
+                    ? `Quiet Mode is temporarily overridden — automation runs normally for about ${quietOverrideMinutesRemaining} more minute${quietOverrideMinutesRemaining === 1 ? '' : 's'}, then Quiet re-engages.`
+                    : 'No override active. Start or cancel a Quiet override from the Generator page.' }}
+                </p>
+              </div>
+            </Card>
+          </div>
+        </div>
+
+        <!-- GPIO Assignments -->
+        <div>
+          <h2 class="text-lg font-bold text-primary mb-1">GPIO Assignments</h2>
+          <p class="text-sm text-muted mb-4">
+            Which Pi 5 BCM GPIO pins GenMaster reads for the Victron input
+            and the HOA selector. Defaults are the standard layout for a
+            clean install on a dedicated Pi.
+            <strong>Changes require a GenMaster restart to take effect</strong>
+            — the pins are bound when the monitors start, they cannot be
+            hot-reassigned.
+          </p>
+          <Card :padding="false">
+            <div class="p-4 space-y-4">
+              <!-- Pending-restart banner -->
+              <div
+                v-if="gpioPendingRestart"
+                class="rounded-lg border border-amber-400 bg-amber-50 dark:bg-amber-900/30 px-3 py-2 flex items-start gap-2"
+              >
+                <ExclamationTriangleIcon class="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div class="text-sm text-amber-700 dark:text-amber-300">
+                  <p class="font-semibold">Restart required</p>
+                  <p>
+                    Saved pin assignments differ from what GenMaster is
+                    currently running. Restart GenMaster to apply them.
+                    The live monitors are still using:
+                    Victron GPIO{{ systemStore.gpioAssignments?.running_victron_gpio_pin }},
+                    HOA Quiet GPIO{{ systemStore.gpioAssignments?.running_hoa_gpio_quiet }},
+                    HOA Run GPIO{{ systemStore.gpioAssignments?.running_hoa_gpio_run }}.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Pin inputs -->
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-secondary mb-1">
+                    Victron Input
+                  </label>
+                  <input
+                    v-model.number="gpioForm.victron_gpio_pin"
+                    type="number" min="0" max="27"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-primary text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p class="text-xs text-muted mt-1">Cerbo GX generator-request signal</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-secondary mb-1">
+                    HOA — Quiet Contact
+                  </label>
+                  <input
+                    v-model.number="gpioForm.hoa_gpio_quiet"
+                    type="number" min="0" max="27"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-primary text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p class="text-xs text-muted mt-1">Selector's Quiet-position contact</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-secondary mb-1">
+                    HOA — Run Contact
+                  </label>
+                  <input
+                    v-model.number="gpioForm.hoa_gpio_run"
+                    type="number" min="0" max="27"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-primary text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p class="text-xs text-muted mt-1">Selector's Run-position contact</p>
+                </div>
+              </div>
+
+              <!-- Validation messages -->
+              <p v-if="gpioConflict" class="text-sm text-red-600 dark:text-red-400">
+                Each function must use a distinct pin — two or more are set to the same GPIO.
+              </p>
+              <p v-else-if="!gpioInRange" class="text-sm text-red-600 dark:text-red-400">
+                Each pin must be a valid BCM GPIO number (0–27).
+              </p>
+
+              <!-- Save -->
+              <div class="flex items-center gap-3">
+                <button
+                  @click="saveGpioAssignments"
+                  :disabled="!gpioCanSave"
+                  :class="[
+                    'px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors',
+                    gpioCanSave ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'
+                  ]"
+                >
+                  {{ gpioSaving ? 'Saving…' : 'Save GPIO Assignments' }}
+                </button>
+                <span class="text-xs text-muted">Restart GenMaster after saving for changes to apply.</span>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
     </template>
 
     <!-- Terminal Tab -->

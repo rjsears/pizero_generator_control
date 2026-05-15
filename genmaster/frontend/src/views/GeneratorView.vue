@@ -178,9 +178,14 @@
       <BoltIcon class="h-7 w-7 text-emerald-500 flex-shrink-0" />
       <div class="flex-1">
         <p class="text-base font-bold text-emerald-700 dark:text-emerald-300">
-          Run Mode Active
+          {{ epoEngaged ? 'Run Mode — Held by EPO' : 'Run Mode Active' }}
         </p>
-        <p class="text-sm text-emerald-600 dark:text-emerald-400">
+        <p v-if="epoEngaged" class="text-sm text-emerald-600 dark:text-emerald-400">
+          The HOA selector is in the Run position, but the GenSlave EPO is
+          engaged so the generator is being held off. As soon as the EPO is
+          released, the system will resume Run Mode and start the generator.
+        </p>
+        <p v-else class="text-sm text-emerald-600 dark:text-emerald-400">
           The HOA selector at GenMaster is in the Run position — operator
           is explicitly requesting the generator. Return the selector to
           Auto to release manual control back to automation.

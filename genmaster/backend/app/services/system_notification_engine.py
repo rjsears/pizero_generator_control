@@ -399,6 +399,7 @@ class SystemNotificationEngine:
         if settings.hour_started_at is None or (now - settings.hour_started_at).total_seconds() >= 3600:
             settings.hour_started_at = now
             settings.notifications_this_hour = 0
+            settings.rate_limit_alert_sent = False
             await db.commit()
 
         return settings.notifications_this_hour < settings.max_notifications_per_hour
@@ -413,9 +414,23 @@ class SystemNotificationEngine:
     async def _notify_emergency_contact(
         self, db: AsyncSession, settings: SystemNotificationGlobalSettings
     ) -> None:
-        """Notify emergency contact about rate limit exceeded."""
+        """Notify emergency contact about rate limit exceeded.
+
+        Sent at most once per hour window. Without this guard the alert
+        would fire on every single rate-limited notification, which
+        defeats the purpose of the rate limit — the operator would get
+        spammed with "rate limit exceeded" messages instead of silence.
+        """
         if not settings.emergency_contact_id:
             return
+
+        # Already alerted for this window — stay silent until it rolls over.
+        if settings.rate_limit_alert_sent:
+            return
+
+        # Claim the window first so concurrent dispatches can't both send.
+        settings.rate_limit_alert_sent = True
+        await db.commit()
 
         try:
             channel = await NotificationChannel.get_by_id(db, settings.emergency_contact_id)
@@ -425,7 +440,7 @@ class SystemNotificationEngine:
                     channel,
                     "GenMaster Rate Limit Exceeded",
                     f"The notification rate limit of {settings.max_notifications_per_hour}/hour has been exceeded. "
-                    "Some notifications may have been suppressed.",
+                    "Further notifications this hour will be suppressed. This alert is sent only once per hour.",
                     "rate_limit_exceeded",
                 )
         except Exception as e:

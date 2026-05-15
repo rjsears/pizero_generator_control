@@ -87,6 +87,23 @@ export default {
   },
 
   /**
+   * Get GenMaster GPIO pin assignments (+ pending-restart state).
+   * @returns {Promise<Object>}
+   */
+  getGpioAssignments() {
+    return api.get('/system/gpio-assignments')
+  },
+
+  /**
+   * Reassign GenMaster GPIO pins. Takes effect on next restart.
+   * @param {Object} payload - { victron_gpio_pin, hoa_gpio_quiet, hoa_gpio_run }
+   * @returns {Promise<Object>}
+   */
+  updateGpioAssignments(payload) {
+    return api.post('/system/gpio-assignments', payload)
+  },
+
+  /**
    * Test slave connection
    * @returns {Promise<Object>}
    */
