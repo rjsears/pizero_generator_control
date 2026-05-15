@@ -114,6 +114,8 @@ The RPi Generator Control system automates generator management for off-grid sol
 | **Automation Arming** | Explicit arm/disarm prevents accidental operations during startup or maintenance |
 | **Heartbeat System** | Continuous health monitoring between GenMaster and GenSlave |
 | **Independent Failsafe** | GenSlave automatically stops generator if communication lost for 30s |
+| **Hardware EPO (optional)** | Schneider XB4 mushroom E-stop at the generator. NC contact physically interrupts the start circuit AND signals software — hardware-enforced maintenance lockout |
+| **HOA Selector (optional)** | Schneider XB4 3-position rotary at the operator location. Quiet / Auto / Run modes for everyday operator control without touching the web UI |
 | **State Persistence** | PostgreSQL database survives reboots and power failures |
 | **Webhook Notifications** | Real-time alerts to n8n, Home Assistant, or any webhook receiver |
 
@@ -198,6 +200,20 @@ The RPi Generator Control system automates generator management for off-grid sol
 
 - 2-wire normally-open contact from Cerbo GX MK2 Relay
 - Connected to GPIO17 (Pin 11) and Ground (Pin 9)
+
+### Optional Hardware Switches (EPO + HOA)
+
+Both switches are optional — the system runs fine without either. Together they provide hardware safety at the generator and operator-side mode control. See [Hardware Switches](docs/manual/hardware-switches.md) for the full operator guide.
+
+| Switch | Schneider P/N | Wires to |
+|--------|---------------|----------|
+| **EPO actuator** (mushroom E-stop at the generator) | XB4-BS542 | The contact block below — mounts in any 22 mm panel cutout |
+| **EPO contact block** | ZB4-BZ104 (1 NC + 1 NO) | NC in series with the GenSlave start-relay circuit; NO from Auto Hat Mini 5V → IN1 |
+| **HOA actuator** (3-position rotary at the operator) | XB4-BD33 | The contact block below |
+| **HOA contact block** | ZB4-BZ103 (2 NO) | Block A NO → GenMaster GPIO22 (Quiet); Block B NO → GPIO27 (Run); shared common → GND |
+| **HOA legend plate (optional)** | ZBY2-series | Printed `QUIET / AUTO / RUN` labels around the rotary knob |
+
+Total parts cost: ~$70–120 for both switches plus the optional legend plate. Order from AutomationDirect, Mouser, or Digikey — avoid no-name Amazon listings as Schneider counterfeits are common and defeat the point of paying for rated safety hardware.
 - Internal pull-up resistor enabled
 
 ---

@@ -29,6 +29,24 @@ Under the default **Fail-Safe** boot policy, GenMaster ships **disarmed** every 
 !!! info "Boot Arming Policy is configurable"
     The "always disarm on boot" behavior is the default (`fail_safe`) policy and is what most operators want. Power users with the right physical safety setup can switch to `preserve_state` (under the **Boot Arming Policy** collapsible on this page), which keeps the armed state across reboots so the system can auto-resume after a power outage. Switching to `preserve_state` requires confirming a warning modal — read it carefully before enabling.
 
+## Hardware switch banners
+
+If you've added the optional hardware switches (the GenSlave EPO mushroom button and the GenMaster HOA selector), their state appears as banners across the top of this page above the status row. Each banner only shows when the switch is in a non-default position — at full baseline (EPO released, HOA in Auto, no override) you see no banner.
+
+| Banner | When it appears | What it means |
+|--------|-----------------|---------------|
+| **GenSlave EPO Triggered** *(red, pulsing)* | EPO mushroom button at the generator is pressed | The generator is **physically prevented** from starting. The Start Generator button and the Emergency Stop card are both disabled. Release the EPO at the generator to resume — GenMaster picks the change up within ~60 s. |
+| **Quiet Mode Active** *(blue)* | HOA selector is in the Quiet position | Automatic runs (Victron, scheduled, exercise) are suppressed. Manual web starts still work. An **Override** button is available for one-off bypasses. |
+| **Quiet Override Active — N min remaining** *(green)* | An operator-started Quiet override is running | Automation fires normally despite the selector being in Quiet. Override clears on timer expiry, on Cancel, or when the selector leaves Quiet. |
+| **Run Mode Active** *(green)* | HOA selector is in the Run position | Operator is explicitly requesting the generator. GenMaster starts the generator and keeps it running until the selector leaves Run. |
+| **HOA Selector Fault** *(amber)* | Both Quiet and Run contacts read closed at the same time | Mechanical wiring fault. System treats the selector as Auto until resolved. |
+
+![EPO Triggered banner on the Generator page](images/hardware/10-generator-epo-engaged.png)
+
+When both the EPO and the HOA selector are active, both banners appear with the EPO banner on top — hardware safety wins. The HOA banner's wording changes to acknowledge the EPO ("Run Mode — Held by EPO" or "Quiet Mode — EPO Active") and the Override button is hidden in the Quiet case, since overriding Quiet only matters if the generator could otherwise run.
+
+For the full operator guide to both switches — wiring, behavior, troubleshooting — see [Hardware Switches](hardware-switches.md).
+
 ## Generator status and Victron command
 
 The two large panels below the status row show what the generator is currently doing and what signal Victron is sending.
@@ -36,11 +54,14 @@ The two large panels below the status row show what the generator is currently d
 ### Generator Status
 
 - Shows the current state — typically **Stopped** or **Running**, with intermediate states like `Starting`, `Stopping`, and `Cooldown` during transitions.
-- **Start Generator** — green button. Sends a manual start command. Requires GenSlave online and the system armed.
-- **Stop Generator** — sends a manual stop command.
+- **Start Generator** — green button. Sends a manual start command. Requires GenSlave online, the system armed, and (if installed) the GenSlave EPO released.
+- **Stop Generator** — sends a manual stop command. Also disabled while the EPO is engaged, since there's nothing to stop — the generator is already physically prevented from running.
 
 !!! tip "Manual vs. Victron-driven control"
     Manual start/stop commands work even when the Victron signal is in the opposite state — but if Victron is asking for the generator to run and you stop it manually, the next state machine tick will start it again unless you also enable **Manual Override** (see below).
+
+!!! info "Start Generator is disabled while the GenSlave EPO is engaged"
+    If the GenSlave hardware E-stop is pressed, both Start Generator and Stop Generator render in grey and clicks have no effect. The banner above the status row explains why and the Emergency Stop card is also dimmed. Release the EPO at the generator to re-enable the buttons; GenMaster will pick up the change within ~60 seconds. See [Hardware Switches](hardware-switches.md) for the full sequence.
 
 ### Victron Command
 
@@ -169,3 +190,4 @@ You can switch back to **Fail-Safe** at any time without a confirmation prompt.
 - Set up **scheduled runs** for predictable maintenance windows: see [Schedule](schedule.md).
 - Watch GenSlave health and network state: see [GenSlave](genslave.md).
 - Browse the full run log with filters: see [Run History](history.md).
+- Add the optional EPO and HOA hardware switches: see [Hardware Switches](hardware-switches.md).

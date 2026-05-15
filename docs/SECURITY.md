@@ -35,6 +35,29 @@ Threats explicitly **outside** scope:
 
 ---
 
+## Hardware safety — two-layer EPO pattern
+
+If the optional GenSlave EPO (the 22 mm mushroom E-stop at the generator) is installed, it provides a **hardware-enforced** safety guarantee that's independent of every line of code in this project. The pattern is deliberately two-layered:
+
+| Layer | Mechanism | Purpose | What happens if it fails |
+|-------|-----------|---------|--------------------------|
+| **Hardware** (the guarantee) | An NC contact (`ZB4-BZ104` terminals 11/12) wired in series with the GenSlave start-relay output between the Pi Zero relay and the generator start input. | Physically interrupts the start circuit when the button is pressed. The generator **cannot** be started by any means while the EPO is engaged. | The relay-to-generator circuit is broken (the safe failure mode — exactly what an E-stop is supposed to do). The generator stays off. |
+| **Software** (the signal) | A separate NO contact (terminals 13/14) wired through the Auto Hat Mini's 5V terminal to IN1, polled at 25 ms by `genslave/app/services/hardware_safety.py`. Surfaced via heartbeat to GenMaster, which dims the UI, blocks start commands, and fires notifications. | Keeps the software's understanding of state consistent with reality — UI banners, state-machine guards, notifications. | The hardware NC contact still works (physical guarantee). The operator may not see a banner or get a notification, but the generator cannot start while the EPO is pressed. |
+
+**The hardware layer is the actual safety guarantee.** The software layer exists to keep state consistent and to tell the operator what's going on — it is not what protects the maintenance person at the generator. If GenMaster crashes, GenSlave crashes, the network goes down, the Pi Zero loses power, or every line of Python in this repo has a bug, the NC contact still opens the start circuit when the button is pressed.
+
+This asymmetry — hardware enforcement for safety, software for everything else — is the same pattern used by the HOA selector at the operator side, but inverted: the HOA selector has *no* hardware enforcement because there is no physical risk if it fails (the worst case is "automation runs anyway", which is the system's behavior with no switch at all). Safety belongs at the generator with the person; convenience belongs with the operator.
+
+Implications for threat modeling:
+
+- A compromised GenMaster, GenSlave, or any combination of them cannot start the generator while the EPO is pressed. There is no software override.
+- Disabling `HARDWARE_SAFETY_ENABLED=false` in GenSlave's `.env` only turns off the LCD/notification side. The NC contact in the start circuit is unaffected. This flag exists so the monitor doesn't error on systems where the EPO isn't wired yet — it cannot be used to "bypass" the EPO once installed.
+- An attacker with physical access to the EPO can release it by twisting the head clockwise. Physical access to the EPO is equivalent to physical access to the generator itself, which is already explicitly out of scope (threat row 8).
+
+The full operator-facing guide to the switches is at [Hardware Switches](manual/hardware-switches.md).
+
+---
+
 ## Network architecture & trust boundaries
 
 ```

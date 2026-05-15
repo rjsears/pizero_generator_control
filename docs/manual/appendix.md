@@ -130,6 +130,26 @@ Events that can fire notifications (configurable on the [Notifications → Confi
 | `system.disk_low` | Host disk usage above 90%. |
 | `system.memory_high` | Host memory usage above 90% sustained for >60s. |
 
+### Hardware-switch events
+
+Added with the optional EPO + HOA hardware switches. See [Hardware Switches](hardware-switches.md) for the operator guide and [Notifications](notifications.md) for routing.
+
+| Event key | Severity | Triggered by |
+|-----------|----------|--------------|
+| `hardware_safety_engaged_genslave` | warning | GenMaster detects EPO has been engaged (via heartbeat or fast-poll). |
+| `hardware_safety_released_genslave` | info | EPO transitions back to released. |
+| `quiet_mode_engaged_genmaster` | info | HOA selector flipped to Quiet (after the boot delay). |
+| `quiet_mode_released_genmaster` | info | HOA selector flipped out of Quiet. |
+| `quiet_override_enabled` | info | Operator started a Quiet override window from the Generator page. |
+| `manual_run_started_genmaster_switch` | info | HOA selector flipped to Run and a run started. |
+| `manual_run_ended_genmaster_switch` | info | HOA selector flipped out of Run, ending the run. |
+| `manual_run_reminder` | info | A long-running manual or HOA-Run run hit the configured reminder milestone (default 2h). |
+| `manual_run_blocked_by_safety` | warning | A start attempt was refused because the EPO was engaged. Also fires for HOA Run that was refused. |
+| `auto_run_suppressed_by_quiet` | warning | An automation trigger (Victron / schedule / exercise) was suppressed by HOA Quiet without an override. |
+| `genmaster_boot_hardware_state` | warning | One-shot ~20 s after boot if the hardware came up in a non-default state (EPO engaged or HOA != Auto). A fully-normal boot fires nothing. |
+
+Several internal events also exist that are logged but not operator-routable: `QUIET_OVERRIDE_EXPIRED`, `QUIET_OVERRIDE_CANCELLED` (with `reason = operator_cancel | hoa_left_quiet`), `MANUAL_RUN_RECLASSIFIED_BY_HOA`, `HOA_RUN_START_REFUSED`. These appear in application logs only — wire them up through the regular state-change events above if you need operator notification.
+
 ---
 
 ## Default ports
@@ -145,6 +165,48 @@ Events that can fire notifications (configurable on the [Notifications → Confi
 | Cloudflared | (outbound) | Tunnel-only | Outbound HTTPS to Cloudflare edge; no incoming port. |
 | Tailscale | UDP 41641 | (mesh) | WireGuard-based. |
 | WiFi Watchdog | (host service) | None | Local-only systemd service. |
+
+---
+
+## Environment variables — hardware switches
+
+`.env` settings introduced with the optional EPO + HOA feature. Defaults match a clean install on dedicated hardware; change them only if your build deviates. Pin assignments can also be edited interactively from [System → Hardware → GPIO Assignments](system.md#gpio-assignments) (which writes the same `.env` keys).
+
+| Variable | Service | Default | Purpose |
+|----------|---------|---------|---------|
+| `HARDWARE_SAFETY_ENABLED` | GenSlave | `true` | Master toggle for the EPO monitor. Set `false` to skip startup if the EPO isn't wired yet. The NC contact in the start-relay circuit still works regardless — disabling only stops the LCD/notification side. |
+| `HOA_SWITCH_ENABLED` | GenMaster | `true` | Master toggle for the HOA monitor. Set `false` to disable; the system then behaves as if the selector were always in Auto. |
+| `HOA_GPIO_QUIET` | GenMaster | `22` | BCM pin for the Quiet-position NO contact. |
+| `HOA_GPIO_RUN` | GenMaster | `27` | BCM pin for the Run-position NO contact. |
+| `HOA_BOOT_DELAY_SECONDS` | GenMaster | `30` | Post-boot grace window before the HOA position is honored — avoids spurious state-change notifications if the selector happens to be in Quiet or Run when GenMaster starts. Set `0` for bench testing. |
+| `VICTRON_GPIO_PIN` | GenMaster | `17` | BCM pin for the Cerbo GX generator-request relay. Pre-existing in the project but compose-wired alongside the HOA pins so all three operator-side inputs flow through `.env` consistently. |
+
+GenMaster also gains two non-hardware DB-backed config columns surfaced under the same area:
+
+| Config column | Default | Purpose |
+|---------------|---------|---------|
+| `manual_run_reminder_enabled` | `true` | Master toggle for the manual-run reminder timer. |
+| `manual_run_reminder_interval_hours` | `2` | How often to fire the `manual_run_reminder` notification during a long-running manual or HOA-Run run. |
+
+Changes to `HOA_GPIO_QUIET`, `HOA_GPIO_RUN`, or `VICTRON_GPIO_PIN` require a GenMaster restart — the pins are bound when the monitors start. The GPIO Assignments panel shows a "Restart required" banner with the still-running pins until the container restarts.
+
+---
+
+## Schema migrations — hardware switches
+
+Alembic migrations introduced with the optional EPO + HOA feature. Apply with `docker compose exec genmaster alembic upgrade head`.
+
+| Revision | Adds |
+|----------|------|
+| **015** | `system_state.slave_physical_safety_engaged` (boolean, nullable) — caches the EPO state GenSlave reports via heartbeat. |
+| **017** | Updates three CHECK constraints (`chk_run_trigger` on `system_state`, `chk_trigger_type` and `chk_stop_reason` on `generator_runs`) to accept `local_switch_genmaster`, `local_switch_genmaster_end`, and `hoa_quiet`. |
+| **018** | Widens `system_state.run_trigger`, `generator_runs.trigger_type`, and `generator_runs.stop_reason` from VARCHAR(20) to VARCHAR(40). Required because `local_switch_genmaster` (22 chars) and `local_switch_genmaster_end` (26 chars) exceed the original 20-char limit — 017 added the values to the CHECK constraints but the column width was overlooked. |
+| **019** | `system_state.quiet_override_active` (boolean) and `system_state.quiet_override_expires_at` (int, nullable) — persistent state for the Quiet web override. |
+| **020** | Seeds 10 notification-event rows into `system_notification_events` using `INSERT ... ON CONFLICT DO NOTHING`. Mirrors `DEFAULT_SYSTEM_NOTIFICATION_EVENTS` in the model. |
+| **021** | Adds `config.manual_run_reminder_enabled` and `config.manual_run_reminder_interval_hours`; seeds the `genmaster_boot_hardware_state` event row. |
+| **022** | Adds `system_notification_global_settings.rate_limit_alert_sent` (boolean, default false) so the "Rate Limit Exceeded" emergency-contact alert fires at most once per hour window instead of on every suppressed notification. |
+
+Migration 016 was intentionally skipped — 017 and 018 shipped before the Quiet override design landed; the linear chain is 014 → 015 → 017 → 018 → 019 → 020 → 021 → 022.
 
 ---
 
@@ -494,6 +556,44 @@ GET    /api/dev/gpio/state
 POST   /api/dev/gpio/victron-signal    {"active": true|false}
 POST   /api/dev/gpio/toggle
 POST   /api/dev/webhook/test
+```
+
+### Hardware switches (EPO + HOA)
+
+Added with the optional hardware-switches feature. See [Hardware Switches](hardware-switches.md) for the operator-facing guide.
+
+**GenMaster side:**
+
+```
+GET    /api/system/hoa                  Returns HOAStatus (state, raw contacts, boot-delay
+                                        flag, pin assignments, last state-change time)
+GET    /api/system/quiet-override       Returns {active, expires_at, seconds_remaining}
+POST   /api/system/quiet-override       {duration_minutes: 1..1440}  start a Quiet override
+DELETE /api/system/quiet-override       Cancel an active override (idempotent)
+GET    /api/system/gpio-assignments     Current .env pins + running pins + pending_restart
+POST   /api/system/gpio-assignments     {victron_gpio_pin, hoa_gpio_quiet, hoa_gpio_run}
+                                        validates BCM 0-27 + distinct; writes .env
+POST   /api/generator/start             409 response when EPO is engaged:
+                                        {"detail": "Cannot start - GenSlave hardware safety
+                                         interlock (EPO) is engaged. Release the E-stop at the
+                                         generator to allow operation."}
+```
+
+The `slave_health` block embedded in `/api/system/status` gains a `physical_safety_engaged: bool` field. `/api/system/status` also gains a top-level `hoa: HOAStatus` object.
+
+**GenSlave side:**
+
+```
+GET    /api/safety                      HardwareSafetyStatus (engaged, engaged_at,
+                                        released_at, engagement_count, raw_input,
+                                        epo_monitor_running, available, enabled)
+GET    /api/health                      Adds physical_safety_engaged: bool to the public
+                                        no-auth payload
+GET    /api/relay/state                 Adds physical_safety_engaged: bool to RelayState
+GET    /api/failsafe                    Adds physical_safety_engaged: bool to FailsafeStatus
+POST   /api/heartbeat                   Reply body adds physical_safety_engaged: bool —
+                                        how GenMaster learns the EPO state without a
+                                        separate poll
 ```
 
 All authenticated endpoints require either:

@@ -85,6 +85,79 @@ The heartbeat system ensures reliable communication between GenMaster and GenSla
 
 ---
 
+## Hardware Switches — Asymmetric Design
+
+Two optional physical control switches sit alongside the web UI: a **GenSlave EPO** (Emergency Power Off) mushroom button at the generator, and a **GenMaster HOA** (Hand-Off-Auto) selector at the operator location. The design is intentionally asymmetric — the two switches solve different problems, live in different places, and use different enforcement mechanisms.
+
+| Switch | Location | Type | Enforcement | Purpose |
+|--------|----------|------|-------------|---------|
+| **EPO** | At the generator (with GenSlave) | 1 NC + 1 NO E-stop | **Hardware** — physically interrupts the relay-to-generator wire, AND signals software | Maintenance lockout. The maintenance person at the generator has an absolute physical guarantee no one starts the generator. |
+| **HOA selector** | At the operator location (with GenMaster) | 2 NO rotary contacts (Quiet / Auto / Run) | Software, with hardware position detection | Operator-side mode selector. No physical safety — convenience only. |
+
+### Rationale for the asymmetry
+
+The EPO protects the **person** at the generator. A stuck contact, a software bug, a crashed Pi, or a network outage cannot start the generator while the EPO is engaged because the NC contact in the start-relay circuit is physically open. The software-signaling NO contact exists only to keep state consistent (drive UI banners, fire notifications, refuse start commands) — it is not what protects the maintenance person. Hardware enforcement is the safety guarantee. See [SECURITY.md](SECURITY.md#hardware-safety--two-layer-epo-pattern) for the full safety pattern.
+
+The HOA helps the **operator** make routine choices — silence the generator overnight (Quiet), let automation run (Auto), or run the generator manually (Run). Its worst-case failure mode is "automation runs anyway", which is exactly what happens today with no switch at all. There's no physical risk if HOA fails, so there's no need for hardware enforcement.
+
+### EPO state flow (heartbeat-based auto-resume)
+
+```
+[Operator presses EPO]
+    ↓
+GenSlave: hardware_safety.py polls IN1 every 25 ms (2-read debounce → ~50 ms)
+    ↓
+Drops the GenSlave relay if it was holding it on.
+Sets physical_safety_engaged = True in GenSlave state.
+LCD line "Generator: ARMED" → "EPO SAFETY ON".
+    ↓
+On the next heartbeat (≤60 s; the fast-poll loop catches it within ~5 s):
+    GenMaster.state_machine.update_slave_physical_safety_from_poll()
+    ↓
+system_state.slave_physical_safety_engaged = True
+hardware_safety_engaged_genslave notification fires.
+UI: red banner appears on Generator page, Emergency Stop card dims,
+    Start/Stop Generator buttons render disabled.
+start_generator() refuses all callers with 409 + detail message.
+
+[Operator twists EPO clockwise to release]
+    ↓
+NC contact closes, NO contact opens.
+GenSlave clears physical_safety_engaged. LCD returns to "Generator: ARMED".
+    ↓
+Next heartbeat / fast-poll:
+GenMaster clears the flag.
+hardware_safety_released_genslave notification fires.
+If Victron was still requesting the generator, GenMaster starts it on
+the next state-machine tick — there is no separate "rearm" step.
+```
+
+The auto-resume is intentional: the EPO is a **maintenance lockout**, not a "stop automation" button. Operators who want to stop automation without engaging the EPO use the HOA selector's Quiet position.
+
+### HOA state machine precedence
+
+The HOA selector reads two NO contacts on GenMaster GPIO22 (Quiet) and GPIO27 (Run). The two-bit encoding gives four possible states: Auto (both open), Quiet (GPIO22 closed), Run (GPIO27 closed), and Fault (both closed — mechanically impossible on the rotary, so reported as Fault and treated as Auto). The state machine consults HOA inside its decision points:
+
+1. **EPO check** — refuse all start paths if `slave_physical_safety_engaged` is True. (Hardware-side guarantee makes this advisory, but it keeps state consistent.)
+2. **HOA Quiet check** — refuse automation-triggered starts (Victron, scheduled, exercise) if HOA is in Quiet AND no override is active. Manual web starts and HOA-Run bypass this.
+3. **Existing state machine logic** — arming, run-time limits, cooldown, etc.
+
+The state-machine precedence stack from top to bottom: EPO (hardware), HOA Run (operator hold), Quiet override (operator bypass), HOA Quiet (operator gate), existing arming/limits, Victron/schedule/exercise. Higher entries override lower ones.
+
+### Quiet override
+
+The Quiet override lets an operator temporarily ignore the HOA Quiet position from the web UI without physically turning the knob. Stored in two columns on `system_state` (`quiet_override_active`, `quiet_override_expires_at`). Survives GenMaster restart — reconciled on boot. Auto-clears when: the timer expires, the operator clicks Cancel, OR the HOA selector leaves Quiet (since the override only matters while the selector is in Quiet).
+
+### Configuration
+
+- **Pin assignments** — `VICTRON_GPIO_PIN`, `HOA_GPIO_QUIET`, `HOA_GPIO_RUN` in GenMaster's `.env`, also writable from the System → Hardware → GPIO Assignments panel. Bound at monitor start so changes require a GenMaster restart.
+- **Boot delay** — `HOA_BOOT_DELAY_SECONDS` (default 30 s). Post-boot grace window so a Quiet or Run position at boot doesn't immediately fire spurious state-change notifications.
+- **Switch enable** — `HARDWARE_SAFETY_ENABLED` (GenSlave) and `HOA_SWITCH_ENABLED` (GenMaster). Disable to skip monitor startup on systems where the switches aren't wired yet. **Cannot bypass the EPO once installed** — the NC contact in the start circuit is unaffected by the flag.
+
+Operator guide: [Hardware Switches](manual/hardware-switches.md).
+
+---
+
 ## Boot Sequence / Power Loss Recovery
 
 Both GenMaster and GenSlave implement safety measures for power loss and reboot scenarios.

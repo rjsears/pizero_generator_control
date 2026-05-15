@@ -126,7 +126,7 @@ The rule engine. The Configure tab is split into three areas: a row of **status 
 | **Sent (24h)** | Notifications delivered in the last 24 hours. |
 | **Maintenance** | Click to enable maintenance mode (suppresses all notifications). |
 | **Quiet Hours** | Click to schedule a daily window where non-critical alerts are suppressed. |
-| **N/27 Events Enabled** | How many of the 27 individual event types currently have at least one target. |
+| **N/36 Events Enabled** | How many of the 36 individual event types currently have at least one target. The new EPO, HOA, Quiet override, and manual-run events from [Hardware Switches](hardware-switches.md) are part of this total. |
 | **N/50 This Hour** | Notifications sent in the current hour vs. the [Rate Limiting](#rate-limiting) ceiling. |
 
 #### Maintenance mode
@@ -186,45 +186,54 @@ Docker container health and status alerts. By default these are off (0/5 enabled
 | **Container Stopped** | warning | A container has stopped unexpectedly. |
 | **Container Unhealthy** | warning | A container's healthcheck has failed. |
 
-##### Generator Events (10 events)
+##### Generator Events (18 events)
 
-![Generator Events expanded](images/screenshots/notifications-11-generator-events-expanded.png)
+![Generator Events expanded — includes new HOA / Quiet override / manual run events](images/hardware/71-notifications-events-list.png)
 
-The core operational events around the generator itself.
+The core operational events around the generator itself, including the events for the optional HOA selector and Quiet override (see [Hardware Switches](hardware-switches.md)).
 
 | Event | Severity | Triggers when |
 |-------|----------|---------------|
+| **Auto Run Suppressed by Quiet Mode** | warning | An automatic trigger (Victron, schedule, exercise) wanted to start the generator while the HOA selector was in Quiet without an override — the run was suppressed. |
 | **Failsafe Triggered** | critical | GenSlave's failsafe fired and forced the relay off due to communication loss. |
 | **Generator Relay Disabled** | warning | The relay was disarmed (automatic operations now blocked). |
 | **Generator Relay Enabled** | info | The relay was armed (automatic operations now allowed). |
 | **Generator Started** | info | The generator entered the running state. |
 | **Generator Stopped** | info | The generator entered the stopped state. |
+| **Manual Run Ended (HOA Switch)** | info | An HOA-Run-triggered manual run ended when the operator left Run. |
+| **Manual Run Reminder** | info | A periodic reminder fired during a long-running manual or HOA-Run run. Interval is configurable (default 2 hours; see `manual_run_reminder_interval_hours`). |
+| **Manual Run Started (HOA Switch)** | info | A manual run started because the operator turned the HOA selector to Run. |
 | **Max Runtime — Cooldown Active** | warning | Max runtime hit; cooldown window in progress. |
 | **Max Runtime — Manual Reset Required** | critical | Max runtime hit and the policy requires manual re-arm before the generator can run again. |
 | **Override Disabled** | info | Manual override turned off (returning to automatic Victron control). |
 | **Override Enabled** | warning | Manual override turned on (Victron signal ignored). |
+| **Quiet Mode Engaged** | info | The HOA selector was turned to the Quiet position. |
+| **Quiet Mode Released** | info | The HOA selector was turned out of the Quiet position. |
+| **Quiet Override Enabled** | info | A temporary Quiet override was enabled from the Generator page. |
 | **Relay Disarmed on Boot (Fail-Safe)** | warning | The fail-safe boot policy automatically disarmed the relay after a GenMaster restart. See [Boot Arming Policy](generator.md#boot-arming-policy). |
+| **Run Blocked by Safety Interlock** | warning | A start attempt (manual, HOA Run, Victron, scheduled) was refused because the GenSlave EPO was engaged. |
 
-##### GenMaster Events (4 events)
+##### GenMaster Events (5 events)
 
 ![GenMaster Events expanded](images/screenshots/notifications-12-genmaster-events-expanded.png)
 
-Resource health for the GenMaster Pi 5 host itself.
+Resource health for the GenMaster Pi 5 host itself, plus a one-shot boot-time alert if the hardware switches aren't in their expected positions.
 
 | Event | Severity | Triggers when |
 |-------|----------|---------------|
+| **GenMaster Boot — Hardware Switch State** | warning | Fires once ~20 s after GenMaster boots if the GenSlave EPO is engaged or the HOA selector is not in Auto. A fully-normal boot (EPO released, HOA Auto) fires nothing. Lets the operator know the system came up into a non-default state — useful after a power cycle or a long-distance reboot. |
 | **GenMaster Disk Space Low** | warning | Free disk space on the GenMaster host falls below threshold. |
 | **GenMaster High CPU Temperature** | warning | CPU core temperature is high (typically >75°C). |
 | **GenMaster High CPU Usage** | warning | Sustained high CPU utilization. |
 | **GenMaster High Memory Usage** | warning | RAM usage exceeds the configured threshold. |
 
-All four are enabled by default (4/4) — these are the canary alerts that tell you the master controller itself is in trouble.
+The four resource events are enabled by default — the canary alerts that tell you the master controller itself is in trouble. The Boot — Hardware Switch State event ships with one target by default but you can route it elsewhere or disable it if you don't have the switches installed.
 
-##### GenSlave Events (6 events)
+##### GenSlave Events (8 events)
 
-![GenSlave Events expanded](images/screenshots/notifications-13-genslave-events-expanded.png)
+![GenSlave Events expanded — includes new EPO Engaged / Released events](images/hardware/72-notifications-genslave-events.png)
 
-Communication status and resource health for the remote GenSlave Pi Zero.
+Communication status and resource health for the remote GenSlave Pi Zero, plus the two events for the optional GenSlave EPO (see [Hardware Switches](hardware-switches.md)).
 
 | Event | Severity | Triggers when |
 |-------|----------|---------------|
@@ -234,8 +243,10 @@ Communication status and resource health for the remote GenSlave Pi Zero.
 | **GenSlave High CPU Temperature** | warning | GenSlave CPU temperature is high. |
 | **GenSlave High CPU Usage** | warning | Sustained high CPU utilization on the slave. |
 | **GenSlave High Memory Usage** | warning | RAM usage on the slave (only 416MB total) is high. |
+| **Hardware Safety (EPO) Engaged** | warning | The hardware E-stop at the generator has been pressed. GenMaster learns about this on the next heartbeat from GenSlave (≤60 s, often faster via the 5-second fast-poll). |
+| **Hardware Safety (EPO) Released** | info | The E-stop has been released. Automation (Victron, schedule, HOA Run) resumes on the next heartbeat. |
 
-All six are enabled by default (6/6).
+The six resource and communication events are enabled by default (6/8). The two EPO events ship with no target by default — route them to whichever channel you want EPO alerts on (typically the same on-call channel as Communication Lost).
 
 #### GenSlave Remote — Notification Forwarding
 
@@ -257,7 +268,7 @@ Default: **50/hour** (Medium preset).
 |-------|---------|
 | **Maximum Notifications Per Hour** | Slider from 10 to 500. Default 50. Once the hourly cap is hit, additional notifications are queued and delivered after the limit resets. |
 | **Presets** | One-click: Low (25), Medium (50), Standard (100), High (200), Maximum (500). |
-| **Emergency Contact** | Optional channel that gets a single alert when the rate limit is exceeded — so you know throttling is in effect. Defaults to "No emergency contact configured". |
+| **Emergency Contact** | Optional channel that gets a single alert when the rate limit is exceeded — so you know throttling is in effect. **Fires at most once per hour window** so the alert itself doesn't pile on top of the rate-limited events. Defaults to "No emergency contact configured". |
 
 !!! tip "Why rate limiting matters"
     Without a cap, a runaway loop (a container flapping unhealthy/restarted every 30 seconds, for example) could push thousands of notifications to your phone in an hour. The rate limiter throttles outbound delivery so a single failure mode can't drown your inbox or get you SMS-blocked by your carrier.
@@ -299,3 +310,4 @@ For the most resilient setup, configure at least one channel on **both** sides �
 - Set up the slave-side independent failsafe alerts: [GenSlave → Notification Settings](genslave.md#notification-settings).
 - Read more about Apprise URL formats: [Apprise wiki](https://github.com/caronc/apprise/wiki).
 - For the older webhook-based notification approach, see [Notifications guide](../NOTIFICATIONS.md).
+- Set up the EPO and HOA hardware switches that fire most of the new events: [Hardware Switches](hardware-switches.md).
