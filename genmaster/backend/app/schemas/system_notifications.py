@@ -19,11 +19,11 @@ Provides request/response schemas for:
 - Notification history
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 # ============================================================================
 # Enums
@@ -362,6 +362,19 @@ class SystemNotificationHistoryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer("triggered_at", "sent_at")
+    def _serialize_utc(self, dt: Optional[datetime]) -> Optional[str]:
+        # Naive datetimes coming from the DB are stored in UTC (containers run
+        # with TZ=UTC and the columns use func.now()). Tag them as UTC on the
+        # way out so browsers parse them correctly — without this the JSON
+        # strings have no tz marker and clients treat them as local time,
+        # which made the History list show "Just now" for every row.
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
 
 
 class HistoryListResponse(BaseModel):

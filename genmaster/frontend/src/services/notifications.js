@@ -84,10 +84,13 @@ export default {
   // History Methods
   // ============================================================================
 
-  async getHistory(limit = 50, channelId = null) {
+  async getHistory(limit = 50, channelId = null, eventType = null) {
     const params = { limit }
     if (channelId) {
       params.channel_id = channelId
+    }
+    if (eventType) {
+      params.event_type = eventType
     }
     const response = await api.get('/notifications/history', { params })
     return response.data

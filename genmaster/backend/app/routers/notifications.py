@@ -469,8 +469,10 @@ async def get_history(
     db: DbSession,
     limit: int = 50,
     channel_id: int = None,
+    event_type: str = None,
 ) -> List[NotificationHistoryResponse]:
-    """Get notification history."""
+    """Get notification history. `event_type` filters to a single event key
+    (e.g. `test` to only show channel-test sends)."""
     query = (
         select(NotificationHistory)
         .options(selectinload(NotificationHistory.channel))
@@ -479,6 +481,8 @@ async def get_history(
     )
     if channel_id:
         query = query.where(NotificationHistory.channel_id == channel_id)
+    if event_type:
+        query = query.where(NotificationHistory.event_type == event_type)
 
     result = await db.execute(query)
     history = result.scalars().all()

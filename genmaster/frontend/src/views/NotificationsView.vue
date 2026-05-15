@@ -96,6 +96,17 @@ const historyExpanded = ref(false)
 // History sub-tab ('channels' for channel tests, 'system' for system events)
 const historyTab = ref('channels')
 
+// The "Channel Tests" sub-tab should only show actual channel-test sends, not
+// every per-delivery entry in the legacy notification log (the legacy log
+// also captures the rate-limit-exceeded alert and any ad-hoc send). The
+// global `history` ref keeps everything so the Overview stat tiles can still
+// reflect total delivery activity.
+const channelTestHistory = computed(() =>
+  (Array.isArray(history.value) ? history.value : []).filter(
+    (h) => h.event_type === 'test',
+  ),
+)
+
 // Testing state
 const testingChannelId = ref(null)
 
@@ -802,12 +813,12 @@ async function executeDelete() {
               </div>
               <div>
                 <h3 class="font-semibold text-primary">Channel Test History</h3>
-                <p class="text-sm text-secondary">Test notifications sent to channels</p>
+                <p class="text-sm text-secondary">Test notifications sent from the ▷ test button on each channel</p>
               </div>
             </div>
             <div class="flex items-center gap-2">
               <span class="text-xs px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                {{ history.length }} total
+                {{ channelTestHistory.length }} total
               </span>
               <ChevronDownIcon v-if="historyExpanded" class="h-5 w-5 text-secondary" />
               <ChevronRightIcon v-else class="h-5 w-5 text-secondary" />
@@ -818,17 +829,17 @@ async function executeDelete() {
             <div v-if="historyExpanded" class="px-4 pb-4 border-t border-gray-200 dark:border-gray-700">
               <!-- Empty State -->
               <EmptyState
-                v-if="history.length === 0"
+                v-if="channelTestHistory.length === 0"
                 :icon="ClockIcon"
                 title="No test notifications sent yet"
-                description="Test notification history will appear here when you test channels."
+                description="Test notification history will appear here when you use the ▷ test button on a channel."
                 class="pt-4"
               />
 
               <!-- History List -->
               <div v-else class="space-y-2 pt-3">
                 <div
-                  v-for="item in history"
+                  v-for="item in channelTestHistory"
                   :key="item.id"
                   class="flex items-center justify-between p-4 bg-surface-hover rounded-lg border border-gray-200 dark:border-gray-700"
                 >

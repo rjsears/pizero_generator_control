@@ -11,11 +11,11 @@
 
 """Notification-related Pydantic schemas."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 
 class ChannelType(str, Enum):
@@ -197,6 +197,16 @@ class NotificationHistoryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer("sent_at")
+    def _serialize_utc(self, dt: datetime) -> str:
+        # See SystemNotificationHistoryResponse._serialize_utc — same fix.
+        # Naive timestamps from func.now() in UTC containers need an explicit
+        # UTC marker on the wire so the browser doesn't reinterpret them as
+        # local time.
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
 
 
 # ============================================================================
