@@ -73,6 +73,7 @@ While designed around Victron integration, the architecture is universal—any t
 ## Table of Contents
 
 - [Overview](#overview)
+- [Safety by Design](#safety-by-design)
 - [Features](#features)
 - [System Architecture](#system-and-network-architecture)
 - [Hardware Requirements](#hardware-requirements)
@@ -95,6 +96,22 @@ While designed around Victron integration, the architecture is universal—any t
 The RPi Generator Control system automates generator management for off-grid solar installations. When your Victron Cerbo GX determines that battery levels are low and generator power is needed, it sends a signal to GenMaster, which coordinates with GenSlave to physically start the generator.
 
 ![System Overview](images/overview.png)
+
+---
+
+## Safety by Design
+
+This is a system that starts and stops a real generator in a real location, sometimes unattended. Safety is treated as a first-class concern, not an afterthought — it shows up at every layer of the stack:
+
+- **Hardware EPO** at the generator that **physically opens the start circuit** with a Schneider XB4 mushroom E-stop. No software override exists or can exist — even if every Pi is offline and every line of code in this repo has a bug, the generator cannot start while the EPO is engaged.
+- **HOA selector** at the operator location for everyday Quiet / Auto / Run mode control without touching the web UI.
+- **Independent failsafe** on GenSlave that drops the relay if it stops hearing from GenMaster for 30 seconds — without any network, database, or web UI dependency.
+- **Fail-safe boot policy** that ships the relay disarmed on every GenMaster restart unless the operator explicitly opts into preserve-state behavior.
+- **Two-layer notification system** so a failure on the master side still pages you from the slave side.
+
+![How the EPO and HOA work together](docs/manual/images/hardware/hoa_epo_diagram.png)
+
+The EPO and HOA are optional — the system runs fine without either — but together they give you the hardware-enforced safety and operator-side control you'd expect from a production-grade generator setup. See [Hardware Switches](docs/manual/hardware-switches.md) for the full operator guide and the [Security model](docs/SECURITY.md#hardware-safety--two-layer-epo-pattern) for why the two-layer pattern is the actual safety guarantee.
 
 ---
 

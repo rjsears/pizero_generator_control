@@ -15,6 +15,8 @@ The two switches solve different problems and live in different places on purpos
 
 The asymmetry is intentional. The EPO protects the **person** at the generator: a stuck contact or a software bug cannot start the generator while the EPO is engaged because the contact physically opens the circuit. The HOA helps the **operator** make routine choices, and its worst-case failure is "automation runs anyway" — which is exactly what happens today with no switch at all.
 
+![How the EPO and HOA interact, end to end](images/hardware/hoa_epo_diagram.png)
+
 ## Quick reference
 
 | Situation | What to do |

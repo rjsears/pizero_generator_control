@@ -82,6 +82,8 @@ The system uses a **master-slave architecture** with two Raspberry Pi devices:
 - **Arming System** - Explicit arm/disarm prevents accidental operations
 - **Heartbeat Monitoring** - Continuous health checks between devices
 - **Independent Failsafe** - GenSlave auto-stops generator if communication lost
+- **Hardware EPO** *(optional)* - Mushroom E-stop at the generator. NC contact physically interrupts the start circuit — a maintenance lockout that works even if every Pi is offline. See [Hardware Switches](manual/hardware-switches.md).
+- **HOA Selector** *(optional)* - 3-position rotary at the operator location for Quiet / Auto / Run modes — operator-side mode control without touching the web UI
 - **State Persistence** - PostgreSQL database survives reboots
 
 ### Modern Interface
