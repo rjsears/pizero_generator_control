@@ -41,9 +41,13 @@ If you've added the optional hardware switches (the GenSlave EPO mushroom button
 | **Run Mode Active** *(green)* | HOA selector is in the Run position | Operator is explicitly requesting the generator. GenMaster starts the generator and keeps it running until the selector leaves Run. |
 | **HOA Selector Fault** *(amber)* | Both Quiet and Run contacts read closed at the same time | Mechanical wiring fault. System treats the selector as Auto until resolved. |
 
-![EPO Triggered banner on the Generator page](images/hardware/10-generator-epo-engaged.png)
+Example with the EPO engaged on its own:
 
-When both the EPO and the HOA selector are active, both banners appear with the EPO banner on top — hardware safety wins. The HOA banner's wording changes to acknowledge the EPO ("Run Mode — Held by EPO" or "Quiet Mode — EPO Active") and the Override button is hidden in the Quiet case, since overriding Quiet only matters if the generator could otherwise run.
+![EPO Triggered banner on the Generator page — EPO engaged, HOA in Auto](images/hardware/10-generator-epo-engaged.png)
+
+When both the EPO and the HOA selector are active, both banners appear with the EPO banner on top — hardware safety wins. The HOA banner's wording changes to acknowledge the EPO ("Run Mode — Held by EPO" or "Quiet Mode — EPO Active") and the Override button is hidden in the Quiet case, since overriding Quiet only matters if the generator could otherwise run:
+
+![Combined banners — EPO engaged AND HOA in Quiet; note the changed "Quiet Mode — EPO Active" wording and no Override button](images/hardware/40-generator-epo-and-quiet.png)
 
 For the full operator guide to both switches — wiring, behavior, troubleshooting — see [Hardware Switches](hardware-switches.md).
 

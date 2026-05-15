@@ -26,8 +26,8 @@ const emit = defineEmits(['close'])
 const appInfo = {
   name: 'GenMaster',
   fullName: 'RPi Generator Control',
-  version: '1.0.0',
-  versionDate: '2026-01-17',
+  version: '0.2.0',
+  versionDate: '2026-05-15',
   author: 'Richard J. Sears',
   email: 'richardjsears@protonmail.com',
   githubUrl: 'https://github.com/rjsears/pizero_generator_control',

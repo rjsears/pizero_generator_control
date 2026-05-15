@@ -324,7 +324,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await state_machine.log_event(
             "SYSTEM_BOOT",
             {
-                "version": "1.0.0",
+                "version": "0.2.0",
                 "environment": settings.app_env,
                 "mock_gpio": gpio_monitor.mock_mode,
             },
@@ -420,7 +420,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title="GenMaster API",
     description="Generator Control System - Master Controller",
-    version="1.0.0",
+    version="0.2.0",
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url=None,  # Custom route below with working CDN URL

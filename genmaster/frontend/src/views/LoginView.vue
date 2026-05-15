@@ -162,7 +162,7 @@ async function handleLogin() {
 
       <!-- Footer -->
       <div class="text-center text-sm text-muted mt-6">
-        <p>GenMaster v1.0.0</p>
+        <p>GenMaster v0.2.0</p>
         <p class="mt-1">Richard J. Sears</p>
         <p>richardjsears@protonmail.com</p>
       </div>

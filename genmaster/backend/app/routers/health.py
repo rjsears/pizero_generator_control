@@ -67,7 +67,7 @@ async def health_check() -> HealthCheck:
     return HealthCheck(
         status="ok",
         timestamp=int(time.time()),
-        version="1.0.0",
+        version="0.2.0",
     )
 
 

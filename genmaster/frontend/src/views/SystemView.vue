@@ -74,7 +74,7 @@ const healthData = ref({
   passed: 0,
   warnings: 0,
   errors: 0,
-  version: '1.0.0',
+  version: '0.2.0',
   checks: {
     docker: { status: 'ok', details: { running: 0, stopped: 0, unhealthy: 0, unhealthy_containers: [] } },
     services: { status: 'ok', details: {} },
@@ -265,7 +265,7 @@ async function loadHealthData() {
       passed,
       warnings,
       errors,
-      version: '1.0.0',
+      version: '0.2.0',
       checks: {
         docker: {
           status: dockerStatus,
