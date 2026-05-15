@@ -60,7 +60,7 @@ The full operator-facing guide to the switches is at [Hardware Switches](manual/
 
 ## Network architecture & trust boundaries
 
-![Secure, layered path from the public internet to the generator control system](manual/images/screenshots/network_boundries.png)
+![Secure, layered path from the public internet to the generator control system](images/network_boundries.png)
 
 The trust boundaries this enforces:
 
