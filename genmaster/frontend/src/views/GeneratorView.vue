@@ -119,7 +119,7 @@
       v-if="hoaIsQuiet"
       :class="[
         'rounded-xl border-2 px-4 py-3 flex items-center gap-3',
-        quietOverrideActive
+        (quietOverrideActive && !epoEngaged)
           ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30'
           : 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
       ]"
@@ -128,11 +128,22 @@
       <InformationCircleIcon
         :class="[
           'h-7 w-7 flex-shrink-0',
-          quietOverrideActive ? 'text-emerald-500' : 'text-blue-500'
+          (quietOverrideActive && !epoEngaged) ? 'text-emerald-500' : 'text-blue-500'
         ]"
       />
       <div class="flex-1">
-        <template v-if="quietOverrideActive">
+        <template v-if="epoEngaged">
+          <p class="text-base font-bold text-blue-700 dark:text-blue-300">
+            Quiet Mode — EPO Active
+          </p>
+          <p class="text-sm text-blue-600 dark:text-blue-400">
+            The HOA selector is in Quiet and the GenSlave EPO is engaged.
+            Overriding Quiet is unavailable while the EPO is active — release
+            the EPO first. Once it's released, normal Quiet Mode behavior
+            (and the override option) resumes.
+          </p>
+        </template>
+        <template v-else-if="quietOverrideActive">
           <p class="text-base font-bold text-emerald-700 dark:text-emerald-300">
             Quiet Override Active — {{ quietOverrideMinutesRemaining }} min remaining
           </p>
@@ -156,14 +167,14 @@
         </template>
       </div>
       <button
-        v-if="!quietOverrideActive"
+        v-if="!quietOverrideActive && !epoEngaged"
         @click="showQuietOverrideModal = true"
         class="flex-shrink-0 px-3 py-2 rounded-lg text-sm font-semibold bg-blue-500 hover:bg-blue-600 text-white transition-colors"
       >
         Override
       </button>
       <button
-        v-else
+        v-else-if="quietOverrideActive && !epoEngaged"
         @click="applyCancelQuietOverride"
         class="flex-shrink-0 px-3 py-2 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
       >
