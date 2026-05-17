@@ -418,14 +418,19 @@ class SlaveStatusService:
 
         client = await self._get_shared_client()
 
-        # Get current master state to send
-        generator_status = await self._state_machine.get_generator_status()
+        # Get current master intent to send. Use get_intended_generator_running
+        # rather than get_generator_status because the latter overrides to
+        # False during a disconnect (display-layer concern) — but the heartbeat
+        # payload must carry the operator's true intent so GenSlave's
+        # self-heal re-energizes the relay on the first successful heartbeat
+        # after a reconnect, not the second.
+        generator_running = await self._state_machine.get_intended_generator_running()
         is_armed = await self._state_machine.is_armed()
 
         # Send heartbeat
         response = await client.heartbeat(
             timestamp=timestamp,
-            generator_running=generator_status.running,
+            generator_running=generator_running,
             armed=is_armed,
             heartbeat_interval=self._heartbeat_interval,
             command="none",  # Commands are sent separately, not via heartbeat
@@ -578,8 +583,9 @@ class SlaveStatusService:
             return
 
         try:
-            generator_status = await self._state_machine.get_generator_status()
-            genmaster_running = generator_status.running
+            # Use intent (not the offline-overridden status) so we don't log
+            # false mismatches while GenSlave is disconnected.
+            genmaster_running = await self._state_machine.get_intended_generator_running()
 
             # Mismatch: relay is ON but GenMaster says stopped
             if genslave_relay_on and not genmaster_running:

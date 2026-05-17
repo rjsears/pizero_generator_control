@@ -394,6 +394,19 @@
                 {{ generatorStateText }}
               </p>
 
+              <!-- Comm-loss explainer: shows when the generator is
+                   displayed as stopped because GenSlave is offline.
+                   The API forces running=false during a disconnect; this
+                   note tells the operator why. Clears automatically on
+                   reconnect. -->
+              <p
+                v-if="!slaveOnline && !generatorStore.isRunning"
+                class="mt-2 text-sm font-medium text-amber-700 dark:text-amber-300"
+                role="status"
+              >
+                Lost communication with GenSlave
+              </p>
+
               <!-- Trigger reason, runtime, and fuel usage -->
               <div class="mt-3 flex flex-wrap gap-3">
                 <!-- Trigger Badge -->

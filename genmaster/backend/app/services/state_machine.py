@@ -1506,9 +1506,27 @@ class StateMachine:
     # =========================================================================
 
     async def get_generator_status(self) -> GeneratorStatus:
-        """Get current generator status."""
+        """Get current generator status.
+
+        When GenSlave is unreachable (slave_connection_status ==
+        "disconnected") we report running=False. We cannot confirm the
+        generator is actually running while comms are down, and GenSlave's
+        own failsafe will have killed the relay by ~90s of comm loss. The
+        DB still holds the operator's intent — when comms restore, the
+        existing heartbeat sync re-asserts that intent to GenSlave, so
+        normal operation resumes automatically without any code here.
+        """
         async with AsyncSessionLocal() as db:
             state = await self._get_state(db)
+
+            if state.slave_connection_status == "disconnected":
+                return GeneratorStatus(
+                    running=False,
+                    start_time=None,
+                    runtime_seconds=None,
+                    trigger=state.run_trigger,
+                    current_run_id=state.current_run_id,
+                )
 
             runtime = None
             if state.generator_running and state.generator_start_time:
@@ -1521,6 +1539,20 @@ class StateMachine:
                 trigger=state.run_trigger,
                 current_run_id=state.current_run_id,
             )
+
+    async def get_intended_generator_running(self) -> bool:
+        """Return the operator's intended running state from the DB.
+
+        Unlike get_generator_status() (which overrides to False when
+        GenSlave is disconnected for display purposes), this returns the
+        raw state.generator_running value. Use this for internal callers
+        — heartbeat sending, state-mismatch checking — that need to know
+        what GenMaster *wants* the generator to be doing, not what we
+        currently show in the UI.
+        """
+        async with AsyncSessionLocal() as db:
+            state = await self._get_state(db)
+            return state.generator_running
 
     async def get_override_status(self) -> OverrideStatus:
         """Get current override status."""
