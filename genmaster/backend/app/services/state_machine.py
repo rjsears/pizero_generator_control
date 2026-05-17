@@ -1274,11 +1274,30 @@ class StateMachine:
 
             logger.info(f"Override disabled (was: {previous_type})")
 
+            # Snapshot the inputs we need for post-release re-evaluation
+            # before leaving this session.
+            victron_active = state.victron_signal_state
+            generator_running = state.generator_running
+
             await self.log_event("OVERRIDE_DISABLED", {"previous_type": previous_type})
             await self._send_webhook("override.disabled", {"previous_type": previous_type})
             await self._trigger_system_notification("override_disabled", {"previous_type": previous_type})
 
-            return previous_type
+        # handle_victron_signal_change only fires on edge transitions, so a
+        # persistent Victron signal that spanned the override never re-triggers
+        # on release. Catch up here so the generator follows Victron's actual
+        # state once the operator drops the override.
+        # start_generator / stop_generator enforce their own guards (EPO,
+        # HOA Quiet, armed, GenSlave connectivity, etc.); any blocker is
+        # logged with a reason.
+        if previous_type == "force_stop" and victron_active and not generator_running:
+            logger.info("Override released — Victron still calling, starting generator")
+            await self.start_generator("victron")
+        elif previous_type == "force_run" and not victron_active and generator_running:
+            logger.info("Override released — Victron no longer calling, stopping generator")
+            await self.stop_generator("victron")
+
+        return previous_type
 
     # =========================================================================
     # Arm Status (cached from heartbeat - GenSlave is source of truth)
