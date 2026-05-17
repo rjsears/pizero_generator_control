@@ -40,6 +40,9 @@ genmaster/docker-compose.yaml
 # Agent documentation (internal use only)
 docs/agents/
 
+# Skill scratch (specs/plans written by superpowers skills — internal use only)
+docs/superpowers/
+
 genmaster/certbot/cloudflare.ini
 genmaster/certbot/*.ini
 genmaster/certbot/*.json
