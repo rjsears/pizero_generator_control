@@ -1,0 +1,2010 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Production-ready distributed generator control system for off-grid solar installations">
+      
+      
+        <meta name="author" content="Richard J. Sears">
+      
+      
+        <link rel="canonical" href="https://rjsears.github.io/pizero_generator_control/manual/generator/">
+      
+      
+        <link rel="prev" href="../welcome/">
+      
+      
+        <link rel="next" href="../hardware-switches/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../images/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Generator Control - RPi Generator Control</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#generator-control" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="RPi Generator Control" class="md-header__button md-logo" aria-label="RPi Generator Control" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 15H6l7-14v8h5l-7 14z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RPi Generator Control
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Generator Control
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/rjsears/pizero_generator_control" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    rjsears/pizero_generator_control
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="RPi Generator Control" class="md-nav__button md-logo" aria-label="RPi Generator Control" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 15H6l7-14v8h5l-7 14z"/></svg>
+
+    </a>
+    RPi Generator Control
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/rjsears/pizero_generator_control" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    rjsears/pizero_generator_control
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Manual
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Manual
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../welcome/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Welcome
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generator Control
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generator Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#top-status-row" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Top status row
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Top status row">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#arming-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Arming behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hardware-switch-banners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hardware switch banners
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generator-status-and-victron-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generator status and Victron command
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Generator status and Victron command">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generator-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generator Status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#victron-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Victron Command
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fuel-usage-and-manual-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fuel Usage and Manual Override
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fuel Usage and Manual Override">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fuel-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fuel Usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manual-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual Override
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-time-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run Time Limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#30-day-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        30-day statistics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generator-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generator Information
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exercise-schedule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exercise Schedule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#boot-arming-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boot Arming Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's next
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware-switches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Switches (EPO + HOA)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quick-reference-emergency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Reference — Emergency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../genslave/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenSlave
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schedule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schedule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../containers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Containers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../common-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../network-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../network-recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Recovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GENERATOR/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generator Controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCHEDULING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VICTRON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Victron Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../NOTIFICATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Setup
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GENSLAVE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenSlave Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TAILSCALE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tailscale VPN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CLOUDFLARE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloudflare Tunnel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../NGINX_ACCESS_CONTROL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nginx Access Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../welcome/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    User Manual
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="generator-control">Generator Control<a class="headerlink" href="#generator-control" title="Permanent link">&para;</a></h1>
+<p>The Generator Control page is GenMaster's home screen — it's where you monitor generator state in real time, manually start or stop the generator, configure fuel tracking, set runtime limits, and view recent run statistics. Whenever you log in or click the <strong>GenMaster</strong> logo, you land here.</p>
+<p><img alt="Generator Control page overview" src="../images/screenshots/generator-01-overview.png" /></p>
+<h2 id="top-status-row">Top status row<a class="headerlink" href="#top-status-row" title="Permanent link">&para;</a></h2>
+<p>Three at-a-glance status cards span the top of the page.</p>
+<table>
+<thead>
+<tr>
+<th>Card</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>GenSlave</strong></td>
+<td>Whether the remote relay controller is currently reachable. <code>Online</code> (green) means GenMaster received a recent heartbeat. <code>Offline</code> means the slave has missed its expected check-ins — until it comes back, GenMaster cannot start or stop the generator.</td>
+</tr>
+<tr>
+<td><strong>Generator Run Relay</strong></td>
+<td>The arming switch. When <strong>Armed</strong> (orange), GenMaster will respond to Victron signals, scheduled runs, and manual start commands. When disarmed, all automated actions are blocked. Click the toggle to flip the state. See <a href="#arming-behavior">Arming behavior</a> below for details.</td>
+</tr>
+<tr>
+<td><strong>Emergency Stop</strong></td>
+<td>A large red <strong>STOP</strong> button. Pressing it sends an immediate shutdown command directly to GenSlave, regardless of arming state or current trigger. Use it any time you need the generator off <strong>right now</strong>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="arming-behavior">Arming behavior<a class="headerlink" href="#arming-behavior" title="Permanent link">&para;</a></h3>
+<p>Under the default <strong>Fail-Safe</strong> boot policy, GenMaster ships <strong>disarmed</strong> every time it boots — this is intentional safety behavior. After a reboot, the operator must explicitly arm the system before automated actions can resume, and the <code>boot_disarmed_failsafe</code> notification is fired so you know to do it.</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Victron signal</th>
+<th>Scheduled runs</th>
+<th>Manual start</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Disarmed</strong></td>
+<td>Logged but ignored</td>
+<td>Skipped (logged)</td>
+<td>Blocked</td>
+</tr>
+<tr>
+<td><strong>Armed</strong></td>
+<td>Triggers start/stop</td>
+<td>Execute normally</td>
+<td>Allowed</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">Disarming does NOT stop a running generator</p>
+<p>If the generator is currently running, flipping the arming switch off only blocks <strong>future</strong> automated actions. Use the <strong>Stop Generator</strong> button or <strong>Emergency Stop</strong> to halt a running generator.</p>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Boot Arming Policy is configurable</p>
+<p>The "always disarm on boot" behavior is the default (<code>fail_safe</code>) policy and is what most operators want. Power users with the right physical safety setup can switch to <code>preserve_state</code> (under the <strong>Boot Arming Policy</strong> collapsible on this page), which keeps the armed state across reboots so the system can auto-resume after a power outage. Switching to <code>preserve_state</code> requires confirming a warning modal — read it carefully before enabling.</p>
+</div>
+<h2 id="hardware-switch-banners">Hardware switch banners<a class="headerlink" href="#hardware-switch-banners" title="Permanent link">&para;</a></h2>
+<p>If you've added the optional hardware switches (the GenSlave EPO mushroom button and the GenMaster HOA selector), their state appears as banners across the top of this page above the status row. Each banner only shows when the switch is in a non-default position — at full baseline (EPO released, HOA in Auto, no override) you see no banner.</p>
+<table>
+<thead>
+<tr>
+<th>Banner</th>
+<th>When it appears</th>
+<th>What it means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>GenSlave EPO Triggered</strong> <em>(red, pulsing)</em></td>
+<td>EPO mushroom button at the generator is pressed</td>
+<td>The generator is <strong>physically prevented</strong> from starting. The Start Generator button and the Emergency Stop card are both disabled. Release the EPO at the generator to resume — GenMaster picks the change up within ~60 s.</td>
+</tr>
+<tr>
+<td><strong>Quiet Mode Active</strong> <em>(blue)</em></td>
+<td>HOA selector is in the Quiet position</td>
+<td>Automatic runs (Victron, scheduled, exercise) are suppressed. Manual web starts still work. An <strong>Override</strong> button is available for one-off bypasses.</td>
+</tr>
+<tr>
+<td><strong>Quiet Override Active — N min remaining</strong> <em>(green)</em></td>
+<td>An operator-started Quiet override is running</td>
+<td>Automation fires normally despite the selector being in Quiet. Override clears on timer expiry, on Cancel, or when the selector leaves Quiet.</td>
+</tr>
+<tr>
+<td><strong>Run Mode Active</strong> <em>(green)</em></td>
+<td>HOA selector is in the Run position</td>
+<td>Operator is explicitly requesting the generator. GenMaster starts the generator and keeps it running until the selector leaves Run.</td>
+</tr>
+<tr>
+<td><strong>HOA Selector Fault</strong> <em>(amber)</em></td>
+<td>Both Quiet and Run contacts read closed at the same time</td>
+<td>Mechanical wiring fault. System treats the selector as Auto until resolved.</td>
+</tr>
+</tbody>
+</table>
+<p>Example with the EPO engaged on its own:</p>
+<p><img alt="EPO Triggered banner on the Generator page — EPO engaged, HOA in Auto" src="../images/hardware/10-generator-epo-engaged.png" /></p>
+<p>When both the EPO and the HOA selector are active, both banners appear with the EPO banner on top — hardware safety wins. The HOA banner's wording changes to acknowledge the EPO ("Run Mode — Held by EPO" or "Quiet Mode — EPO Active") and the Override button is hidden in the Quiet case, since overriding Quiet only matters if the generator could otherwise run:</p>
+<p><img alt="Combined banners — EPO engaged AND HOA in Quiet; note the changed &quot;Quiet Mode — EPO Active&quot; wording and no Override button" src="../images/hardware/40-generator-epo-and-quiet.png" /></p>
+<p>For the full operator guide to both switches — wiring, behavior, troubleshooting — see <a href="../hardware-switches/">Hardware Switches</a>.</p>
+<h2 id="generator-status-and-victron-command">Generator status and Victron command<a class="headerlink" href="#generator-status-and-victron-command" title="Permanent link">&para;</a></h2>
+<p>The two large panels below the status row show what the generator is currently doing and what signal Victron is sending.</p>
+<h3 id="generator-status">Generator Status<a class="headerlink" href="#generator-status" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Shows the current state — typically <strong>Stopped</strong> or <strong>Running</strong>, with intermediate states like <code>Starting</code>, <code>Stopping</code>, and <code>Cooldown</code> during transitions.</li>
+<li><strong>Start Generator</strong> — green button. Sends a manual start command. Requires GenSlave online, the system armed, and (if installed) the GenSlave EPO released.</li>
+<li><strong>Stop Generator</strong> — sends a manual stop command. Also disabled while the EPO is engaged, since there's nothing to stop — the generator is already physically prevented from running.</li>
+</ul>
+<div class="admonition tip">
+<p class="admonition-title">Manual vs. Victron-driven control</p>
+<p>Manual start/stop commands work even when the Victron signal is in the opposite state — but if Victron is asking for the generator to run and you stop it manually, the next state machine tick will start it again unless you also enable <strong>Manual Override</strong> (see below).</p>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Start Generator is disabled while the GenSlave EPO is engaged</p>
+<p>If the GenSlave hardware E-stop is pressed, both Start Generator and Stop Generator render in grey and clicks have no effect. The banner above the status row explains why and the Emergency Stop card is also dimmed. Release the EPO at the generator to re-enable the buttons; GenMaster will pick up the change within ~60 seconds. See <a href="../hardware-switches/">Hardware Switches</a> for the full sequence.</p>
+</div>
+<h3 id="victron-command">Victron Command<a class="headerlink" href="#victron-command" title="Permanent link">&para;</a></h3>
+<p>Tells you what signal the Victron Cerbo GX is currently sending via GPIO17. The big text reads either <code>Generator Stop</code> (signal LOW) or <code>Generator Run</code> (signal HIGH). The smaller <code>GPIO17 LOW</code>/<code>GPIO17 HIGH</code> line below confirms the raw GPIO state.</p>
+<p>This panel is read-only — it reflects what GenMaster is detecting. To override what GenMaster does in response to the Victron signal, use <strong>Manual Override</strong> (next section).</p>
+<h2 id="fuel-usage-and-manual-override">Fuel Usage and Manual Override<a class="headerlink" href="#fuel-usage-and-manual-override" title="Permanent link">&para;</a></h2>
+<h3 id="fuel-usage">Fuel Usage<a class="headerlink" href="#fuel-usage" title="Permanent link">&para;</a></h3>
+<p>Tracks cumulative fuel consumption since the last reset. The number is calculated from runtime × your configured <code>fuel_consumption_50</code> and <code>fuel_consumption_100</code> rates (set under <a href="#generator-information">Generator Information</a>).</p>
+<ul>
+<li><strong>Reset</strong> button — zeroes the counter. Useful after a fuel fill-up so the running total reflects only what's been burned since the tank was last topped off.</li>
+<li>The "Since initial" line is the elapsed time since the counter was last reset.</li>
+</ul>
+<h3 id="manual-override">Manual Override<a class="headerlink" href="#manual-override" title="Permanent link">&para;</a></h3>
+<p>A toggle that decouples GenMaster from the Victron signal:</p>
+<ul>
+<li><strong>Disabled</strong> (default): GenMaster will auto-start the generator whenever Victron raises the signal.</li>
+<li><strong>Enabled</strong>: GenMaster ignores the Victron signal entirely. The generator will only run when started manually or by a scheduled run.</li>
+</ul>
+<div class="admonition tip">
+<p class="admonition-title">When to use Manual Override</p>
+<p>Enable this temporarily during maintenance, when testing wiring, or when Victron is misreporting battery state and you need to take direct control.</p>
+</div>
+<h2 id="run-time-limits">Run Time Limits<a class="headerlink" href="#run-time-limits" title="Permanent link">&para;</a></h2>
+<p>A collapsible section. Click anywhere on the row to expand it.</p>
+<p><img alt="Run Time Limits expanded" src="../images/screenshots/generator-02-runtime-limits-expanded.png" /></p>
+<p>When <strong>Disabled</strong> (default), GenMaster lets every run continue indefinitely until something else (Victron, schedule, manual stop) ends it.</p>
+<p>When enabled, the section exposes:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Enable Runtime Limits</strong></td>
+<td>Master toggle for the feature.</td>
+</tr>
+<tr>
+<td><strong>Minimum Run Time (minutes)</strong></td>
+<td>Minimum a run must continue, even if Victron releases the signal early. Prevents short cycling. Default <code>5</code>.</td>
+</tr>
+<tr>
+<td><strong>Maximum Run Time (minutes)</strong></td>
+<td>Hard ceiling — GenMaster auto-stops the generator after this many minutes regardless of trigger. Default <code>480</code> (8 hours).</td>
+</tr>
+<tr>
+<td><strong>When Maximum Time Reached</strong></td>
+<td>What to do after hitting the max. <strong>Require Manual Reset</strong> keeps the generator off until you manually re-arm. <strong>Cooldown Period</strong> keeps it off for a set time, then allows Victron to restart it.</td>
+</tr>
+<tr>
+<td><strong>Save Run Time Settings</strong></td>
+<td>Persists your changes.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">Maximum run time is a safety net, not a control mechanism</p>
+<p>Use Victron SOC thresholds and schedules for normal operation. Maximum run time is meant to catch runaway scenarios (Victron stuck high, wiring fault), not to define your everyday runtime.</p>
+</div>
+<h2 id="30-day-statistics">30-day statistics<a class="headerlink" href="#30-day-statistics" title="Permanent link">&para;</a></h2>
+<p>A row of three cards summarizing the last 30 days of runs.</p>
+<table>
+<thead>
+<tr>
+<th>Card</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Total Runs (30 days)</strong></td>
+<td>Number of distinct generator runs (scheduled, manual, or Victron-triggered) in the past 30 days.</td>
+</tr>
+<tr>
+<td><strong>Total Runtime (30 days)</strong></td>
+<td>Total clock time the generator was running, summed across all runs.</td>
+</tr>
+<tr>
+<td><strong>Avg Run Duration</strong></td>
+<td>Average length of a single run over the 30-day window.</td>
+</tr>
+</tbody>
+</table>
+<p>For a complete log with filters, see <a href="../history/">Run History</a>.</p>
+<h2 id="generator-information">Generator Information<a class="headerlink" href="#generator-information" title="Permanent link">&para;</a></h2>
+<p>A collapsible panel that stores your generator's identity and fuel-consumption profile. Click the row to expand.</p>
+<p><img alt="Generator Information expanded" src="../images/screenshots/generator-03-info-expanded.png" /></p>
+<p>When expanded you'll see (or be able to edit):</p>
+<ul>
+<li><strong>Manufacturer</strong> — e.g. <code>Generac</code></li>
+<li><strong>Model Number</strong> — e.g. <code>G00722310</code></li>
+<li><strong>Serial Number</strong></li>
+<li><strong>Fuel Type</strong> — <code>LPG</code>, <code>Natural Gas</code>, or <code>Diesel</code></li>
+<li><strong>Expected Load</strong> — <code>50</code> or <code>100</code> (percent)</li>
+<li><strong>Fuel Consumption at 50%</strong> — gallons per hour at 50% load</li>
+<li><strong>Fuel Consumption at 100%</strong> — gallons per hour at 100% load</li>
+</ul>
+<p>The <strong>Edit</strong> button opens an inline form. Save commits your changes; the next run will use the new consumption rates for fuel tracking.</p>
+<div class="admonition tip">
+<p class="admonition-title">Where to find these numbers</p>
+<p>Manufacturer specs sheets list fuel consumption in gallons/hour or BTU/hour. For LPG generators, divide BTU/hour by 91,547 (BTU per gallon of propane) to get gal/hour.</p>
+</div>
+<h2 id="exercise-schedule">Exercise Schedule<a class="headerlink" href="#exercise-schedule" title="Permanent link">&para;</a></h2>
+<p>A collapsible panel for configuring <strong>automated exercise runs</strong> — short scheduled runs that keep the generator healthy when it isn't being used.</p>
+<p><img alt="Exercise Schedule expanded" src="../images/screenshots/generator-04-exercise-expanded.png" /></p>
+<p>When expanded:</p>
+<ul>
+<li><strong>Enabled / Disabled</strong> — master toggle.</li>
+<li><strong>Frequency</strong> — how often (weekly, bi-weekly, monthly, or custom number of days).</li>
+<li><strong>Day of week</strong> and <strong>Start time</strong> — when to run.</li>
+<li><strong>Duration (minutes)</strong> — how long to run.</li>
+<li><strong>Last exercise date</strong> and <strong>Next exercise date</strong> — read-only, calculated from your settings.</li>
+<li><strong>Run Now</strong> — fires an immediate exercise run regardless of schedule.</li>
+</ul>
+<div class="admonition tip">
+<p class="admonition-title">Recommended cadence</p>
+<p>Most generator manufacturers recommend a 15–30 minute run at least once every two weeks. If your generator gets regular Victron-triggered runs, you may not need an explicit exercise schedule.</p>
+</div>
+<h2 id="boot-arming-policy">Boot Arming Policy<a class="headerlink" href="#boot-arming-policy" title="Permanent link">&para;</a></h2>
+<p>Controls what happens to the <strong>arming state</strong> when GenMaster reboots. The current policy is shown as a badge on the collapsible header.</p>
+<p><img alt="Boot Arming Policy collapsed" src="../images/screenshots/generator-05-boot-arming-policy-collapsed.png" /></p>
+<p>Click the row to expand and choose between two policies.</p>
+<p><img alt="Boot Arming Policy expanded" src="../images/screenshots/generator-05-boot-arming-policy-expanded.png" /></p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Fail-Safe on Boot</strong> <em>(recommended, default)</em></td>
+<td>Every time GenMaster restarts, the relay is automatically <strong>disarmed</strong>. The generator will <strong>not</strong> start automatically until you log in and re-arm it. A <code>boot_disarmed_failsafe</code> notification is fired so you know to do it.</td>
+</tr>
+<tr>
+<td><strong>Preserve State Across Reboots</strong></td>
+<td>GenMaster remembers the prior armed state across reboots. After a power outage the system can auto-resume operation with <strong>no operator interaction</strong>.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">Switching to Preserve State requires explicit confirmation</p>
+<p>Selecting <strong>Preserve State Across Reboots</strong> opens a confirmation modal. Read it carefully — auto-resuming operation after an outage means the generator can run unattended. Only enable it if your installation has a properly configured ATS, weatherproof enclosure, fuel and CO safety measures, and you accept the consequences.</p>
+</div>
+<p><img alt="Preserve State warning modal" src="../images/screenshots/generator-06-preserve-state-warning-modal.png" /></p>
+<p>You can switch back to <strong>Fail-Safe</strong> at any time without a confirmation prompt.</p>
+<div class="admonition info">
+<p class="admonition-title">GenSlave drops are handled automatically</p>
+<p>Mid-operation GenSlave drops (network blips, slave reboots, etc.) are independent of this setting. GenSlave reads the armed state from every heartbeat and matches whatever GenMaster's database says, so it re-arms on its own when communication is restored. Boot Arming Policy applies <strong>only</strong> to GenMaster's own reboots.</p>
+</div>
+<h2 id="whats-next">What's next<a class="headerlink" href="#whats-next" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Set up <strong>scheduled runs</strong> for predictable maintenance windows: see <a href="../schedule/">Schedule</a>.</li>
+<li>Watch GenSlave health and network state: see <a href="../genslave/">GenSlave</a>.</li>
+<li>Browse the full run log with filters: see <a href="../history/">Run History</a>.</li>
+<li>Add the optional EPO and HOA hardware switches: see <a href="../hardware-switches/">Hardware Switches</a>.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Richard J. Sears
+    </div>
+  
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/rjsears" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.indexes", "navigation.path", "navigation.top", "toc.follow", "toc.integrate", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/manual.js"></script>
+      
+    
+  </body>
+</html>

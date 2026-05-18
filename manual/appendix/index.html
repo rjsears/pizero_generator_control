@@ -1,0 +1,3405 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Production-ready distributed generator control system for off-grid solar installations">
+      
+      
+        <meta name="author" content="Richard J. Sears">
+      
+      
+        <link rel="canonical" href="https://rjsears.github.io/pizero_generator_control/manual/appendix/">
+      
+      
+        <link rel="prev" href="../network-recovery/">
+      
+      
+        <link rel="next" href="../../GENERATOR/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../images/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Appendix - RPi Generator Control</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#appendix" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="RPi Generator Control" class="md-header__button md-logo" aria-label="RPi Generator Control" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 15H6l7-14v8h5l-7 14z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RPi Generator Control
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Appendix
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/rjsears/pizero_generator_control" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    rjsears/pizero_generator_control
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="RPi Generator Control" class="md-nav__button md-logo" aria-label="RPi Generator Control" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 15H6l7-14v8h5l-7 14z"/></svg>
+
+    </a>
+    RPi Generator Control
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/rjsears/pizero_generator_control" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    rjsears/pizero_generator_control
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Manual
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Manual
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../welcome/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Welcome
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../generator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generator Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware-switches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Switches (EPO + HOA)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quick-reference-emergency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Reference — Emergency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../genslave/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenSlave
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schedule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schedule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run History
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../containers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Containers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../common-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../network-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../network-recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Recovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generator-wont-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generator won't start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generator-wont-stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generator won't stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#genslave-shows-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GenSlave shows OFFLINE
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#victron-signal-not-detected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Victron signal not detected
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-connection-failed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database connection failed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#web-ui-inaccessible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web UI inaccessible
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notifications-not-arriving" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notifications not arriving
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#schedules-not-firing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Schedules not firing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#state-machine-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State machine reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#event-types-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event types reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Event types reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hardware-switch-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hardware-switch events
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#default-ports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default ports
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables-hardware-switches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment variables — hardware switches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#schema-migrations-hardware-switches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Schema migrations — hardware switches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-and-directory-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File and directory locations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="File and directory locations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-the-genmaster-host" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On the GenMaster host
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inside-the-genmaster-container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inside the genmaster container
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-the-genslave-host" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On the GenSlave host
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#useful-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Useful commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Useful commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#genmaster-host-sshd-to-the-pi-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GenMaster host (SSH'd to the Pi 5)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#genslave-host-sshd-to-the-pi-zero" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GenSlave host (SSH'd to the Pi Zero)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#from-genmaster-addressing-the-slave" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From GenMaster, addressing the slave
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backup-restore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backup / restore
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backup / restore">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-a-backup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a backup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recovery-from-unbootable-web-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recovery from unbootable web UI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance tuning
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance tuning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-genmaster-is-sluggish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When GenMaster is sluggish
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tuning-the-pi-zero-2w-genslave" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning the Pi Zero 2W (GenSlave)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#glossary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Glossary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-flag-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security flag index
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference-selected-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API reference (selected endpoints)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="API reference (selected endpoints)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generator-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generator control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#system-arming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System / arming
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#schedules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Schedules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run history
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notifications
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#containers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Containers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#development-mock-gpio-mode-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development (mock GPIO mode only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hardware-switches-epo-hoa" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hardware switches (EPO + HOA)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hardware-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hardware compatibility
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hardware compatibility">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tested-generator-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tested generator types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tested-cerbo-signal-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tested Cerbo signal sources
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failure-scenarios-expected-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure scenarios + expected behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related docs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting help
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GENERATOR/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generator Controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCHEDULING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VICTRON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Victron Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../NOTIFICATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Setup
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GENSLAVE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GenSlave Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TAILSCALE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tailscale VPN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CLOUDFLARE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloudflare Tunnel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../NGINX_ACCESS_CONTROL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nginx Access Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../welcome/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    User Manual
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="appendix">Appendix<a class="headerlink" href="#appendix" title="Permanent link">&para;</a></h1>
+<p>Comprehensive reference material for GenMaster operators — troubleshooting tables, command cheat sheets, state machine details, file locations, and recovery procedures.</p>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="generator-wont-start">Generator won't start<a class="headerlink" href="#generator-wont-start" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Start button is grayed out</td>
+<td>System is <strong>disarmed</strong></td>
+<td>Toggle <strong>Generator Run Relay</strong> to Armed on the <a href="../generator/#top-status-row">Generator Control</a> page.</td>
+</tr>
+<tr>
+<td>Click Start, nothing happens</td>
+<td>GenSlave is <strong>offline</strong></td>
+<td>Check <a href="../genslave/">GenSlave</a> for ONLINE status. Restart the slave container or fix WiFi.</td>
+</tr>
+<tr>
+<td>Start command returns error toast</td>
+<td>API secret mismatch</td>
+<td>Re-save secret on both ends via <a href="../genslave/#connection-settings">GenSlave → Connection Settings</a>.</td>
+</tr>
+<tr>
+<td>Generator starts then stops within seconds</td>
+<td>Run Time Limits min-time set high but Victron released signal early</td>
+<td>Check <a href="../generator/#run-time-limits">Run Time Limits</a>.</td>
+</tr>
+<tr>
+<td>Generator starts but won't pull load</td>
+<td>Hardware issue (transfer switch, wiring)</td>
+<td>Outside GenMaster's scope — check generator + ATS manuals.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="generator-wont-stop">Generator won't stop<a class="headerlink" href="#generator-wont-stop" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stop button does nothing</td>
+<td>GenSlave offline</td>
+<td>Use <strong>Emergency Stop</strong> which bypasses normal flow. If that fails too, manually open the breaker.</td>
+</tr>
+<tr>
+<td>Generator restarts after stop</td>
+<td>Victron signal still HIGH</td>
+<td>Enable <a href="../generator/#fuel-usage-and-manual-override">Manual Override</a> until Victron releases.</td>
+</tr>
+<tr>
+<td>Stop command 200 but generator runs</td>
+<td>Relay wired NC instead of NO, or relay stuck</td>
+<td>Check Pimoroni Automation Hat Mini wiring; replace if a relay contact is welded.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="genslave-shows-offline">GenSlave shows OFFLINE<a class="headerlink" href="#genslave-shows-offline" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Likely cause</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pi Zero powered off</td>
+<td>Verify physical power, indicator LEDs.</td>
+</tr>
+<tr>
+<td>WiFi dropped</td>
+<td>Check router for the <code>genslave</code> device; check WiFi Watchdog status in <a href="../system/#wifi-watchdog">System</a> and on GenSlave page.</td>
+</tr>
+<tr>
+<td>API secret rotation drift</td>
+<td>Re-save secret on both ends from <a href="../genslave/#connection-settings">GenSlave → Connection Settings</a>.</td>
+</tr>
+<tr>
+<td>Tailscale issue (if used)</td>
+<td><code>tailscale status</code> on both ends.</td>
+</tr>
+<tr>
+<td>Heartbeat firewall block</td>
+<td>Verify nothing on the network is blocking outbound TCP from GenMaster to the slave's <code>:8001</code>.</td>
+</tr>
+<tr>
+<td>Container crashed</td>
+<td>SSH the slave: <code>cd /opt/genslave &amp;&amp; docker compose logs --tail=100 genslave</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="victron-signal-not-detected">Victron signal not detected<a class="headerlink" href="#victron-signal-not-detected" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Likely cause</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Wiring loose</td>
+<td>Reseat Cerbo GX Relay 1/2 to GPIO17 + GND on the Pi 5.</td>
+</tr>
+<tr>
+<td>Wrong relay polarity</td>
+<td>In Cerbo settings, <strong>Relay function</strong> should be <code>Generator start/stop</code>. The contact should close on <code>Generator wanted</code>.</td>
+</tr>
+<tr>
+<td>GPIO permissions</td>
+<td>Verify GenMaster container has <code>privileged: true</code> and <code>/dev/gpiochip0</code> mapped.</td>
+</tr>
+<tr>
+<td>GPIO17 in use elsewhere</td>
+<td>No other process or HAT should be claiming GPIO17.</td>
+</tr>
+<tr>
+<td>Cerbo SOC threshold not crossed</td>
+<td>Check Cerbo's battery monitor — if SOC is above the trigger threshold, the relay won't close.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="database-connection-failed">Database connection failed<a class="headerlink" href="#database-connection-failed" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Likely cause</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>genmaster_db</code> container not running</td>
+<td><a href="../containers/">Containers</a> → start <code>genmaster_db</code>.</td>
+</tr>
+<tr>
+<td><code>DATABASE_PASSWORD</code> mismatch</td>
+<td>Verify in <a href="../settings/#environment">Settings → Environment</a>; should match <code>genmaster_db</code>'s <code>POSTGRES_PASSWORD</code>.</td>
+</tr>
+<tr>
+<td>Postgres data volume corrupt</td>
+<td>Restore from backup downloaded earlier — see <a href="#backup-restore">Backup / restore</a> below.</td>
+</tr>
+<tr>
+<td>Disk full</td>
+<td>Check <a href="../system/">System → Health</a> Host Disk metric; clear old logs/Docker images.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="web-ui-inaccessible">Web UI inaccessible<a class="headerlink" href="#web-ui-inaccessible" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Browser timeout</td>
+<td>Cloudflare tunnel down or Tailscale down</td>
+<td>Try the LAN IP directly. Check <code>genmaster_cloudflared</code> and <code>genmaster_tailscale</code> containers.</td>
+</tr>
+<tr>
+<td>HTTPS cert error</td>
+<td>Let's Encrypt cert expired</td>
+<td><a href="../system/#ssl-certificates">System → Health → SSL Certificates</a> → Force Renew.</td>
+</tr>
+<tr>
+<td>502 Bad Gateway</td>
+<td><code>genmaster</code> API container down/unhealthy</td>
+<td>Restart <code>genmaster</code> from <a href="../containers/">Containers</a>.</td>
+</tr>
+<tr>
+<td>403 Forbidden</td>
+<td>Your IP isn't in the allowed Access Control list</td>
+<td>Add your IP via <a href="../settings/#access-control">Settings → Access Control</a> (or temporarily disable geo-block for diagnosis).</td>
+</tr>
+<tr>
+<td>Stuck "loading..." spinner</td>
+<td>Backend reachable but DB query hung</td>
+<td>Restart <code>genmaster_db</code>, then <code>genmaster</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="notifications-not-arriving">Notifications not arriving<a class="headerlink" href="#notifications-not-arriving" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No notifications, channels show ✓ Success</td>
+<td>Cooldown timers active</td>
+<td><a href="../genslave/#notification-settings">GenSlave → Notification Settings → Clear cooldown timers</a> (master cooldowns are similar).</td>
+</tr>
+<tr>
+<td>Channel shows × Failed</td>
+<td>Wrong URL, expired token, blocked sender</td>
+<td>Click the test (▷) button on that channel to see the error message.</td>
+</tr>
+<tr>
+<td>Email channel keeps failing</td>
+<td>TLS misconfig or auth issue</td>
+<td>Confirm SMTP host/port and that the username has SMTP-send permissions (some providers require an app password).</td>
+</tr>
+<tr>
+<td>Apprise URL not working</td>
+<td>Service-specific URL syntax</td>
+<td>See the <a href="https://github.com/caronc/apprise/wiki">Apprise wiki</a> for the exact format.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="schedules-not-firing">Schedules not firing<a class="headerlink" href="#schedules-not-firing" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Schedule status shows <code>Pending</code> long after expected fire time</td>
+<td>System was disarmed at trigger time</td>
+<td>Re-arm and wait for next occurrence. The skip is recorded in <a href="../history/">Run History</a>.</td>
+</tr>
+<tr>
+<td>Schedule fires but generator doesn't run</td>
+<td>GenSlave offline</td>
+<td>Same as "GenSlave shows OFFLINE" above.</td>
+</tr>
+<tr>
+<td>Wrong day or wrong time</td>
+<td>Server timezone mismatch</td>
+<td>Check <code>TZ</code> env var on <code>genmaster</code> container — should match your physical location.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="state-machine-reference">State machine reference<a class="headerlink" href="#state-machine-reference" title="Permanent link">&para;</a></h2>
+<p>GenMaster's state machine has these states. Transitions are driven by Victron, schedules, manual commands, and timeouts.</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Description</th>
+<th>Typical exit conditions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>idle</strong></td>
+<td>Generator off, no run in progress.</td>
+<td>Victron signal goes HIGH, schedule fires, or manual start.</td>
+</tr>
+<tr>
+<td><strong>starting</strong></td>
+<td>Start command sent to GenSlave. Waiting for relay confirmation.</td>
+<td>Relay confirmed (→ running) or timeout (→ failed).</td>
+</tr>
+<tr>
+<td><strong>running</strong></td>
+<td>Generator is on. Heartbeat continues, runtime accumulates.</td>
+<td>Victron signal goes LOW, schedule duration elapsed, manual stop, or runtime limit hit.</td>
+</tr>
+<tr>
+<td><strong>stopping</strong></td>
+<td>Stop command sent. Waiting for relay to open.</td>
+<td>Relay confirmed off (→ cooldown) or timeout (→ failed).</td>
+</tr>
+<tr>
+<td><strong>cooldown</strong></td>
+<td>Brief post-stop period (configurable, default 60s). Prevents short-cycling.</td>
+<td>Cooldown elapsed → idle.</td>
+</tr>
+<tr>
+<td><strong>failed</strong></td>
+<td>Start or stop returned an error. State persists until acknowledged.</td>
+<td>Manual reset via API or UI clears to idle.</td>
+</tr>
+</tbody>
+</table>
+<p>A <strong>run</strong> is recorded when the state machine transitions <code>starting → running</code> and closed when it transitions out of <code>running</code> (to <code>stopping</code> or <code>failed</code>).</p>
+<hr />
+<h2 id="event-types-reference">Event types reference<a class="headerlink" href="#event-types-reference" title="Permanent link">&para;</a></h2>
+<p>Events that can fire notifications (configurable on the <a href="../notifications/#configure">Notifications → Configure</a> tab):</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Fires when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>generator.starting</code></td>
+<td>Start command issued.</td>
+</tr>
+<tr>
+<td><code>generator.started</code></td>
+<td>Generator confirmed running.</td>
+</tr>
+<tr>
+<td><code>generator.stopping</code></td>
+<td>Stop command issued.</td>
+</tr>
+<tr>
+<td><code>generator.stopped</code></td>
+<td>Generator confirmed off.</td>
+</tr>
+<tr>
+<td><code>generator.failed</code></td>
+<td>Start or stop command returned an error.</td>
+</tr>
+<tr>
+<td><code>generator.exercise_started</code></td>
+<td>An exercise run kicked off.</td>
+</tr>
+<tr>
+<td><code>generator.exercise_completed</code></td>
+<td>An exercise run finished normally.</td>
+</tr>
+<tr>
+<td><code>system.armed</code></td>
+<td>Operator armed the system.</td>
+</tr>
+<tr>
+<td><code>system.disarmed</code></td>
+<td>Operator disarmed.</td>
+</tr>
+<tr>
+<td><code>system.boot_reset</code></td>
+<td>GenMaster booted and reset state to safe defaults.</td>
+</tr>
+<tr>
+<td><code>slave.online</code></td>
+<td>Heartbeat resumed after being lost.</td>
+</tr>
+<tr>
+<td><code>slave.offline</code></td>
+<td>Heartbeat lost (configurable threshold).</td>
+</tr>
+<tr>
+<td><code>slave.failsafe_triggered</code></td>
+<td>Slave's independent failsafe forced relay OFF.</td>
+</tr>
+<tr>
+<td><code>victron.signal_high</code></td>
+<td>GPIO17 went HIGH (Victron requesting generator).</td>
+</tr>
+<tr>
+<td><code>victron.signal_low</code></td>
+<td>GPIO17 went LOW (Victron releasing).</td>
+</tr>
+<tr>
+<td><code>victron.signal_ignored</code></td>
+<td>Signal received while disarmed (logged-only).</td>
+</tr>
+<tr>
+<td><code>scheduled_run.fired</code></td>
+<td>Schedule trigger fired.</td>
+</tr>
+<tr>
+<td><code>scheduled_run.skipped</code></td>
+<td>Schedule fired but was skipped (disarmed, slave offline, etc.).</td>
+</tr>
+<tr>
+<td><code>scheduled_run.completed</code></td>
+<td>Scheduled run completed.</td>
+</tr>
+<tr>
+<td><code>notification.test</code></td>
+<td>Operator triggered a test notification.</td>
+</tr>
+<tr>
+<td><code>system.cert_expiring</code></td>
+<td>SSL cert is within 14 days of expiring.</td>
+</tr>
+<tr>
+<td><code>system.disk_low</code></td>
+<td>Host disk usage above 90%.</td>
+</tr>
+<tr>
+<td><code>system.memory_high</code></td>
+<td>Host memory usage above 90% sustained for &gt;60s.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="hardware-switch-events">Hardware-switch events<a class="headerlink" href="#hardware-switch-events" title="Permanent link">&para;</a></h3>
+<p>Added with the optional EPO + HOA hardware switches. See <a href="../hardware-switches/">Hardware Switches</a> for the operator guide and <a href="../notifications/">Notifications</a> for routing.</p>
+<table>
+<thead>
+<tr>
+<th>Event key</th>
+<th>Severity</th>
+<th>Triggered by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hardware_safety_engaged_genslave</code></td>
+<td>warning</td>
+<td>GenMaster detects EPO has been engaged (via heartbeat or fast-poll).</td>
+</tr>
+<tr>
+<td><code>hardware_safety_released_genslave</code></td>
+<td>info</td>
+<td>EPO transitions back to released.</td>
+</tr>
+<tr>
+<td><code>quiet_mode_engaged_genmaster</code></td>
+<td>info</td>
+<td>HOA selector flipped to Quiet (after the boot delay).</td>
+</tr>
+<tr>
+<td><code>quiet_mode_released_genmaster</code></td>
+<td>info</td>
+<td>HOA selector flipped out of Quiet.</td>
+</tr>
+<tr>
+<td><code>quiet_override_enabled</code></td>
+<td>info</td>
+<td>Operator started a Quiet override window from the Generator page.</td>
+</tr>
+<tr>
+<td><code>manual_run_started_genmaster_switch</code></td>
+<td>info</td>
+<td>HOA selector flipped to Run and a run started.</td>
+</tr>
+<tr>
+<td><code>manual_run_ended_genmaster_switch</code></td>
+<td>info</td>
+<td>HOA selector flipped out of Run, ending the run.</td>
+</tr>
+<tr>
+<td><code>manual_run_reminder</code></td>
+<td>info</td>
+<td>A long-running manual or HOA-Run run hit the configured reminder milestone (default 2h).</td>
+</tr>
+<tr>
+<td><code>manual_run_blocked_by_safety</code></td>
+<td>warning</td>
+<td>A start attempt was refused because the EPO was engaged. Also fires for HOA Run that was refused.</td>
+</tr>
+<tr>
+<td><code>auto_run_suppressed_by_quiet</code></td>
+<td>warning</td>
+<td>An automation trigger (Victron / schedule / exercise) was suppressed by HOA Quiet without an override.</td>
+</tr>
+<tr>
+<td><code>genmaster_boot_hardware_state</code></td>
+<td>warning</td>
+<td>One-shot ~20 s after boot if the hardware came up in a non-default state (EPO engaged or HOA != Auto). A fully-normal boot fires nothing.</td>
+</tr>
+</tbody>
+</table>
+<p>Several internal events also exist that are logged but not operator-routable: <code>QUIET_OVERRIDE_EXPIRED</code>, <code>QUIET_OVERRIDE_CANCELLED</code> (with <code>reason = operator_cancel | hoa_left_quiet</code>), <code>MANUAL_RUN_RECLASSIFIED_BY_HOA</code>, <code>HOA_RUN_START_REFUSED</code>. These appear in application logs only — wire them up through the regular state-change events above if you need operator notification.</p>
+<hr />
+<h2 id="default-ports">Default ports<a class="headerlink" href="#default-ports" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Internal port</th>
+<th>External access</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Nginx</td>
+<td>443</td>
+<td>Yes (HTTPS only)</td>
+<td>Main entry point. HTTP→HTTPS redirect on 80.</td>
+</tr>
+<tr>
+<td>FastAPI (GenMaster)</td>
+<td>8000</td>
+<td>No (internal)</td>
+<td>Reverse-proxied through Nginx.</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>5432</td>
+<td>No (internal)</td>
+<td>Container-only.</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>6379</td>
+<td>No (internal)</td>
+<td>Container-only.</td>
+</tr>
+<tr>
+<td>GenSlave API</td>
+<td>8001</td>
+<td>LAN / Tailscale only</td>
+<td>Pi Zero 2W. Never expose publicly.</td>
+</tr>
+<tr>
+<td>Portainer</td>
+<td>9000</td>
+<td><code>/portainer/</code> path</td>
+<td>Optional, gated by Nginx.</td>
+</tr>
+<tr>
+<td>Cloudflared</td>
+<td>(outbound)</td>
+<td>Tunnel-only</td>
+<td>Outbound HTTPS to Cloudflare edge; no incoming port.</td>
+</tr>
+<tr>
+<td>Tailscale</td>
+<td>UDP 41641</td>
+<td>(mesh)</td>
+<td>WireGuard-based.</td>
+</tr>
+<tr>
+<td>WiFi Watchdog</td>
+<td>(host service)</td>
+<td>None</td>
+<td>Local-only systemd service.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="environment-variables-hardware-switches">Environment variables — hardware switches<a class="headerlink" href="#environment-variables-hardware-switches" title="Permanent link">&para;</a></h2>
+<p><code>.env</code> settings introduced with the optional EPO + HOA feature. Defaults match a clean install on dedicated hardware; change them only if your build deviates. Pin assignments can also be edited interactively from <a href="../system/#gpio-assignments">System → Hardware → GPIO Assignments</a> (which writes the same <code>.env</code> keys).</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Service</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HARDWARE_SAFETY_ENABLED</code></td>
+<td>GenSlave</td>
+<td><code>true</code></td>
+<td>Master toggle for the EPO monitor. Set <code>false</code> to skip startup if the EPO isn't wired yet. The NC contact in the start-relay circuit still works regardless — disabling only stops the LCD/notification side.</td>
+</tr>
+<tr>
+<td><code>HOA_SWITCH_ENABLED</code></td>
+<td>GenMaster</td>
+<td><code>true</code></td>
+<td>Master toggle for the HOA monitor. Set <code>false</code> to disable; the system then behaves as if the selector were always in Auto.</td>
+</tr>
+<tr>
+<td><code>HOA_GPIO_QUIET</code></td>
+<td>GenMaster</td>
+<td><code>22</code></td>
+<td>BCM pin for the Quiet-position NO contact.</td>
+</tr>
+<tr>
+<td><code>HOA_GPIO_RUN</code></td>
+<td>GenMaster</td>
+<td><code>27</code></td>
+<td>BCM pin for the Run-position NO contact.</td>
+</tr>
+<tr>
+<td><code>HOA_BOOT_DELAY_SECONDS</code></td>
+<td>GenMaster</td>
+<td><code>30</code></td>
+<td>Post-boot grace window before the HOA position is honored — avoids spurious state-change notifications if the selector happens to be in Quiet or Run when GenMaster starts. Set <code>0</code> for bench testing.</td>
+</tr>
+<tr>
+<td><code>VICTRON_GPIO_PIN</code></td>
+<td>GenMaster</td>
+<td><code>17</code></td>
+<td>BCM pin for the Cerbo GX generator-request relay. Pre-existing in the project but compose-wired alongside the HOA pins so all three operator-side inputs flow through <code>.env</code> consistently.</td>
+</tr>
+</tbody>
+</table>
+<p>GenMaster also gains two non-hardware DB-backed config columns surfaced under the same area:</p>
+<table>
+<thead>
+<tr>
+<th>Config column</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>manual_run_reminder_enabled</code></td>
+<td><code>true</code></td>
+<td>Master toggle for the manual-run reminder timer.</td>
+</tr>
+<tr>
+<td><code>manual_run_reminder_interval_hours</code></td>
+<td><code>2</code></td>
+<td>How often to fire the <code>manual_run_reminder</code> notification during a long-running manual or HOA-Run run.</td>
+</tr>
+</tbody>
+</table>
+<p>Changes to <code>HOA_GPIO_QUIET</code>, <code>HOA_GPIO_RUN</code>, or <code>VICTRON_GPIO_PIN</code> require a GenMaster restart — the pins are bound when the monitors start. The GPIO Assignments panel shows a "Restart required" banner with the still-running pins until the container restarts.</p>
+<hr />
+<h2 id="schema-migrations-hardware-switches">Schema migrations — hardware switches<a class="headerlink" href="#schema-migrations-hardware-switches" title="Permanent link">&para;</a></h2>
+<p>Alembic migrations introduced with the optional EPO + HOA feature. Apply with <code>docker compose exec genmaster alembic upgrade head</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Revision</th>
+<th>Adds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>015</strong></td>
+<td><code>system_state.slave_physical_safety_engaged</code> (boolean, nullable) — caches the EPO state GenSlave reports via heartbeat.</td>
+</tr>
+<tr>
+<td><strong>017</strong></td>
+<td>Updates three CHECK constraints (<code>chk_run_trigger</code> on <code>system_state</code>, <code>chk_trigger_type</code> and <code>chk_stop_reason</code> on <code>generator_runs</code>) to accept <code>local_switch_genmaster</code>, <code>local_switch_genmaster_end</code>, and <code>hoa_quiet</code>.</td>
+</tr>
+<tr>
+<td><strong>018</strong></td>
+<td>Widens <code>system_state.run_trigger</code>, <code>generator_runs.trigger_type</code>, and <code>generator_runs.stop_reason</code> from VARCHAR(20) to VARCHAR(40). Required because <code>local_switch_genmaster</code> (22 chars) and <code>local_switch_genmaster_end</code> (26 chars) exceed the original 20-char limit — 017 added the values to the CHECK constraints but the column width was overlooked.</td>
+</tr>
+<tr>
+<td><strong>019</strong></td>
+<td><code>system_state.quiet_override_active</code> (boolean) and <code>system_state.quiet_override_expires_at</code> (int, nullable) — persistent state for the Quiet web override.</td>
+</tr>
+<tr>
+<td><strong>020</strong></td>
+<td>Seeds 10 notification-event rows into <code>system_notification_events</code> using <code>INSERT ... ON CONFLICT DO NOTHING</code>. Mirrors <code>DEFAULT_SYSTEM_NOTIFICATION_EVENTS</code> in the model.</td>
+</tr>
+<tr>
+<td><strong>021</strong></td>
+<td>Adds <code>config.manual_run_reminder_enabled</code> and <code>config.manual_run_reminder_interval_hours</code>; seeds the <code>genmaster_boot_hardware_state</code> event row.</td>
+</tr>
+<tr>
+<td><strong>022</strong></td>
+<td>Adds <code>system_notification_global_settings.rate_limit_alert_sent</code> (boolean, default false) so the "Rate Limit Exceeded" emergency-contact alert fires at most once per hour window instead of on every suppressed notification.</td>
+</tr>
+</tbody>
+</table>
+<p>Migration 016 was intentionally skipped — 017 and 018 shipped before the Quiet override design landed; the linear chain is 014 → 015 → 017 → 018 → 019 → 020 → 021 → 022.</p>
+<hr />
+<h2 id="file-and-directory-locations">File and directory locations<a class="headerlink" href="#file-and-directory-locations" title="Permanent link">&para;</a></h2>
+<h3 id="on-the-genmaster-host">On the GenMaster host<a class="headerlink" href="#on-the-genmaster-host" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/root/pizero_generator_control/genmaster/</code></td>
+<td>Compose stack root. <code>docker-compose.yaml</code>, <code>.env</code>, scripts.</td>
+</tr>
+<tr>
+<td><code>/root/pizero_generator_control/genmaster/.env</code></td>
+<td>Environment configuration (DB password, API secrets, Cloudflare token, etc.).</td>
+</tr>
+<tr>
+<td><code>/var/lib/docker/volumes/genmaster_postgres_data/</code></td>
+<td>Postgres data directory.</td>
+</tr>
+<tr>
+<td><code>/var/lib/docker/volumes/genmaster_redis_data/</code></td>
+<td>Redis persistence.</td>
+</tr>
+<tr>
+<td><code>/var/lib/docker/volumes/genmaster_nginx_certs/</code></td>
+<td>Let's Encrypt certificates.</td>
+</tr>
+<tr>
+<td><code>/var/lib/docker/volumes/genmaster_app_logs/</code></td>
+<td>Application log files.</td>
+</tr>
+<tr>
+<td><code>/var/lib/docker/volumes/genmaster_backups/</code></td>
+<td>Database / config backups.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="inside-the-genmaster-container">Inside the <code>genmaster</code> container<a class="headerlink" href="#inside-the-genmaster-container" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/app/</code></td>
+<td>Backend Python source.</td>
+</tr>
+<tr>
+<td><code>/app/logs/</code></td>
+<td>Application logs (mounted from host volume).</td>
+</tr>
+<tr>
+<td><code>/app/data/</code></td>
+<td>Runtime SQLite cache (if used).</td>
+</tr>
+<tr>
+<td><code>/app/alembic/</code></td>
+<td>Database migration scripts.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="on-the-genslave-host">On the GenSlave host<a class="headerlink" href="#on-the-genslave-host" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/opt/genslave/</code></td>
+<td>Compose root.</td>
+</tr>
+<tr>
+<td><code>/opt/genslave/.env</code></td>
+<td>Slave-side env (must contain matching <code>API_SECRET</code>).</td>
+</tr>
+<tr>
+<td><code>/opt/genslave/data/</code></td>
+<td>Optional SQLite cache.</td>
+</tr>
+<tr>
+<td><code>/opt/genslave/logs/</code></td>
+<td>Slave application logs.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="useful-commands">Useful commands<a class="headerlink" href="#useful-commands" title="Permanent link">&para;</a></h2>
+<h3 id="genmaster-host-sshd-to-the-pi-5">GenMaster host (SSH'd to the Pi 5)<a class="headerlink" href="#genmaster-host-sshd-to-the-pi-5" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># View logs from each service</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span><span class="w"> </span>genmaster
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span><span class="w"> </span>genmaster_nginx
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span><span class="w"> </span>genmaster_db
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># Restart a single service</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>docker<span class="w"> </span>compose<span class="w"> </span>restart<span class="w"> </span>genmaster
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Restart the entire stack</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>docker<span class="w"> </span>compose<span class="w"> </span>down<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># Pull new image and recreate (after a release)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>docker<span class="w"> </span>compose<span class="w"> </span>pull<span class="w"> </span>genmaster
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--force-recreate<span class="w"> </span>genmaster
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="c1"># Apply pending DB migrations</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>genmaster<span class="w"> </span>alembic<span class="w"> </span>upgrade<span class="w"> </span>head
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c1"># Reset admin password</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>genmaster<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>app.cli<span class="w"> </span>reset_password<span class="w"> </span>admin
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="c1"># Open a Postgres shell</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>genmaster_db<span class="w"> </span>psql<span class="w"> </span>-U<span class="w"> </span>genmaster<span class="w"> </span>-d<span class="w"> </span>genmaster
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="c1"># Tail nginx access log</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>genmaster_nginx<span class="w"> </span>tail<span class="w"> </span>-f<span class="w"> </span>/var/log/nginx/access.log
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="c1"># Force renew Let&#39;s Encrypt certs</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>genmaster_certbot<span class="w"> </span>certbot<span class="w"> </span>renew<span class="w"> </span>--force-renewal
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="c1"># Check Tailscale status</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>genmaster_tailscale<span class="w"> </span>tailscale<span class="w"> </span>status
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="c1"># Check Cloudflare tunnel</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span><span class="w"> </span>genmaster_cloudflared
+</span></code></pre></div>
+<h3 id="genslave-host-sshd-to-the-pi-zero">GenSlave host (SSH'd to the Pi Zero)<a class="headerlink" href="#genslave-host-sshd-to-the-pi-zero" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">cd</span><span class="w"> </span>/opt/genslave
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># View logs</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span><span class="w"> </span>genslave
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># Restart slave</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>docker<span class="w"> </span>compose<span class="w"> </span>restart<span class="w"> </span>genslave
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Pull new image</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>docker<span class="w"> </span>compose<span class="w"> </span>pull<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Check relay GPIO state directly (bypass API)</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>gpioget<span class="w"> </span>gpiochip0<span class="w"> </span><span class="m">16</span>
+</span></code></pre></div>
+<h3 id="from-genmaster-addressing-the-slave">From GenMaster, addressing the slave<a class="headerlink" href="#from-genmaster-addressing-the-slave" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Test heartbeat reachability</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;X-API-Key: </span><span class="nv">$SLAVE_API_SECRET</span><span class="s2">&quot;</span><span class="w"> </span>http://genslave.local:8001/api/health
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Force relay OFF (bypasses normal arming flow)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;X-API-Key: </span><span class="nv">$SLAVE_API_SECRET</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">     </span>http://genslave.local:8001/api/relay/off<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">     </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;force&quot;: true}&#39;</span>
+</span></code></pre></div>
+<hr />
+<h2 id="backup-restore">Backup / restore<a class="headerlink" href="#backup-restore" title="Permanent link">&para;</a></h2>
+<h3 id="creating-a-backup">Creating a backup<a class="headerlink" href="#creating-a-backup" title="Permanent link">&para;</a></h3>
+<p>GenMaster includes a one-click backup at <a href="../settings/#environment">Settings → Environment → Download Full Backup</a> (gated behind the Danger Zone confirmation). The backup is a tar.gz containing:</p>
+<ul>
+<li>The Postgres database dump.</li>
+<li>The current <code>.env</code> file (sensitive — store securely).</li>
+<li>The current <code>nginx.conf</code> and any custom Access Control rules.</li>
+<li>A <code>restore.sh</code> script that walks the operator through restoration.</li>
+</ul>
+<p>Backups are timestamped: <code>genmaster_full_backup_YYYY-MM-DDTHH-MM-SS.tar.gz</code>.</p>
+<p>You can also trigger a database-only backup from the host:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-T<span class="w"> </span>genmaster_db<span class="w"> </span>pg_dump<span class="w"> </span>-U<span class="w"> </span>genmaster<span class="w"> </span>-F<span class="w"> </span>c<span class="w"> </span>genmaster<span class="w"> </span>&gt;<span class="w"> </span>genmaster_<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span>.dump
+</span></code></pre></div>
+<h3 id="restoring">Restoring<a class="headerlink" href="#restoring" title="Permanent link">&para;</a></h3>
+<p>For a full system restore from a backup archive:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># 1. Stop the stack</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">cd</span><span class="w"> </span>/root/pizero_generator_control/genmaster
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>docker<span class="w"> </span>compose<span class="w"> </span>down
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># 2. Extract backup</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>tar<span class="w"> </span>-xzf<span class="w"> </span>genmaster_full_backup_YYYY-MM-DD.tar.gz<span class="w"> </span>-C<span class="w"> </span>/tmp/restore
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># 3. Run the included restore.sh (it walks you through DB + .env + nginx.conf restore)</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>sudo<span class="w"> </span>bash<span class="w"> </span>/tmp/restore/restore.sh
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># 4. Start the stack</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+</span></code></pre></div>
+<p>For a database-only restore:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-T<span class="w"> </span>genmaster_db<span class="w"> </span>psql<span class="w"> </span>-U<span class="w"> </span>genmaster<span class="w"> </span>-d<span class="w"> </span>genmaster<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;DROP SCHEMA public CASCADE; CREATE SCHEMA public;&quot;</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-T<span class="w"> </span>genmaster_db<span class="w"> </span>pg_restore<span class="w"> </span>-U<span class="w"> </span>genmaster<span class="w"> </span>-d<span class="w"> </span>genmaster<span class="w"> </span>&lt;<span class="w"> </span>genmaster_20260115.dump
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>docker<span class="w"> </span>compose<span class="w"> </span>restart<span class="w"> </span>genmaster
+</span></code></pre></div>
+<hr />
+<h2 id="recovery-from-unbootable-web-ui">Recovery from unbootable web UI<a class="headerlink" href="#recovery-from-unbootable-web-ui" title="Permanent link">&para;</a></h2>
+<p>If you've broken the web UI (e.g. typo in <code>.env</code>, bad nginx config) and can no longer reach <code>/</code>, here's the recovery flow. SSH access is required.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># 1. SSH to the GenMaster host</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>ssh<span class="w"> </span>user@genmaster.local<span class="w">   </span><span class="c1"># or its Tailscale name</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># 2. Navigate to the install directory</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="nb">cd</span><span class="w"> </span>/root/pizero_generator_control/genmaster
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># 3. Identify what&#39;s broken</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>docker<span class="w"> </span>compose<span class="w"> </span>ps<span class="w">                  </span><span class="c1"># which containers are unhealthy?</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span><span class="w"> </span>genmaster
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span><span class="w"> </span>genmaster_nginx
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="c1"># 4. If .env was the problem, restore from your last backup:</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>ls<span class="w"> </span>/var/lib/docker/volumes/genmaster_backups/_data/
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>cp<span class="w"> </span>/var/lib/docker/volumes/genmaster_backups/_data/genmaster_full_backup_&lt;timestamp&gt;.tar.gz<span class="w"> </span>/tmp/
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>tar<span class="w"> </span>-xzf<span class="w"> </span>/tmp/genmaster_full_backup_&lt;timestamp&gt;.tar.gz<span class="w"> </span>-C<span class="w"> </span>/tmp/restore
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>cp<span class="w"> </span>/tmp/restore/.env<span class="w"> </span>/root/pizero_generator_control/genmaster/.env
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="c1"># 5. Restart</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>docker<span class="w"> </span>compose<span class="w"> </span>down<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+</span></code></pre></div>
+<hr />
+<h2 id="performance-tuning">Performance tuning<a class="headerlink" href="#performance-tuning" title="Permanent link">&para;</a></h2>
+<h3 id="when-genmaster-is-sluggish">When GenMaster is sluggish<a class="headerlink" href="#when-genmaster-is-sluggish" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Tuning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Web UI slow to load</td>
+<td>Check <a href="../system/#host-system-resources">System → Host Resources</a> — if CPU &gt;80% sustained, restart <code>genmaster</code>.</td>
+</tr>
+<tr>
+<td>Frequent timeouts</td>
+<td>Default <a href="../genslave/#connection-settings">Heartbeat Interval</a> is 10s (failsafe at 30s). Raise it if you're seeing network noise; lower (e.g. 5s) for faster failure detection. Failsafe scales as 3× the interval.</td>
+</tr>
+<tr>
+<td>Database slow</td>
+<td><code>VACUUM FULL</code> rarely needed but can help: <code>docker compose exec genmaster_db psql -U genmaster -d genmaster -c 'VACUUM FULL ANALYZE;'</code></td>
+</tr>
+<tr>
+<td>Disk filling up</td>
+<td>Old run history accumulates. Either purge from the DB or increase disk. The run-history table is the largest contributor.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tuning-the-pi-zero-2w-genslave">Tuning the Pi Zero 2W (GenSlave)<a class="headerlink" href="#tuning-the-pi-zero-2w-genslave" title="Permanent link">&para;</a></h3>
+<p>The Pi Zero 2W has only 416MB usable RAM. Watch for:</p>
+<ul>
+<li>Memory above 80% for sustained periods → reboot (or add a swap file).</li>
+<li>WiFi signal below -75 dBm → relocate or add an antenna.</li>
+<li>CPU temp above 70°C → improve airflow / add a small heatsink.</li>
+</ul>
+<p>The slave's stat panel on <a href="../genslave/#at-a-glance-health-cpu-memory-disk-temp">GenSlave</a> shows all of these live.</p>
+<hr />
+<h2 id="glossary">Glossary<a class="headerlink" href="#glossary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Definition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Apprise</strong></td>
+<td>Notification library supporting 80+ services via URL strings. See <a href="https://github.com/caronc/apprise/wiki">Apprise wiki</a>.</td>
+</tr>
+<tr>
+<td><strong>Armed / Disarmed</strong></td>
+<td>Whether GenMaster will respond to automation triggers. Disarmed = read-only / monitoring mode.</td>
+</tr>
+<tr>
+<td><strong>APScheduler</strong></td>
+<td>Python scheduling library used for the cron-driven run scheduler.</td>
+</tr>
+<tr>
+<td><strong>ATS</strong></td>
+<td>Automatic Transfer Switch — the device that switches loads between grid/generator. Outside GenMaster's scope.</td>
+</tr>
+<tr>
+<td><strong>Cerbo GX</strong></td>
+<td>Victron Energy's central monitoring/control device for off-grid solar systems. Provides the GPIO signal that asks GenMaster to start the generator.</td>
+</tr>
+<tr>
+<td><strong>Cooldown</strong></td>
+<td>A short post-stop period before the state machine will accept a new start command, preventing rapid cycling. Default 60s.</td>
+</tr>
+<tr>
+<td><strong>Failsafe</strong></td>
+<td>Independent watchdog on GenSlave that forces the relay OFF if it stops hearing from GenMaster for a configured timeout.</td>
+</tr>
+<tr>
+<td><strong>GenMaster</strong></td>
+<td>The Raspberry Pi 5 running the FastAPI backend, web UI, scheduler, and Victron GPIO listener. The "brain".</td>
+</tr>
+<tr>
+<td><strong>GenSlave</strong></td>
+<td>The Raspberry Pi Zero 2W running the relay controller and failsafe. The "muscle".</td>
+</tr>
+<tr>
+<td><strong>GPIO17</strong></td>
+<td>The Pi 5 pin (physical pin 11) that listens for the Victron Cerbo GX relay signal.</td>
+</tr>
+<tr>
+<td><strong>Heartbeat</strong></td>
+<td>Periodic message GenMaster sends to GenSlave to confirm liveness and sync arming state. Default interval 10s; GenSlave's failsafe trips at 3× this (30s by default).</td>
+</tr>
+<tr>
+<td><strong>HMAC</strong></td>
+<td>Hash-based message authentication code; used to sign webhook payloads so receivers can verify they came from GenMaster.</td>
+</tr>
+<tr>
+<td><strong>HAT (Pimoroni Automation Hat Mini)</strong></td>
+<td>The add-on board on GenSlave that provides the physical relay and small LCD.</td>
+</tr>
+<tr>
+<td><strong>Manual Override</strong></td>
+<td>Mode where GenMaster ignores the Victron GPIO signal completely. Use during maintenance or when Victron is misreporting.</td>
+</tr>
+<tr>
+<td><strong>mock GPIO</strong></td>
+<td>Development mode where GenMaster simulates GPIO signals via API endpoints (no real Pi hardware needed).</td>
+</tr>
+<tr>
+<td><strong>Run</strong></td>
+<td>A single instance of the generator being on, from start command to stop. Recorded in <a href="../history/">Run History</a>.</td>
+</tr>
+<tr>
+<td><strong>SOC</strong></td>
+<td>State of Charge — battery percentage. Cerbo GX uses SOC thresholds to decide when to ask for the generator.</td>
+</tr>
+<tr>
+<td><strong>State machine</strong></td>
+<td>The backend logic that transitions the system through <code>idle → starting → running → stopping → cooldown → idle</code>.</td>
+</tr>
+<tr>
+<td><strong>Tailscale</strong></td>
+<td>Mesh VPN used to give GenMaster, GenSlave, and your phone secure access to each other from anywhere.</td>
+</tr>
+<tr>
+<td><strong>Trigger</strong></td>
+<td>What caused a run to start: <code>Victron Auto-Start</code>, <code>Scheduled Run</code>, <code>Manual Start</code>, <code>Exercise Run</code>.</td>
+</tr>
+<tr>
+<td><strong>WAL (Write-Ahead Log)</strong></td>
+<td>Postgres's crash-safety mechanism. Don't disable it.</td>
+</tr>
+<tr>
+<td><strong>WiFi Watchdog</strong></td>
+<td>Host service on GenMaster that pings a known target and bounces the WiFi interface on connectivity loss.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="security-flag-index">Security flag index<a class="headerlink" href="#security-flag-index" title="Permanent link">&para;</a></h2>
+<p>The following pages contain screenshots or fields with sensitive values you may want to mask before sharing externally:</p>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>What to mask</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../genslave/">GenSlave</a></td>
+<td>LAN IP, Tailscale IP, MAC address, WiFi SSID, API secret, Apprise URLs.</td>
+</tr>
+<tr>
+<td><a href="../generator/">Generator Control</a></td>
+<td>Generator serial number (some manufacturers use it as a service-portal credential).</td>
+</tr>
+<tr>
+<td><a href="../notifications/#channels">Notifications → Channels (expanded)</a></td>
+<td>Apprise URLs always contain bot tokens / webhook secrets. SMTP credentials in Email channels. To/From addresses.</td>
+</tr>
+<tr>
+<td><a href="../system/#network-sub-tab">System → Network</a></td>
+<td>All IPs, MAC addresses, SSIDs.</td>
+</tr>
+<tr>
+<td><a href="../system/#ssl-certificates">System → SSL Certificates</a></td>
+<td>Domain name (not strictly secret, but identifies your deployment).</td>
+</tr>
+<tr>
+<td><a href="../settings/#access-control">Settings → Access Control</a></td>
+<td>External IP CIDRs (your home/office public IP).</td>
+</tr>
+<tr>
+<td><a href="../settings/#environment">Settings → Environment</a></td>
+<td>Database password, API secrets, Cloudflare tunnel token, Tailscale auth key, webhook URLs.</td>
+</tr>
+<tr>
+<td><a href="../settings/#account">Settings → Account</a></td>
+<td>Username (less sensitive but identifies your account).</td>
+</tr>
+<tr>
+<td><a href="../containers/#logs-dialog">Containers → Logs</a></td>
+<td>Logs frequently include IPs, request paths, occasionally tokens.</td>
+</tr>
+</tbody>
+</table>
+<p>If you share screenshots externally, blur:</p>
+<ol>
+<li>Any IP address ending in numbers other than <code>.0</code>/<code>.255</code>.</li>
+<li>Any string starting with <code>tskey-</code>, <code>eyJh</code>, <code>tgram://</code>, <code>slack://</code>, <code>discord://</code>, <code>twilio://</code>, <code>mailto://</code>, <code>https://*/webhook</code>.</li>
+<li>Email addresses other than your own.</li>
+<li>Generator serial numbers.</li>
+<li>Hostnames that identify your deployment (e.g. <code>mymachine.example.com</code>).</li>
+</ol>
+<hr />
+<h2 id="api-reference-selected-endpoints">API reference (selected endpoints)<a class="headerlink" href="#api-reference-selected-endpoints" title="Permanent link">&para;</a></h2>
+<p>GenMaster's full OpenAPI spec is available at <code>https://your-domain/docs</code> (Swagger) or <code>/redoc</code> (ReDoc). Key endpoints:</p>
+<h3 id="generator-control">Generator control<a class="headerlink" href="#generator-control" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>GET    /api/status              Current state, runtime, last heartbeat
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>GET    /api/generator/state     Just the state (lighter weight)
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>POST   /api/generator/start     {&quot;trigger&quot;: &quot;manual&quot;} | {&quot;trigger&quot;: &quot;exercise&quot;}
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>POST   /api/generator/stop
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>POST   /api/generator/emergency-stop
+</span></code></pre></div>
+<h3 id="system-arming">System / arming<a class="headerlink" href="#system-arming" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>GET    /api/system/arm          Returns {armed: bool, armed_at, armed_by, slave_connection}
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>POST   /api/system/arm          {&quot;source&quot;: &quot;api&quot;|&quot;ui&quot;|&quot;webhook&quot;}
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>POST   /api/system/disarm
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>GET    /api/system/health
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>GET    /api/system/slave        GenSlave heartbeat status
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>POST   /api/system/host/reboot  Requires admin
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>POST   /api/system/host/shutdown Requires admin
+</span></code></pre></div>
+<h3 id="schedules">Schedules<a class="headerlink" href="#schedules" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>GET    /api/schedule
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>POST   /api/schedule            {name, start_time, duration_minutes, days_of_week[], enabled}
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>PATCH  /api/schedule/{id}
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>DELETE /api/schedule/{id}
+</span></code></pre></div>
+<h3 id="run-history">Run history<a class="headerlink" href="#run-history" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>GET    /api/runs?start_date&amp;end_date&amp;limit&amp;offset
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>GET    /api/runs/stats          30-day summary
+</span></code></pre></div>
+<h3 id="notifications">Notifications<a class="headerlink" href="#notifications" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>GET    /api/notifications/channels
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>POST   /api/notifications/channels
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>PATCH  /api/notifications/channels/{id}
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>DELETE /api/notifications/channels/{id}
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>POST   /api/notifications/channels/{id}/test
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>GET    /api/notifications/groups
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>GET    /api/notifications/rules
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>GET    /api/notifications/history
+</span></code></pre></div>
+<h3 id="containers">Containers<a class="headerlink" href="#containers" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>GET    /api/containers
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>POST   /api/containers/{name}/start
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>POST   /api/containers/{name}/stop
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>POST   /api/containers/{name}/restart
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>GET    /api/containers/{name}/logs?lines=200&amp;since=
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>GET    /api/containers/{name}/inspect
+</span></code></pre></div>
+<h3 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>GET    /api/settings                  All settings (filtered by role)
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>PATCH  /api/settings/security
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>PATCH  /api/settings/access-control
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>PATCH  /api/settings/environment       Requires admin + danger-zone confirmation
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>PATCH  /api/settings/account
+</span></code></pre></div>
+<h3 id="development-mock-gpio-mode-only">Development (mock GPIO mode only)<a class="headerlink" href="#development-mock-gpio-mode-only" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>GET    /api/dev/status
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>GET    /api/dev/gpio/state
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>POST   /api/dev/gpio/victron-signal    {&quot;active&quot;: true|false}
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>POST   /api/dev/gpio/toggle
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>POST   /api/dev/webhook/test
+</span></code></pre></div>
+<h3 id="hardware-switches-epo-hoa">Hardware switches (EPO + HOA)<a class="headerlink" href="#hardware-switches-epo-hoa" title="Permanent link">&para;</a></h3>
+<p>Added with the optional hardware-switches feature. See <a href="../hardware-switches/">Hardware Switches</a> for the operator-facing guide.</p>
+<p><strong>GenMaster side:</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>GET    /api/system/hoa                  Returns HOAStatus (state, raw contacts, boot-delay
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>                                        flag, pin assignments, last state-change time)
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>GET    /api/system/quiet-override       Returns {active, expires_at, seconds_remaining}
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>POST   /api/system/quiet-override       {duration_minutes: 1..1440}  start a Quiet override
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>DELETE /api/system/quiet-override       Cancel an active override (idempotent)
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>GET    /api/system/gpio-assignments     Current .env pins + running pins + pending_restart
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>POST   /api/system/gpio-assignments     {victron_gpio_pin, hoa_gpio_quiet, hoa_gpio_run}
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>                                        validates BCM 0-27 + distinct; writes .env
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>POST   /api/generator/start             409 response when EPO is engaged:
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>                                        {&quot;detail&quot;: &quot;Cannot start - GenSlave hardware safety
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>                                         interlock (EPO) is engaged. Release the E-stop at the
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>                                         generator to allow operation.&quot;}
+</span></code></pre></div>
+<p>The <code>slave_health</code> block embedded in <code>/api/system/status</code> gains a <code>physical_safety_engaged: bool</code> field. <code>/api/system/status</code> also gains a top-level <code>hoa: HOAStatus</code> object.</p>
+<p><strong>GenSlave side:</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>GET    /api/safety                      HardwareSafetyStatus (engaged, engaged_at,
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>                                        released_at, engagement_count, raw_input,
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>                                        epo_monitor_running, available, enabled)
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>GET    /api/health                      Adds physical_safety_engaged: bool to the public
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>                                        no-auth payload
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>GET    /api/relay/state                 Adds physical_safety_engaged: bool to RelayState
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>GET    /api/failsafe                    Adds physical_safety_engaged: bool to FailsafeStatus
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>POST   /api/heartbeat                   Reply body adds physical_safety_engaged: bool —
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>                                        how GenMaster learns the EPO state without a
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>                                        separate poll
+</span></code></pre></div>
+<p>All authenticated endpoints require either:</p>
+<ul>
+<li>A session cookie (after web login), or</li>
+<li>An <code>Authorization: Bearer &lt;jwt&gt;</code> header (for programmatic access), or</li>
+<li>An <code>X-API-Key: &lt;secret&gt;</code> header (for the slave-side endpoints).</li>
+</ul>
+<hr />
+<h2 id="hardware-compatibility">Hardware compatibility<a class="headerlink" href="#hardware-compatibility" title="Permanent link">&para;</a></h2>
+<h3 id="tested-generator-types">Tested generator types<a class="headerlink" href="#tested-generator-types" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LPG (propane)</td>
+<td>Most common in off-grid. Use 2-wire start input.</td>
+</tr>
+<tr>
+<td>Natural Gas</td>
+<td>Same wiring as LPG.</td>
+</tr>
+<tr>
+<td>Diesel</td>
+<td>Glow-plug delay may be needed — set Run Time Limits <strong>min run time</strong> to ≥ 5 min so the engine stabilizes before any auto-stop.</td>
+</tr>
+<tr>
+<td>Gasoline</td>
+<td>Less common in off-grid; works with same 2-wire interface. Choke automation is generator-side.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tested-cerbo-signal-sources">Tested Cerbo signal sources<a class="headerlink" href="#tested-cerbo-signal-sources" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Wiring</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cerbo GX <strong>Relay 1</strong> or <strong>Relay 2</strong></td>
+<td>NO contact → GPIO17, COM → Pi GND.</td>
+</tr>
+<tr>
+<td>24V dry contact (other source)</td>
+<td>Use an opto-coupler module if voltage isn't 0/3.3V.</td>
+</tr>
+<tr>
+<td>External PLC</td>
+<td>Same — opto-isolate to protect the Pi GPIO.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="failure-scenarios-expected-behavior">Failure scenarios + expected behavior<a class="headerlink" href="#failure-scenarios-expected-behavior" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Expected behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GenMaster reboots while generator running</td>
+<td>On boot: state reset to safe (disarmed, generator_running=false), orphaned run closed with <code>stop_reason=power_loss</code>. Generator may still be physically running until GenSlave's failsafe trips (default 30s after last heartbeat — calculated as 3× the heartbeat interval).</td>
+</tr>
+<tr>
+<td>GenSlave reboots while generator running</td>
+<td>On boot: relay forced OFF (hardware safety). Generator stops. Run record on GenMaster gets stop_reason <code>slave_lost</code> after heartbeat timeout.</td>
+</tr>
+<tr>
+<td>Network partition between master and slave</td>
+<td>Heartbeats fail. After the failsafe timeout (default 30s = 3× the 10s heartbeat interval) the slave triggers failsafe and forces relay OFF, sends Apprise alert.</td>
+</tr>
+<tr>
+<td>Postgres dies</td>
+<td>API errors. Web UI shows toast + degraded badges. Generator state retained in-memory until restart. Recover by restarting <code>genmaster_db</code>.</td>
+</tr>
+<tr>
+<td>Disk full</td>
+<td>Logs fail to write. Backups fail. Run history may stop persisting. Web UI may degrade. Free space immediately.</td>
+</tr>
+<tr>
+<td>Cert expires</td>
+<td>HTTPS access fails. Force renew via <a href="../system/#ssl-certificates">System → SSL Certificates</a> or <code>docker compose exec genmaster_certbot certbot renew --force-renewal</code>.</td>
+</tr>
+<tr>
+<td>Tailscale auth key expires</td>
+<td>Tailscale-routed access fails. Re-auth via Tailscale admin console or generate a new auth key and update <code>.env</code>.</td>
+</tr>
+<tr>
+<td>Cloudflare tunnel down</td>
+<td>Public URL fails. LAN/Tailscale access still works. Restart <code>genmaster_cloudflared</code>.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="related-docs">Related docs<a class="headerlink" href="#related-docs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../../ARCHITECTURE/">Architecture overview</a> — how the master + slave fit together at the system level.</li>
+<li><a href="../../GENERATOR/">Generator Controls (install guide)</a> — original install-side reference.</li>
+<li><a href="../../SCHEDULING/">Scheduling (install guide)</a> — deeper background on the scheduler.</li>
+<li><a href="../../VICTRON/">Victron Integration</a> — Cerbo GX wiring and behavior.</li>
+<li><a href="../../NOTIFICATIONS/">Notifications (install guide)</a> — Apprise setup details.</li>
+<li><a href="../../GENSLAVE/">GenSlave Setup</a> — slave Pi Zero install.</li>
+<li><a href="../../TAILSCALE/">Tailscale VPN</a> — mesh VPN setup.</li>
+<li><a href="../../CLOUDFLARE/">Cloudflare Tunnel</a> — public access setup.</li>
+<li><a href="../../TROUBLESHOOTING/">Troubleshooting</a> — extended troubleshooting reference.</li>
+</ul>
+<h2 id="getting-help">Getting help<a class="headerlink" href="#getting-help" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>GitHub Issues</strong>: <a href="https://github.com/rjsears/pizero_generator_control/issues">github.com/rjsears/pizero_generator_control/issues</a> — bug reports, feature requests.</li>
+<li><strong>GitHub Discussions</strong>: <a href="https://github.com/rjsears/pizero_generator_control/discussions">github.com/rjsears/pizero_generator_control/discussions</a> — community Q&amp;A.</li>
+<li><strong>In-app Help</strong>: the [?] icon in the header opens the <a href="../common-ui/#help-documentation">Help &amp; Documentation dialog</a> with quick links to API docs, this manual, and the repo.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Richard J. Sears
+    </div>
+  
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/rjsears" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.indexes", "navigation.path", "navigation.top", "toc.follow", "toc.integrate", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/manual.js"></script>
+      
+    
+  </body>
+</html>
