@@ -234,7 +234,9 @@
 
 
 
-<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
     <a href=".." title="RPi Generator Control" class="md-nav__button md-logo" aria-label="RPi Generator Control" data-md-component="logo">
       
@@ -403,6 +405,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -486,6 +496,62 @@
     
   
     Generator Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/hardware-switches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Switches (EPO + HOA)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/quick-reference-emergency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Reference — Emergency
   
 
     
@@ -710,6 +776,62 @@
     
   
     Common UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/network-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/network-recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Recovery
   
 
     
@@ -1744,6 +1866,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#lost-network-after-wifi-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lost Network After WiFi Change
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#full-system-reset" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1831,582 +1964,6 @@
                 </div>
               </div>
             
-            
-              
-              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
-                <div class="md-sidebar__scrollwrap">
-                  <div class="md-sidebar__inner">
-                    
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Table of Contents
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-diagnostics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Diagnostics
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Quick Diagnostics">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#system-health-check" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        System Health Check
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#expected-healthy-response" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Expected Healthy Response
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#genmaster-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenMaster Issues
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="GenMaster Issues">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#container-wont-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Container Won't Start
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#database-migrations-failed" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database Migrations Failed
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#api-returns-500-errors" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        API Returns 500 Errors
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#high-memory-usage" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        High Memory Usage
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#genslave-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenSlave Issues
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="GenSlave Issues">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#container-wont-start_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Container Won't Start
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mock-mode-when-hat-is-present" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mock Mode When HAT is Present
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#relay-not-clicking" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Relay Not Clicking
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#communication-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Communication Issues
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Communication Issues">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#genslave-not-reachable" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenSlave Not Reachable
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#heartbeat-failures" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Heartbeat Failures
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#api-authentication-errors" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        API Authentication Errors
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#generator-control-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Generator Control Issues
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Generator Control Issues">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#generator-wont-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Generator Won't Start
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#generator-wont-stop" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Generator Won't Stop
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#state-mismatch-between-master-and-slave" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        State Mismatch Between Master and Slave
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#victron-integration-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Victron Integration Issues
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Victron Integration Issues">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#signal-not-detected" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Signal Not Detected
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#signal-stuck-activeinactive" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Signal Stuck Active/Inactive
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#notification-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notification Issues
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Notification Issues">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#notifications-not-sending" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notifications Not Sending
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#genslave-failsafe-not-notifying" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenSlave Failsafe Not Notifying
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#database-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database Issues
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Database Issues">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#postgresql-wont-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PostgreSQL Won't Start
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#connection-pool-exhausted" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Connection Pool Exhausted
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#redis-connection-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Redis Connection Issues
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#docker-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Docker Issues
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Docker Issues">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#container-keeps-restarting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Container Keeps Restarting
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#out-of-disk-space" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Out of Disk Space
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#permission-denied" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Permission Denied
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#log-analysis" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Log Analysis
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Log Analysis">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#viewing-logs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Viewing Logs
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#filtering-logs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Filtering Logs
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#common-log-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common Log Patterns
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#getting-help" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Getting Help
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#recovery-procedures" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Recovery Procedures
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Recovery Procedures">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#full-system-reset" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Full System Reset
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#restore-from-backup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Restore from Backup
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#emergency-generator-stop" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Emergency Generator Stop
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-                  </div>
-                </div>
-              </div>
             
           
           
@@ -3022,6 +2579,9 @@
 </ol>
 <hr />
 <h2 id="recovery-procedures">Recovery Procedures<a class="headerlink" href="#recovery-procedures" title="Permanent link">&para;</a></h2>
+<h3 id="lost-network-after-wifi-change">Lost Network After WiFi Change<a class="headerlink" href="#lost-network-after-wifi-change" title="Permanent link">&para;</a></h3>
+<p>A bad static IP, gateway, or subnet on a saved WiFi profile can leave a device unreachable over the network. Recovery options (local console, <code>nmcli</code>, SD card edit, Ethernet fallback) are documented separately:</p>
+<p>→ See <a href="../manual/network-recovery/">Network Recovery</a>.</p>
 <h3 id="full-system-reset">Full System Reset<a class="headerlink" href="#full-system-reset" title="Permanent link">&para;</a></h3>
 <p>If all else fails:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a><span class="c1"># Stop everything</span>
@@ -3130,7 +2690,7 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.indexes", "navigation.path", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.indexes", "navigation.path", "navigation.top", "toc.follow", "toc.integrate", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>

@@ -234,7 +234,9 @@
 
 
 
-<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
     <a href=".." title="RPi Generator Control" class="md-nav__button md-logo" aria-label="RPi Generator Control" data-md-component="logo">
       
@@ -496,6 +498,78 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hardware-switches-asymmetric-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hardware Switches — Asymmetric Design
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hardware Switches — Asymmetric Design">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rationale-for-the-asymmetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rationale for the asymmetry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#epo-state-flow-heartbeat-based-auto-resume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EPO state flow (heartbeat-based auto-resume)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hoa-state-machine-precedence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HOA state machine precedence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quiet-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quiet override
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -773,6 +847,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -856,6 +938,62 @@
     
   
     Generator Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/hardware-switches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Switches (EPO + HOA)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/quick-reference-emergency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Reference — Emergency
   
 
     
@@ -1080,6 +1218,62 @@
     
   
     Common UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/network-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual/network-recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Recovery
   
 
     
@@ -1603,353 +1797,6 @@
               </div>
             
             
-              
-              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
-                <div class="md-sidebar__scrollwrap">
-                  <div class="md-sidebar__inner">
-                    
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#system-architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        System Architecture
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#genmaster-docker-container-architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenMaster Docker Container Architecture
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#genslave-container-architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenSlave Container Architecture
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="GenSlave Container Architecture">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#genslave-host-file-structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenSlave Host File Structure
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#whats-inside-the-image" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What's inside the image
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#request-flow-architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Request Flow Architecture
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#heartbeat-system-architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Heartbeat System Architecture
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#boot-sequence-power-loss-recovery" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Boot Sequence / Power Loss Recovery
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Boot Sequence / Power Loss Recovery">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#boot-arming-policy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Boot Arming Policy
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#genslave-on-reboot-always-the-same" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenSlave on reboot (always the same)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#reconciliation-events" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reconciliation Events
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#database-fields-reset-on-boot" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database Fields Reset on Boot
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#state-machine-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        State Machine Flow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#automation-arming-system" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Automation Arming System
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Automation Arming System">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#arming-integration-points" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Arming Integration Points
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#webhook-event-system" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Webhook Event System
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#database-schema-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database Schema Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#installation-setup-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Installation &amp; Setup Flow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#memory-budget-raspberry-pi-5-8gb" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Memory Budget (Raspberry Pi 5 - 8GB)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#port-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Port Reference
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#security-layers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Security Layers
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#developmenttesting-mode-lxc-containers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Development/Testing Mode (LXC Containers)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Development/Testing Mode (LXC Containers)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#auto-detection" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Auto-Detection
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#development-api-endpoints" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Development API Endpoints
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#testing-a-generator-cycle" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Testing a Generator Cycle
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related Documentation
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-                  </div>
-                </div>
-              </div>
-            
           
           
             <div class="md-content" data-md-component="content">
@@ -2082,6 +1929,86 @@ container — no source files on the Pi Zero ever change.</p>
 <p>The heartbeat system ensures reliable communication between GenMaster and GenSlave, with failsafe mechanisms.</p>
 <p><img alt="Heartbeat System" src="../images/heartbeat.jpeg" /></p>
 <hr />
+<h2 id="hardware-switches-asymmetric-design">Hardware Switches — Asymmetric Design<a class="headerlink" href="#hardware-switches-asymmetric-design" title="Permanent link">&para;</a></h2>
+<p>Two optional physical control switches sit alongside the web UI: a <strong>GenSlave EPO</strong> (Emergency Power Off) mushroom button at the generator, and a <strong>GenMaster HOA</strong> (Hand-Off-Auto) selector at the operator location. The design is intentionally asymmetric — the two switches solve different problems, live in different places, and use different enforcement mechanisms.</p>
+<table>
+<thead>
+<tr>
+<th>Switch</th>
+<th>Location</th>
+<th>Type</th>
+<th>Enforcement</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>EPO</strong></td>
+<td>At the generator (with GenSlave)</td>
+<td>1 NC + 1 NO E-stop</td>
+<td><strong>Hardware</strong> — physically interrupts the relay-to-generator wire, AND signals software</td>
+<td>Maintenance lockout. The maintenance person at the generator has an absolute physical guarantee no one starts the generator.</td>
+</tr>
+<tr>
+<td><strong>HOA selector</strong></td>
+<td>At the operator location (with GenMaster)</td>
+<td>2 NO rotary contacts (Quiet / Auto / Run)</td>
+<td>Software, with hardware position detection</td>
+<td>Operator-side mode selector. No physical safety — convenience only.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="rationale-for-the-asymmetry">Rationale for the asymmetry<a class="headerlink" href="#rationale-for-the-asymmetry" title="Permanent link">&para;</a></h3>
+<p>The EPO protects the <strong>person</strong> at the generator. A stuck contact, a software bug, a crashed Pi, or a network outage cannot start the generator while the EPO is engaged because the NC contact in the start-relay circuit is physically open. The software-signaling NO contact exists only to keep state consistent (drive UI banners, fire notifications, refuse start commands) — it is not what protects the maintenance person. Hardware enforcement is the safety guarantee. See <a href="../SECURITY/#hardware-safety--two-layer-epo-pattern">SECURITY.md</a> for the full safety pattern.</p>
+<p>The HOA helps the <strong>operator</strong> make routine choices — silence the generator overnight (Quiet), let automation run (Auto), or run the generator manually (Run). Its worst-case failure mode is "automation runs anyway", which is exactly what happens today with no switch at all. There's no physical risk if HOA fails, so there's no need for hardware enforcement.</p>
+<h3 id="epo-state-flow-heartbeat-based-auto-resume">EPO state flow (heartbeat-based auto-resume)<a class="headerlink" href="#epo-state-flow-heartbeat-based-auto-resume" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>[Operator presses EPO]
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    ↓
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>GenSlave: hardware_safety.py polls IN1 every 25 ms (2-read debounce → ~50 ms)
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    ↓
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>Drops the GenSlave relay if it was holding it on.
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>Sets physical_safety_engaged = True in GenSlave state.
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>LCD line &quot;Generator: ARMED&quot; → &quot;EPO SAFETY ON&quot;.
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    ↓
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>On the next heartbeat (≤60 s; the fast-poll loop catches it within ~5 s):
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    GenMaster.state_machine.update_slave_physical_safety_from_poll()
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    ↓
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>system_state.slave_physical_safety_engaged = True
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>hardware_safety_engaged_genslave notification fires.
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>UI: red banner appears on Generator page, Emergency Stop card dims,
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    Start/Stop Generator buttons render disabled.
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>start_generator() refuses all callers with 409 + detail message.
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>[Operator twists EPO clockwise to release]
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    ↓
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>NC contact closes, NO contact opens.
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>GenSlave clears physical_safety_engaged. LCD returns to &quot;Generator: ARMED&quot;.
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>    ↓
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>Next heartbeat / fast-poll:
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>GenMaster clears the flag.
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>hardware_safety_released_genslave notification fires.
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>If Victron was still requesting the generator, GenMaster starts it on
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>the next state-machine tick — there is no separate &quot;rearm&quot; step.
+</span></code></pre></div>
+<p>The auto-resume is intentional: the EPO is a <strong>maintenance lockout</strong>, not a "stop automation" button. Operators who want to stop automation without engaging the EPO use the HOA selector's Quiet position.</p>
+<h3 id="hoa-state-machine-precedence">HOA state machine precedence<a class="headerlink" href="#hoa-state-machine-precedence" title="Permanent link">&para;</a></h3>
+<p>The HOA selector reads two NO contacts on GenMaster GPIO22 (Quiet) and GPIO27 (Run). The two-bit encoding gives four possible states: Auto (both open), Quiet (GPIO22 closed), Run (GPIO27 closed), and Fault (both closed — mechanically impossible on the rotary, so reported as Fault and treated as Auto). The state machine consults HOA inside its decision points:</p>
+<ol>
+<li><strong>EPO check</strong> — refuse all start paths if <code>slave_physical_safety_engaged</code> is True. (Hardware-side guarantee makes this advisory, but it keeps state consistent.)</li>
+<li><strong>HOA Quiet check</strong> — refuse automation-triggered starts (Victron, scheduled, exercise) if HOA is in Quiet AND no override is active. Manual web starts and HOA-Run bypass this.</li>
+<li><strong>Existing state machine logic</strong> — arming, run-time limits, cooldown, etc.</li>
+</ol>
+<p>The state-machine precedence stack from top to bottom: EPO (hardware), HOA Run (operator hold), Quiet override (operator bypass), HOA Quiet (operator gate), existing arming/limits, Victron/schedule/exercise. Higher entries override lower ones.</p>
+<h3 id="quiet-override">Quiet override<a class="headerlink" href="#quiet-override" title="Permanent link">&para;</a></h3>
+<p>The Quiet override lets an operator temporarily ignore the HOA Quiet position from the web UI without physically turning the knob. Stored in two columns on <code>system_state</code> (<code>quiet_override_active</code>, <code>quiet_override_expires_at</code>). Survives GenMaster restart — reconciled on boot. Auto-clears when: the timer expires, the operator clicks Cancel, OR the HOA selector leaves Quiet (since the override only matters while the selector is in Quiet).</p>
+<h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Pin assignments</strong> — <code>VICTRON_GPIO_PIN</code>, <code>HOA_GPIO_QUIET</code>, <code>HOA_GPIO_RUN</code> in GenMaster's <code>.env</code>, also writable from the System → Hardware → GPIO Assignments panel. Bound at monitor start so changes require a GenMaster restart.</li>
+<li><strong>Boot delay</strong> — <code>HOA_BOOT_DELAY_SECONDS</code> (default 30 s). Post-boot grace window so a Quiet or Run position at boot doesn't immediately fire spurious state-change notifications.</li>
+<li><strong>Switch enable</strong> — <code>HARDWARE_SAFETY_ENABLED</code> (GenSlave) and <code>HOA_SWITCH_ENABLED</code> (GenMaster). Disable to skip monitor startup on systems where the switches aren't wired yet. <strong>Cannot bypass the EPO once installed</strong> — the NC contact in the start circuit is unaffected by the flag.</li>
+</ul>
+<p>Operator guide: <a href="../manual/hardware-switches/">Hardware Switches</a>.</p>
+<hr />
 <h2 id="boot-sequence-power-loss-recovery">Boot Sequence / Power Loss Recovery<a class="headerlink" href="#boot-sequence-power-loss-recovery" title="Permanent link">&para;</a></h2>
 <p>Both GenMaster and GenSlave implement safety measures for power loss and reboot scenarios.</p>
 <p><img alt="Boot Sequence" src="../images/boot_sequence.png" /></p>
@@ -2154,19 +2081,19 @@ configuration needed.</p>
 </tbody>
 </table>
 <h3 id="database-fields-reset-on-boot">Database Fields Reset on Boot<a class="headerlink" href="#database-fields-reset-on-boot" title="Permanent link">&para;</a></h3>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1">-- Always reset</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">slave_connection_status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;unknown&#39;</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">missed_heartbeat_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="c1">-- Reset based on boot_arming_policy</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">slave_relay_armed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">False</span><span class="w">        </span><span class="c1">-- ONLY if policy = &#39;fail_safe&#39; AND was armed pre-boot</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">manual_disarm_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">True</span><span class="w">      </span><span class="c1">-- Set when fail_safe disarms (records operator-must-re-arm intent)</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1">-- Reset if generator was running (regardless of policy)</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">generator_running</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">False</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">run_trigger</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;idle&#39;</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">generator_start_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">NULL</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">current_run_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">NULL</span><span class="w">  </span><span class="c1">-- After closing orphaned run</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1">-- Always reset</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">slave_connection_status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;unknown&#39;</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">missed_heartbeat_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1">-- Reset based on boot_arming_policy</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">slave_relay_armed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">False</span><span class="w">        </span><span class="c1">-- ONLY if policy = &#39;fail_safe&#39; AND was armed pre-boot</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">manual_disarm_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">True</span><span class="w">      </span><span class="c1">-- Set when fail_safe disarms (records operator-must-re-arm intent)</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1">-- Reset if generator was running (regardless of policy)</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">generator_running</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">False</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">run_trigger</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;idle&#39;</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">generator_start_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">NULL</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">current_run_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">NULL</span><span class="w">  </span><span class="c1">-- After closing orphaned run</span>
 </span></code></pre></div>
 <hr />
 <h2 id="state-machine-flow">State Machine Flow<a class="headerlink" href="#state-machine-flow" title="Permanent link">&para;</a></h2>
@@ -2306,34 +2233,33 @@ configuration needed.</p>
 <li>GenMaster automatically detects when NOT running on a Raspberry Pi</li>
 <li>Falls back to mock GPIO mode (checks <code>/proc/cpuinfo</code> for "Raspberry Pi")</li>
 <li>Development API becomes available at <code>/api/dev/*</code></li>
-<li>Set <code>GENSLAVE_ENABLED=false</code> in <code>.env</code> for UI-only testing (disables heartbeat)</li>
 </ul>
 <h3 id="development-api-endpoints">Development API Endpoints<a class="headerlink" href="#development-api-endpoints" title="Permanent link">&para;</a></h3>
 <p>When in mock mode, these endpoints simulate Victron GPIO signals:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>GET  /api/dev/status           - Development mode status
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>GET  /api/dev/gpio/state       - Current mock GPIO state
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>POST /api/dev/gpio/victron-signal  - Simulate Victron signal {&quot;active&quot;: true/false}
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>POST /api/dev/gpio/toggle      - Toggle signal state
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>POST /api/dev/gpio/reset       - Reset to inactive
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>POST /api/dev/webhook/test     - Test webhook delivery
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>GET  /api/dev/status           - Development mode status
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>GET  /api/dev/gpio/state       - Current mock GPIO state
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>POST /api/dev/gpio/victron-signal  - Simulate Victron signal {&quot;active&quot;: true/false}
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>POST /api/dev/gpio/toggle      - Toggle signal state
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>POST /api/dev/gpio/reset       - Reset to inactive
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>POST /api/dev/webhook/test     - Test webhook delivery
 </span></code></pre></div>
 <h3 id="testing-a-generator-cycle">Testing a Generator Cycle<a class="headerlink" href="#testing-a-generator-cycle" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Start GenMaster (auto-detects LXC/dev environment)</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Simulate Victron requesting generator</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/dev/gpio/victron-signal<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">     </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">     </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;active&quot;: true}&#39;</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># Watch state transition: IDLE → STARTING → RUNNING</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># Simulate Victron releasing generator</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/dev/gpio/victron-signal<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">     </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">     </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;active&quot;: false}&#39;</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="c1"># Watch state transition: RUNNING → STOPPING → IDLE</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Start GenMaster (auto-detects LXC/dev environment)</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Simulate Victron requesting generator</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/dev/gpio/victron-signal<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">     </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">     </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;active&quot;: true}&#39;</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># Watch state transition: IDLE → STARTING → RUNNING</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1"># Simulate Victron releasing generator</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/dev/gpio/victron-signal<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">     </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">     </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;active&quot;: false}&#39;</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># Watch state transition: RUNNING → STOPPING → IDLE</span>
 </span></code></pre></div>
 <hr />
 <h2 id="related-documentation">Related Documentation<a class="headerlink" href="#related-documentation" title="Permanent link">&para;</a></h2>
@@ -2418,7 +2344,7 @@ configuration needed.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.indexes", "navigation.path", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.indexes", "navigation.path", "navigation.top", "toc.follow", "toc.integrate", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>

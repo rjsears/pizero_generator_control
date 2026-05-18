@@ -230,7 +230,9 @@
 
 
 
-<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
     <a href="../.." title="RPi Generator Control" class="md-nav__button md-logo" aria-label="RPi Generator Control" data-md-component="logo">
       
@@ -399,6 +401,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -482,6 +492,62 @@
     
   
     Generator Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../manual/hardware-switches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Switches (EPO + HOA)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../manual/quick-reference-emergency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Reference — Emergency
   
 
     
@@ -706,6 +772,62 @@
     
   
     Common UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../manual/network-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../manual/network-recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Recovery
   
 
     
@@ -1228,598 +1350,6 @@
                 </div>
               </div>
             
-            
-              
-              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
-                <div class="md-sidebar__scrollwrap">
-                  <div class="md-sidebar__inner">
-                    
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#purpose" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Purpose
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Overview">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#deployment-methods" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Deployment Methods
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#network-architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Network Architecture
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#tailscale-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tailscale Configuration
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Tailscale Configuration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prerequisites
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#generate-auth-key" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Generate Auth Key
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#genmaster-docker-container-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenMaster: Docker Container Configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#genslave-native-installation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenSlave: Native Installation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#magicdns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        MagicDNS
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tailscale-acls" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tailscale ACLs
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tailscale-ssh-optional" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tailscale SSH (Optional)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#subnet-router-optional" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Subnet Router (Optional)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#cloudflare-tunnel-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cloudflare Tunnel Configuration
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Cloudflare Tunnel Configuration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#when-to-use-cloudflare-tunnel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to Use Cloudflare Tunnel
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#prerequisites_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prerequisites
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#create-tunnel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Create Tunnel
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#docker-container-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Docker Container Configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tunnel-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tunnel Configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nginx-configuration-for-cloudflare" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Nginx Configuration for Cloudflare
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#firewall-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Firewall Configuration
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Firewall Configuration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ufw-rules-recommended" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        UFW Rules (Recommended)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#iptables-for-docker" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        iptables for Docker
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dns-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        DNS Configuration
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="DNS Configuration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#local-dns-resolution" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Local DNS Resolution
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tailscale-magicdns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tailscale MagicDNS
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#ssltls-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        SSL/TLS Configuration
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="SSL/TLS Configuration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#tailscale-https-recommended" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tailscale HTTPS (Recommended)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cloudflare-ssl" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cloudflare SSL
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#monitoring-troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Monitoring &amp; Troubleshooting
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Monitoring &amp; Troubleshooting">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#tailscale-status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tailscale Status
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cloudflare-tunnel-status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cloudflare Tunnel Status
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#network-debugging" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Network Debugging
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#failover-considerations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Failover Considerations
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Failover Considerations">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#if-tailscale-goes-down" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        If Tailscale Goes Down
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#if-internet-goes-down" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        If Internet Goes Down
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#mitigation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mitigation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#security-best-practices" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Security Best Practices
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#configuration-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Configuration Reference
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Configuration Reference">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#genmaster-networking-environment" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenMaster Networking Environment
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#genslave-networking-environment" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GenSlave Networking Environment
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#agent-implementation-checklist" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Agent Implementation Checklist
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Agent Implementation Checklist">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#tailscale-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tailscale Setup
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cloudflare-tunnel-optional-genmaster-only" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cloudflare Tunnel (Optional - GenMaster only)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#security" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Security
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-documents" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related Documents
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-                  </div>
-                </div>
-              </div>
             
           
           
@@ -2399,7 +1929,7 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.indexes", "navigation.path", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.indexes", "navigation.path", "navigation.top", "toc.follow", "toc.integrate", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>

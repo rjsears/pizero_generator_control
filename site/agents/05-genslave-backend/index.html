@@ -230,7 +230,9 @@
 
 
 
-<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
     <a href="../.." title="RPi Generator Control" class="md-nav__button md-logo" aria-label="RPi Generator Control" data-md-component="logo">
       
@@ -399,6 +401,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -482,6 +492,62 @@
     
   
     Generator Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../manual/hardware-switches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Switches (EPO + HOA)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../manual/quick-reference-emergency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Reference — Emergency
   
 
     
@@ -706,6 +772,62 @@
     
   
     Common UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../manual/network-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../manual/network-recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network Recovery
   
 
     
@@ -1228,815 +1350,6 @@
                 </div>
               </div>
             
-            
-              
-              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
-                <div class="md-sidebar__scrollwrap">
-                  <div class="md-sidebar__inner">
-                    
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#purpose" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Purpose
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#current-implementation-status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Current Implementation Status
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Current Implementation Status">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#actual-file-structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Actual File Structure
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#api-endpoints-port-8001" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        API Endpoints (Port 8001)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#deployment-architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Deployment Architecture
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Deployment Architecture">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#memory-budget-pi-zero-2w-512mb" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Memory Budget (Pi Zero 2W - 512MB)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hardware" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hardware
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Hardware">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#automation-hat-mini" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Automation Hat Mini
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#wiring" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Wiring
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#technology-stack" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Technology Stack
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#project-structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Project Structure
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#main-application" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Main Application
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Configuration
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#database-setup-sqlite" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database Setup (SQLite)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Database Setup (SQLite)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#sqlite-models-no-alembic" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        SQLite Models (No Alembic)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pydantic-schemas" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pydantic Schemas
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Pydantic Schemas">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#relay-schemas" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Relay Schemas
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#heartbeat-schemas" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Heartbeat Schemas
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#system-schemas" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        System Schemas
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#api-routers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        API Routers
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="API Routers">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#relay-router" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Relay Router
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#heartbeat-router" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Heartbeat Router
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#health-router" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Health Router
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#system-router" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        System Router
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#config-router" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Config Router
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#services" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Services
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Services">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#relay-control-service" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Relay Control Service
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#lcd-display-service" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        LCD Display Service
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#heartbeat-monitor-service" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Heartbeat Monitor Service
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#failsafe-service" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Failsafe Service
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#webhook-service" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Webhook Service
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#utilities" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Utilities
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Utilities">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#authentication" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Authentication
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#system-info" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        System Info
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#database-models" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database Models
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#requirements" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Requirements
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Requirements">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#development-requirements-optional" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Development Requirements (Optional)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hardware-testing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hardware Testing
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Hardware Testing">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#test-relay" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Test Relay
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#test-lcd" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Test LCD
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#container-installation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Container Installation
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Container Installation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#directory-structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Directory Structure
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#environment-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Environment Configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#envexample-template" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        .env.example Template
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#boot-behavior-power-loss-recovery" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Boot Behavior / Power Loss Recovery
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Boot Behavior / Power Loss Recovery">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#startup-sequence" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Startup Sequence
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#key-safety-behaviors" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Key Safety Behaviors
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#no-state-restoration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        No State Restoration
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#docker-compose" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Docker Compose
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Docker Compose">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#lifecycle" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Lifecycle
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#log-management" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Log Management
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#tailscale-integration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tailscale Integration
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Tailscale Integration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#configure-genmaster-url" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Configure GenMaster URL
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#database-backup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database Backup
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#health-check-script" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Health Check Script
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#agent-implementation-checklist" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Agent Implementation Checklist
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Agent Implementation Checklist">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#phase-1-core-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Phase 1: Core Setup
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#phase-2-api-implementation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Phase 2: API Implementation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#phase-3-hardware-services" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Phase 3: Hardware Services
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#phase-4-communication-services" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Phase 4: Communication Services
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#phase-5-deployment" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Phase 5: Deployment
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-documents" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related Documents
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-                  </div>
-                </div>
-              </div>
             
           
           
@@ -4410,7 +3723,7 @@ limits in <code>/etc/docker/daemon.json</code>:</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.indexes", "navigation.path", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.indexes", "navigation.path", "navigation.top", "toc.follow", "toc.integrate", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>

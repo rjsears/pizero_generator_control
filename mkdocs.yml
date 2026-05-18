@@ -46,6 +46,12 @@ plugins:
   - search
   - tags
 
+# Internal-only docs — excluded from every build (local + CI) so they
+# never publish to the GitHub Pages site even if they somehow get
+# added to git. Belt-and-suspenders on top of .gitignore.
+exclude_docs: |
+  agents/
+
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
@@ -100,6 +106,8 @@ nav:
   - User Manual:
     - Welcome: manual/welcome.md
     - Generator Control: manual/generator.md
+    - Hardware Switches (EPO + HOA): manual/hardware-switches.md
+    - Quick Reference — Emergency: manual/quick-reference-emergency.md
     - GenSlave: manual/genslave.md
     - Schedule: manual/schedule.md
     - Run History: manual/history.md
