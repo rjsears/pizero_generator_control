@@ -11,6 +11,7 @@
 
 """Notification service for sending via Apprise and Email."""
 
+import asyncio
 import logging
 import re
 import smtplib
@@ -30,6 +31,8 @@ from app.models.notifications import (
 )
 
 logger = logging.getLogger(__name__)
+
+SMTP_TIMEOUT_SECONDS: int = 30
 
 
 @dataclass
@@ -161,6 +164,27 @@ class NotificationService:
 
         return result
 
+    def _smtp_send_sync(self, config: dict, msg_as_string: str, timeout: float) -> None:
+        """Blocking SMTP send; run in a worker thread. Raises on failure."""
+        host = config["smtp_host"]
+        port = int(config["smtp_port"])
+
+        if port == 465:
+            # Implicit TLS: the TLS handshake happens on connect, no STARTTLS
+            server_cm = smtplib.SMTP_SSL(host, port, timeout=timeout)
+        else:
+            server_cm = smtplib.SMTP(host, port, timeout=timeout)
+
+        with server_cm as server:
+            if port != 465 and config.get("use_tls", True):
+                server.starttls()
+            server.login(config["username"], config["password"])
+            server.sendmail(
+                config["from_address"],
+                config["to_addresses"],
+                msg_as_string,
+            )
+
     async def _send_email(
         self,
         channel: NotificationChannel,
@@ -210,24 +234,10 @@ class NotificationService:
             html_part = MIMEText(html_message, "html")
             msg.attach(html_part)
 
-            # Send email
-            use_tls = config.get("use_tls", True)
-            smtp_host = config["smtp_host"]
-            smtp_port = config["smtp_port"]
-
-            if use_tls:
-                server = smtplib.SMTP(smtp_host, smtp_port)
-                server.starttls()
-            else:
-                server = smtplib.SMTP(smtp_host, smtp_port)
-
-            server.login(config["username"], config["password"])
-            server.sendmail(
-                config["from_address"],
-                config["to_addresses"],
-                msg.as_string(),
+            # Send email off the event loop (smtplib is blocking)
+            await asyncio.to_thread(
+                self._smtp_send_sync, config, msg.as_string(), SMTP_TIMEOUT_SECONDS
             )
-            server.quit()
 
             result.success = True
 
