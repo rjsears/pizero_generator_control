@@ -12,7 +12,7 @@ This directory contains utility scripts for the RPi Generator Control system tha
 - **Auto-detects WiFi interface** - Works with wlan0, wlp2s0, etc.
 - **Escalating recovery** - Tries soft fixes before hard resets
 - **Reboot protection** - Max one reboot per hour prevents loops
-- **State persistence** - Remembers failure count across restarts
+- **State persistence** - Remembers the last reboot time across restarts and reboots (the failure count restarts from zero on every start)
 - **Works on both Pi5 and PiZero** - Adapts to available tools (nmcli vs wpa_cli)
 
 ### Recovery Sequence
@@ -22,7 +22,7 @@ This directory contains utility scripts for the RPi Generator Control system tha
 | 1 | Log only (grace period, no action) |
 | 2-4 | Soft WiFi reset (nmcli/wpa_cli) |
 | 5-6 | Hard WiFi reset (ip link down/up) + service restart |
-| 7+ | System reboot (once per hour max) |
+| 7+ | Long-outage mode: checks continue every 30 s, but recovery actions run only every `WATCHDOG_RECOVERY_INTERVAL` (default 300 s). Each action first tries a reboot (only after the minimum outage of 600 s, once per hour max, and only if the reboot guard allows it); if the reboot is not allowed, it runs a recovery sequence: soft reset, then hard reset, then network service restart, stopping as soon as the gateway answers |
 
 Shown with the defaults. The grace period (`WATCHDOG_GRACE_FAILURES`) and the number of soft and hard resets (`WATCHDOG_MAX_SOFT_RESETS`, `WATCHDOG_MAX_HARD_RESETS`) are configurable.
 
@@ -31,7 +31,10 @@ Shown with the defaults. The grace period (`WATCHDOG_GRACE_FAILURES`) and the nu
 - **Checks gateway, not internet** - If your gateway is reachable but internet is down, no action is taken
 - **Reboot cooldown** - Prevents reboot loops if the issue persists. Checked against both the saved last-reboot time and system uptime (`/proc/uptime`), so it still holds on a Pi with no RTC whose clock is wrong while the network is down
 - **Persistent state** - State is kept in `/var/lib/wifi-watchdog/state` (not tmpfs), so the last reboot time survives the reboot. The failure counter resets on every start, so a fresh boot restarts from soft resets
-- **Reboot guard (optional)** - When `WATCHDOG_REBOOT_GUARD_URL` is set, the watchdog fetches that URL before rebooting and refuses to reboot unless it reports `"relay_state": false`. A `true` relay state, a failed request, or an unparseable response all block the reboot; the watchdog keeps doing hard resets instead
+- **Minimum outage before reboot** - No reboot until connectivity has been failing continuously for `WATCHDOG_MIN_OUTAGE_BEFORE_REBOOT` seconds (default 600). Measured with `/proc/uptime`, so it does not depend on the wall clock
+- **SSID visibility logging** - Before each reboot decision, the watchdog runs a fresh WiFi scan (`nmcli`) and logs whether a configured WiFi network is visible, so the journal shows whether the access point was down (router reboot, power outage) or the Pi was stuck (network visible, or the scan itself failed). The result is for diagnosis only and does not block the reboot; with the hourly reboot as the backstop, an empty scan from a wedged WiFi chip can no longer stall recovery. Skipped when `nmcli` is not installed or no WiFi connection is configured
+- **Long-outage mode** - Once the soft and hard resets are exhausted, the connectivity check still runs every 30 s (so recovery is noticed immediately), but recovery actions run only once every `WATCHDOG_RECOVERY_INTERVAL` seconds (default 300). Each action tries a reboot first, at most once per hour, and otherwise runs the soft reset, hard reset, network service restart sequence. The interface is not bounced every 30 s for hours
+- **Reboot guard (optional)** - When `WATCHDOG_REBOOT_GUARD_URL` is set, the watchdog fetches that URL before rebooting and refuses to reboot unless it reports `"relay_state": false`. A `true` relay state, a failed request, or an unparseable response all block the reboot; the watchdog keeps running the recovery sequence instead
 - **Graceful degradation** - If nmcli isn't available, uses wpa_cli; if neither, uses ip link directly
 
 ### Installation
@@ -93,6 +96,8 @@ Configuration is done via environment variables in the systemd service file. Edi
 | `WATCHDOG_REBOOT_COOLDOWN` | 3600 | Minimum seconds between reboots (also the minimum uptime before a reboot) |
 | `WATCHDOG_STATE_FILE` | `/var/lib/wifi-watchdog/state` | Persistent state file |
 | `WATCHDOG_REBOOT_GUARD_URL` | (empty) | If set, refuse to reboot unless this URL reports `"relay_state": false` |
+| `WATCHDOG_MIN_OUTAGE_BEFORE_REBOOT` | 600 | Seconds of continuous failure before a reboot is considered |
+| `WATCHDOG_RECOVERY_INTERVAL` | 300 | Seconds between recovery sequences in long-outage mode |
 
 After editing, reload and restart:
 

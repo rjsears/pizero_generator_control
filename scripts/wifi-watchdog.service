@@ -30,6 +30,8 @@ SyslogIdentifier=wifi-watchdog
 #Environment="WATCHDOG_REBOOT_COOLDOWN=3600"
 #Environment="WATCHDOG_STATE_FILE=/var/lib/wifi-watchdog/state"
 #Environment="WATCHDOG_REBOOT_GUARD_URL=http://localhost:8001/api/health"
+#Environment="WATCHDOG_MIN_OUTAGE_BEFORE_REBOOT=600"
+#Environment="WATCHDOG_RECOVERY_INTERVAL=300"
 
 [Install]
 WantedBy=multi-user.target

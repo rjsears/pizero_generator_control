@@ -13,7 +13,14 @@
 #   1 failure:     Log only (grace period, no action)
 #   2-4 failures:  Soft WiFi reset (nmcli or wpa_cli)
 #   5-6 failures:  Hard WiFi reset (ip link down/up)
-#   7+ failures:   Reboot (max once per hour, see safety features)
+#   7+ failures:   Long-outage mode. The connectivity check still runs every
+#                  cycle, but recovery actions run only once every
+#                  WATCHDOG_RECOVERY_INTERVAL seconds (default 300): a reboot
+#                  is tried first (only after a 10 min minimum outage, at most
+#                  once per hour, relay guard permitting); if it is not
+#                  allowed, a recovery sequence runs instead (soft reset, then
+#                  hard reset, then network service restart, stopping as soon
+#                  as the gateway answers)
 # (Shown with the defaults; the grace period and the number of soft and
 # hard resets are configurable via the WATCHDOG_* environment variables.)
 #
@@ -23,6 +30,15 @@
 #   - Reboot cooldown prevents reboot loops (checked against both the saved
 #     wall-clock time and system uptime, since a Pi without an RTC may not
 #     have a correct clock while the network is down)
+#   - Minimum outage: no reboot until connectivity has been failing
+#     continuously for WATCHDOG_MIN_OUTAGE_BEFORE_REBOOT seconds (default
+#     600), measured with /proc/uptime (monotonic, no RTC needed)
+#   - SSID visibility logging: before a reboot, a fresh WiFi scan records
+#     whether a configured network is visible (access point down vs. Pi
+#     stuck). The result is logged for diagnosis, not used as a gate
+#   - Recovery actions are throttled in long-outage mode to one sequence
+#     per WATCHDOG_RECOVERY_INTERVAL seconds, so the interface is not
+#     bounced every check interval during a long access point outage
 #   - Optional reboot guard: if WATCHDOG_REBOOT_GUARD_URL is set, the reboot
 #     is refused unless that URL reports "relay_state": false (GenSlave
 #     must never reboot while the generator relay is energized)
@@ -53,12 +69,16 @@ MAX_HARD_RESETS="${WATCHDOG_MAX_HARD_RESETS:-2}"         # Hard resets before re
 REBOOT_COOLDOWN="${WATCHDOG_REBOOT_COOLDOWN:-3600}"      # Min seconds between reboots
 STATE_FILE="${WATCHDOG_STATE_FILE:-/var/lib/wifi-watchdog/state}"      # Persistent (not tmpfs)
 REBOOT_GUARD_URL="${WATCHDOG_REBOOT_GUARD_URL:-}"        # Optional: refuse reboot unless relay_state is false
+MIN_OUTAGE_BEFORE_REBOOT="${WATCHDOG_MIN_OUTAGE_BEFORE_REBOOT:-600}"   # Seconds of continuous failure before a reboot is considered
+RECOVERY_INTERVAL="${WATCHDOG_RECOVERY_INTERVAL:-300}"   # Seconds between recovery actions in long-outage mode
 LOG_TAG="wifi-watchdog"
 
 # State tracking (loaded from file if exists)
 CONSECUTIVE_FAILURES=0
 LAST_REBOOT_TIME=0
-REFUSED_REBOOTS=0          # Reboot-refused cycles since last success (not persisted)
+OUTAGE_START=0             # Uptime (s) when the current outage began, 0 = none (not persisted)
+LAST_RECOVERY_ACTION=0     # Uptime (s) of the last recovery action, 0 = none (not persisted)
+QUIET_CYCLES=0             # Long-outage cycles without an action, for log throttling (not persisted)
 
 # =============================================================================
 # Logging
@@ -181,7 +201,7 @@ reset_wifi_soft() {
         nmcli radio wifi off 2>/dev/null || true
         sleep 3
         nmcli radio wifi on 2>/dev/null || true
-        sleep 10
+        sleep 20
         return 0
     fi
 
@@ -189,7 +209,7 @@ reset_wifi_soft() {
     if command -v wpa_cli &>/dev/null; then
         log_info "Using wpa_cli for soft reset"
         wpa_cli -i "$iface" reassociate 2>/dev/null || true
-        sleep 10
+        sleep 20
         return 0
     fi
 
@@ -296,6 +316,71 @@ check_reboot_guard() {
     return 1
 }
 
+log_ap_visibility() {
+    # Informational only: always returns 0 and never blocks a reboot.
+    # Runs a fresh scan and logs whether a configured SSID is visible, so
+    # the journal shows whether the access point was down (no configured
+    # network visible) or the Pi was stuck (network visible, or the scan
+    # itself failed, which suggests a wedged WiFi chip).
+    if ! command -v nmcli &>/dev/null; then
+        log_info "Scan skipped (nmcli not available)"
+        return 0
+    fi
+
+    # Collect the SSIDs of all configured WiFi connections.
+    # nmcli -g escapes ':' inside values as '\:', and a connection name may
+    # contain ':', so split on the last ':' (TYPE never contains one).
+    local -a configured=()
+    local line name type ssid
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        type="${line##*:}"
+        name="${line%:*}"
+        name="${name//\\:/:}"
+        if [[ "$type" == "802-11-wireless" ]]; then
+            ssid=$(nmcli -g 802-11-wireless.ssid connection show "$name" 2>/dev/null)
+            ssid="${ssid//\\:/:}"
+            if [[ -n "$ssid" ]]; then
+                configured+=("$ssid")
+            fi
+        fi
+    done < <(nmcli -g NAME,TYPE connection show 2>/dev/null)
+
+    if [[ ${#configured[@]} -eq 0 ]]; then
+        log_warn "Scan: no configured WiFi networks to compare against"
+        return 0
+    fi
+
+    # Fresh scan of visible networks
+    local iface
+    iface=$(get_wifi_interface)
+    local scan_output
+    local scan_status
+    scan_output=$(timeout 45 nmcli -g SSID device wifi list ifname "$iface" --rescan yes 2>/dev/null)
+    scan_status=$?
+    if [[ $scan_status -ne 0 ]]; then
+        log_error "WiFi scan failed (status $scan_status); WiFi chip may be wedged"
+        return 0
+    fi
+
+    local seen=0
+    local scanned want
+    while IFS= read -r scanned; do
+        [[ -z "$scanned" ]] && continue
+        ((seen++)) || true
+        scanned="${scanned//\\:/:}"
+        for want in "${configured[@]}"; do
+            if [[ "$scanned" == "$want" ]]; then
+                log_info "Scan: configured network '$want' is visible; Pi is failing to connect to a working access point"
+                return 0
+            fi
+        done
+    done <<< "$scan_output"
+
+    log_warn "Scan: configured network not visible ($seen networks seen); access point appears down; rebooting anyway per policy"
+    return 0
+}
+
 do_reboot() {
     local current_time
     current_time=$(date +%s)
@@ -317,6 +402,20 @@ do_reboot() {
         return 1
     fi
 
+    # Require a minimum continuous outage (uptime-based, monotonic)
+    local outage=$(( $(get_uptime_seconds) - OUTAGE_START ))
+    if [[ $OUTAGE_START -eq 0 ]] || [[ $outage -lt $MIN_OUTAGE_BEFORE_REBOOT ]]; then
+        local remaining_outage=$MIN_OUTAGE_BEFORE_REBOOT
+        if [[ $OUTAGE_START -ne 0 ]]; then
+            remaining_outage=$((MIN_OUTAGE_BEFORE_REBOOT - outage))
+        fi
+        log_warn "Outage below minimum before reboot (${MIN_OUTAGE_BEFORE_REBOOT}s). $remaining_outage seconds remaining. Skipping reboot."
+        return 1
+    fi
+
+    # Record whether the access point is visible (diagnostic only, not a gate)
+    log_ap_visibility || true
+
     # Never reboot while the generator relay is (or may be) energized
     if ! check_reboot_guard; then
         return 1
@@ -336,6 +435,28 @@ do_reboot() {
     /sbin/reboot
 }
 
+run_recovery_sequence() {
+    # One full long-outage recovery action: soft reset, then hard reset,
+    # then network service restart, stopping as soon as the gateway answers.
+    # The next cycle's check reports the final outcome.
+    LAST_RECOVERY_ACTION=$(get_uptime_seconds)
+
+    reset_wifi_soft
+    if check_gateway_reachable; then
+        log_info "Recovery sequence: gateway reachable, recovered after soft reset"
+        return 0
+    fi
+
+    reset_wifi_hard
+    if check_gateway_reachable; then
+        log_info "Recovery sequence: gateway reachable, recovered after hard reset"
+        return 0
+    fi
+
+    restart_network_service
+    return 0
+}
+
 # =============================================================================
 # Main Recovery Logic
 # =============================================================================
@@ -352,12 +473,14 @@ attempt_recovery() {
     if [[ $effective -le $MAX_SOFT_RESETS ]]; then
         # Soft reset phase
         log_info "Recovery phase 1: soft reset (attempt $effective of $MAX_SOFT_RESETS)"
+        LAST_RECOVERY_ACTION=$(get_uptime_seconds)
         reset_wifi_soft
 
     elif [[ $effective -le $total_soft_hard ]]; then
         # Hard reset phase
         local hard_attempt=$((effective - MAX_SOFT_RESETS))
         log_info "Recovery phase 2: hard reset (attempt $hard_attempt of $MAX_HARD_RESETS)"
+        LAST_RECOVERY_ACTION=$(get_uptime_seconds)
         reset_wifi_hard
 
         # Also try restarting network service on last hard reset
@@ -366,19 +489,30 @@ attempt_recovery() {
         fi
 
     else
-        # Reboot phase
-        log_error "Recovery phase 3: all resets exhausted after $CONSECUTIVE_FAILURES failures"
-        if ! do_reboot; then
-            # Reboot not permitted right now; keep recovering each cycle,
-            # restarting the network service on every 3rd refused cycle
-            ((REFUSED_REBOOTS++)) || true
-            if [[ $((REFUSED_REBOOTS % 3)) -eq 0 ]]; then
-                log_warn "Reboot skipped (refused cycle $REFUSED_REBOOTS); restarting network service"
-                restart_network_service
-            else
-                log_warn "Reboot skipped (refused cycle $REFUSED_REBOOTS); continuing with hard reset"
-                reset_wifi_hard
+        # Long-outage mode: the check keeps running every cycle, but recovery
+        # actions (reboot attempt or recovery sequence) are throttled to one
+        # per RECOVERY_INTERVAL
+        local now
+        now=$(get_uptime_seconds)
+        local since=$((now - LAST_RECOVERY_ACTION))
+        local outage=0
+        if [[ $OUTAGE_START -ne 0 ]]; then
+            outage=$((now - OUTAGE_START))
+        fi
+
+        if [[ $since -lt $RECOVERY_INTERVAL ]]; then
+            # Quiet cycle: log the first and then every 10th
+            ((QUIET_CYCLES++)) || true
+            if [[ $((QUIET_CYCLES % 10)) -eq 1 ]]; then
+                log_info "Long-outage mode: outage ${outage}s, next recovery action in $((RECOVERY_INTERVAL - since))s"
             fi
+            return 0
+        fi
+
+        log_error "Recovery phase 3 (long-outage mode): outage ${outage}s after $CONSECUTIVE_FAILURES failures; recovery action due"
+        if ! do_reboot; then
+            log_warn "Reboot not performed; running recovery sequence"
+            run_recovery_sequence
         fi
     fi
 }
@@ -386,6 +520,13 @@ attempt_recovery() {
 # =============================================================================
 # Main Loop
 # =============================================================================
+should_log_failure() {
+    # Log every failed check during the ladder, then the first and every
+    # 10th check in long-outage mode (limits journal growth)
+    local past=$((CONSECUTIVE_FAILURES - GRACE_FAILURES - MAX_SOFT_RESETS - MAX_HARD_RESETS))
+    [[ $past -le 0 ]] || [[ $((past % 10)) -eq 1 ]]
+}
+
 main() {
     local iface
     iface=$(get_wifi_interface)
@@ -402,6 +543,9 @@ main() {
     log_info "Reboot cooldown: ${REBOOT_COOLDOWN}s"
     log_info "State file: $STATE_FILE"
     log_info "Reboot guard URL: ${REBOOT_GUARD_URL:-not configured}"
+    log_info "Minimum outage before reboot: ${MIN_OUTAGE_BEFORE_REBOOT}s"
+    log_info "Recovery interval (long-outage mode): ${RECOVERY_INTERVAL}s"
+    log_info "SSID visibility: logged at each reboot decision (not a gate)"
     log_info "=========================================="
 
     if [[ -z "$iface" ]]; then
@@ -422,9 +566,13 @@ main() {
     while true; do
         # First check if WiFi is even connected
         if ! check_wifi_connected; then
-            log_warn "WiFi interface has no IP address"
             ((CONSECUTIVE_FAILURES++)) || true
-            save_state
+            if should_log_failure; then
+                log_warn "WiFi interface has no IP address (consecutive failures: $CONSECUTIVE_FAILURES)"
+            fi
+            if [[ $OUTAGE_START -eq 0 ]]; then
+                OUTAGE_START=$(get_uptime_seconds)
+            fi
             attempt_recovery
             sleep "$CHECK_INTERVAL"
             continue
@@ -436,14 +584,19 @@ main() {
             if [[ $CONSECUTIVE_FAILURES -gt 0 ]]; then
                 log_info "Connectivity restored after $CONSECUTIVE_FAILURES failure(s)"
                 CONSECUTIVE_FAILURES=0
-                REFUSED_REBOOTS=0
-                save_state
             fi
+            OUTAGE_START=0
+            LAST_RECOVERY_ACTION=0
+            QUIET_CYCLES=0
         else
             # Failure
             ((CONSECUTIVE_FAILURES++)) || true
-            log_warn "Gateway unreachable (consecutive failures: $CONSECUTIVE_FAILURES)"
-            save_state
+            if [[ $OUTAGE_START -eq 0 ]]; then
+                OUTAGE_START=$(get_uptime_seconds)
+            fi
+            if should_log_failure; then
+                log_warn "Gateway unreachable (consecutive failures: $CONSECUTIVE_FAILURES)"
+            fi
             attempt_recovery
         fi
 
