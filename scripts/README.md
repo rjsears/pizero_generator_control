@@ -19,9 +19,12 @@ This directory contains utility scripts for the RPi Generator Control system tha
 
 | Consecutive Failures | Action |
 |---------------------|--------|
-| 1-3 | Soft WiFi reset (nmcli/wpa_cli) |
-| 4-5 | Hard WiFi reset (ip link down/up) + service restart |
-| 6+ | System reboot (once per hour max) |
+| 1 | Log only (grace period, no action) |
+| 2-4 | Soft WiFi reset (nmcli/wpa_cli) |
+| 5-6 | Hard WiFi reset (ip link down/up) + service restart |
+| 7+ | System reboot (once per hour max) |
+
+Shown with the defaults. The grace period (`WATCHDOG_GRACE_FAILURES`) and the number of soft and hard resets (`WATCHDOG_MAX_SOFT_RESETS`, `WATCHDOG_MAX_HARD_RESETS`) are configurable.
 
 ### Safety Features
 
@@ -83,7 +86,8 @@ Configuration is done via environment variables in the systemd service file. Edi
 |----------|---------|-------------|
 | `WATCHDOG_CHECK_INTERVAL` | 30 | Seconds between connectivity checks |
 | `WATCHDOG_PING_TIMEOUT` | 5 | Ping timeout in seconds |
-| `WATCHDOG_PING_COUNT` | 2 | Number of pings per check |
+| `WATCHDOG_PING_COUNT` | 3 | Number of pings per check |
+| `WATCHDOG_GRACE_FAILURES` | 1 | Failed checks tolerated before any recovery action |
 | `WATCHDOG_MAX_SOFT_RESETS` | 3 | Soft resets before escalating |
 | `WATCHDOG_MAX_HARD_RESETS` | 2 | Hard resets before reboot |
 | `WATCHDOG_REBOOT_COOLDOWN` | 3600 | Minimum seconds between reboots (also the minimum uptime before a reboot) |

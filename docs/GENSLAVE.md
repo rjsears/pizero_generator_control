@@ -38,7 +38,7 @@ GenSlave is a lightweight FastAPI application that:
 
 | Spec | Requirement |
 |------|-------------|
-| **Model** | Pi Zero 2W (recommended) or Pi Zero W |
+| **Model** | Pi Zero 2 W (64-bit Raspberry Pi OS recommended; the original Pi Zero W is no longer supported because its ARMv6 CPU has no current Debian base image) |
 | **RAM** | 512MB (sufficient for GenSlave) |
 | **Storage** | 8GB+ microSD card |
 | **Power** | 5V 2.5A power supply |
@@ -98,7 +98,7 @@ git clone https://github.com/rjsears/pizero_generator_control.git
 cd pizero_generator_control/genslave
 
 # Build for ARM (Pi Zero)
-docker buildx build --platform linux/arm/v7 -t genslave:local .
+docker buildx build --platform linux/arm64 -t genslave:local .
 
 # Update docker-compose.yaml to use local image
 # Change: image: rjsears/pizero_generator_control:genslave

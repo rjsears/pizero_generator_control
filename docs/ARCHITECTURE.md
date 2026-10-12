@@ -21,7 +21,7 @@ The RPi Generator Control system is a distributed two-device architecture for au
 ## GenSlave Container Architecture
 
 GenSlave runs as a single Docker container on the Pi Zero 2W. The image
-(`rjsears/pizero_generator_control:genslave`) is built for `linux/arm/v6`
+(`rjsears/pizero_generator_control:genslave`) is built for `linux/arm64`
 and ships from Docker Hub, so the Pi Zero only needs Docker installed —
 no Python, no virtualenv, no system packages.
 

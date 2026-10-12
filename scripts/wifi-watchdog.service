@@ -23,6 +23,8 @@ SyslogIdentifier=wifi-watchdog
 # Uncomment and modify as needed:
 #Environment="WATCHDOG_CHECK_INTERVAL=30"
 #Environment="WATCHDOG_PING_TIMEOUT=5"
+#Environment="WATCHDOG_PING_COUNT=3"
+#Environment="WATCHDOG_GRACE_FAILURES=1"
 #Environment="WATCHDOG_MAX_SOFT_RESETS=3"
 #Environment="WATCHDOG_MAX_HARD_RESETS=2"
 #Environment="WATCHDOG_REBOOT_COOLDOWN=3600"

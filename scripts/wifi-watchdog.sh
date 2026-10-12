@@ -10,9 +10,12 @@
 # both GenMaster (Pi5) and GenSlave (PiZero 2W).
 #
 # Recovery sequence:
-#   1-3 failures:  Soft WiFi reset (nmcli or wpa_cli)
-#   4-5 failures:  Hard WiFi reset (ip link down/up)
-#   6+ failures:   Reboot (max once per hour, see safety features)
+#   1 failure:     Log only (grace period, no action)
+#   2-4 failures:  Soft WiFi reset (nmcli or wpa_cli)
+#   5-6 failures:  Hard WiFi reset (ip link down/up)
+#   7+ failures:   Reboot (max once per hour, see safety features)
+# (Shown with the defaults; the grace period and the number of soft and
+# hard resets are configurable via the WATCHDOG_* environment variables.)
 #
 # Safety features:
 #   - Only checks gateway (local network), not internet
@@ -43,7 +46,8 @@ set -uo pipefail
 # =============================================================================
 CHECK_INTERVAL="${WATCHDOG_CHECK_INTERVAL:-30}"          # Seconds between checks
 PING_TIMEOUT="${WATCHDOG_PING_TIMEOUT:-5}"               # Ping timeout in seconds
-PING_COUNT="${WATCHDOG_PING_COUNT:-2}"                   # Number of pings per check
+PING_COUNT="${WATCHDOG_PING_COUNT:-3}"                   # Number of pings per check
+GRACE_FAILURES="${WATCHDOG_GRACE_FAILURES:-1}"           # Failed checks tolerated before any recovery action
 MAX_SOFT_RESETS="${WATCHDOG_MAX_SOFT_RESETS:-3}"         # Soft resets before escalating
 MAX_HARD_RESETS="${WATCHDOG_MAX_HARD_RESETS:-2}"         # Hard resets before reboot
 REBOOT_COOLDOWN="${WATCHDOG_REBOOT_COOLDOWN:-3600}"      # Min seconds between reboots
@@ -337,15 +341,22 @@ do_reboot() {
 # =============================================================================
 attempt_recovery() {
     local total_soft_hard=$((MAX_SOFT_RESETS + MAX_HARD_RESETS))
+    # Failures counted past the grace period drive the escalation ladder
+    local effective=$((CONSECUTIVE_FAILURES - GRACE_FAILURES))
 
-    if [[ $CONSECUTIVE_FAILURES -le $MAX_SOFT_RESETS ]]; then
+    if [[ $effective -le 0 ]]; then
+        log_warn "Within grace period ($CONSECUTIVE_FAILURES of $GRACE_FAILURES failed checks); no action yet"
+        return 0
+    fi
+
+    if [[ $effective -le $MAX_SOFT_RESETS ]]; then
         # Soft reset phase
-        log_info "Recovery phase 1: soft reset (attempt $CONSECUTIVE_FAILURES of $MAX_SOFT_RESETS)"
+        log_info "Recovery phase 1: soft reset (attempt $effective of $MAX_SOFT_RESETS)"
         reset_wifi_soft
 
-    elif [[ $CONSECUTIVE_FAILURES -le $total_soft_hard ]]; then
+    elif [[ $effective -le $total_soft_hard ]]; then
         # Hard reset phase
-        local hard_attempt=$((CONSECUTIVE_FAILURES - MAX_SOFT_RESETS))
+        local hard_attempt=$((effective - MAX_SOFT_RESETS))
         log_info "Recovery phase 2: hard reset (attempt $hard_attempt of $MAX_HARD_RESETS)"
         reset_wifi_hard
 
@@ -384,6 +395,8 @@ main() {
     log_info "=========================================="
     log_info "WiFi interface: ${iface:-not found}"
     log_info "Check interval: ${CHECK_INTERVAL}s"
+    log_info "Pings per check: $PING_COUNT"
+    log_info "Grace period: $GRACE_FAILURES failed check(s)"
     log_info "Soft resets before escalating: $MAX_SOFT_RESETS"
     log_info "Hard resets before reboot: $MAX_HARD_RESETS"
     log_info "Reboot cooldown: ${REBOOT_COOLDOWN}s"

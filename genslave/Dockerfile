@@ -5,7 +5,7 @@
 # Version 1.0.0 - January 17th, 2026
 #
 # Cross-compile on Mac/Linux, run on Pi Zero
-# Build: docker buildx build --platform linux/arm/v6 -t rjsears/pizero_generator_control:genslave --push .
+# Build: docker buildx build --platform linux/arm64 -t rjsears/pizero_generator_control:genslave --push .
 #
 # Richard J. Sears
 # richardjsears@protonmail.com

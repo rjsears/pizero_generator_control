@@ -791,7 +791,7 @@ Docker images are automatically built and pushed to Docker Hub when code is merg
 | Image | Platforms | Trigger Path |
 |-------|-----------|--------------|
 | `rjsears/genmaster:latest` | amd64, arm64 | `genmaster/**` |
-| `rjsears/pizero_generator_control:genslave` | arm/v6 | `genslave/**` |
+| `rjsears/pizero_generator_control:genslave` | arm64 | `genslave/**` |
 
 Manual builds can be triggered from the GitHub Actions tab with target selection.
 

@@ -5,7 +5,7 @@
 # Part of the "RPi Generator Control" suite
 # Version 1.0.0 - January 17th, 2026
 #
-# Cross-compiles GenSlave for Pi Zero (arm/v6) and pushes to Docker Hub
+# Cross-compiles GenSlave for Pi Zero 2 W (arm64) and pushes to Docker Hub
 # Run this on your Mac or any x86/arm64 machine with Docker
 #
 # Richard J. Sears
@@ -18,7 +18,7 @@ set -e
 # Configuration
 IMAGE_NAME="rjsears/pizero_generator_control"
 IMAGE_TAG="genslave"
-PLATFORM="linux/arm/v6"
+PLATFORM="linux/arm64"
 BUILDER_NAME="genslave-builder"
 
 # Colors for output

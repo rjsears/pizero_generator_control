@@ -4,7 +4,7 @@
 #
 # Images:
 # - GenMaster: rjsears/genmaster (amd64, arm64)
-# - GenSlave: rjsears/pizero_generator_control:genslave (arm/v6 for Pi Zero)
+# - GenSlave: rjsears/pizero_generator_control:genslave (arm64 for Pi Zero 2 W)
 # - Host-Tools: rjsears/genmaster-host-tools (amd64, arm64)
 #
 # Triggers:
@@ -231,7 +231,7 @@ jobs:
           sarif_file: 'trivy-results-genmaster.sarif'
 
   # ==========================================================================
-  # Build and Push GenSlave (arm/v6 for Pi Zero)
+  # Build and Push GenSlave (arm64 for Pi Zero 2 W)
   # ==========================================================================
   build-genslave:
     needs: changes
@@ -250,7 +250,7 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
-          platforms: linux/arm/v6,linux/arm/v7,linux/arm64
+          platforms: linux/arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -285,7 +285,7 @@ jobs:
         with:
           context: ./genslave
           file: ./genslave/Dockerfile
-          platforms: linux/arm/v6
+          platforms: linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -301,7 +301,7 @@ jobs:
 
   # ==========================================================================
   # Security Scanning for GenSlave
-  # Note: Uses filesystem scan because arm/v6 images can't be pulled on amd64 runners
+  # Note: Uses filesystem scan because ARM-only images can't be pulled on amd64 runners
   # ==========================================================================
   security-scan-genslave:
     needs: build-genslave
