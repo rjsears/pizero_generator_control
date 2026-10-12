@@ -66,7 +66,7 @@ Shows total disk used by Docker (images + volumes + containers + build cache) so
 
 ### WiFi Watchdog
 
-A separate connectivity-recovery service that pings a known target every minute and restarts the WiFi interface if connectivity is lost.
+A separate connectivity-recovery service that pings the default gateway every 30 seconds and, if connectivity is lost, escalates through a WiFi radio toggle, an interface bounce, a NetworkManager restart, and finally a reboot (subject to a cooldown).
 
 | Field | Meaning |
 |-------|---------|

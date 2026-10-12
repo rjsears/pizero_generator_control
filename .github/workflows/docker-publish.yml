@@ -74,13 +74,53 @@ jobs:
               - '.github/workflows/docker-publish.yml'
 
   # ==========================================================================
-  # Build and Push GenMaster (amd64, arm64)
+  # Run GenMaster backend tests (gates the GenMaster image build)
   # ==========================================================================
-  build-genmaster:
+  test-genmaster:
     needs: changes
     if: |
       needs.changes.outputs.genmaster == 'true' ||
       github.event_name == 'workflow_dispatch' && (github.event.inputs.target == 'all' || github.event.inputs.target == 'genmaster')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: genmaster/backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            genmaster/backend/requirements.txt
+            genmaster/backend/requirements-dev.txt
+
+      # requirements.txt pins Raspberry Pi GPIO packages (gpiozero, rpi-lgpio)
+      # that do not build on the ubuntu-latest runner and are not needed by the
+      # tests, so they are filtered out before installing.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          grep -v -i -E "lgpio|gpiozero|rpi" requirements.txt > /tmp/requirements-ci.txt && pip install -r /tmp/requirements-ci.txt -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+  # ==========================================================================
+  # Build and Push GenMaster (amd64, arm64)
+  # ==========================================================================
+  build-genmaster:
+    needs: [changes, test-genmaster]
+    if: |
+      (needs.changes.outputs.genmaster == 'true' ||
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.target == 'all' || github.event.inputs.target == 'genmaster')) &&
+      needs.test-genmaster.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read

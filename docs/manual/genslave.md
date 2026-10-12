@@ -86,7 +86,7 @@ For each interface you'll see IP address, netmask, MAC address, default gateway,
 
 Action buttons:
 
-- **Add Network** — manually enter SSID + password to add a new known WiFi network to the slave's wpa_supplicant config.
+- **Add Network** — manually enter SSID + password to add a new known WiFi network to the slave (saved as a NetworkManager connection via `nmcli`).
 - **Scan & Connect** — scan for nearby SSIDs and pick one to join.
 
 !!! example "Sensitive data"

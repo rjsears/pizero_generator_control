@@ -10,6 +10,10 @@ ExecStart=/usr/local/bin/wifi-watchdog.sh
 Restart=always
 RestartSec=30
 
+# Persistent state directory (/var/lib/wifi-watchdog) so the reboot
+# cooldown survives the reboot it is meant to limit
+StateDirectory=wifi-watchdog
+
 # Logging
 StandardOutput=journal
 StandardError=journal
@@ -22,6 +26,8 @@ SyslogIdentifier=wifi-watchdog
 #Environment="WATCHDOG_MAX_SOFT_RESETS=3"
 #Environment="WATCHDOG_MAX_HARD_RESETS=2"
 #Environment="WATCHDOG_REBOOT_COOLDOWN=3600"
+#Environment="WATCHDOG_STATE_FILE=/var/lib/wifi-watchdog/state"
+#Environment="WATCHDOG_REBOOT_GUARD_URL=http://localhost:8001/api/health"
 
 [Install]
 WantedBy=multi-user.target

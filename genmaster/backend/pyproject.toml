@@ -42,3 +42,8 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Tests mark coroutines explicitly with @pytest.mark.asyncio
+asyncio_mode = "strict"

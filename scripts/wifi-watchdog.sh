@@ -12,13 +12,20 @@
 # Recovery sequence:
 #   1-3 failures:  Soft WiFi reset (nmcli or wpa_cli)
 #   4-5 failures:  Hard WiFi reset (ip link down/up)
-#   6+ failures:   Reboot (max once per hour)
+#   6+ failures:   Reboot (max once per hour, see safety features)
 #
 # Safety features:
 #   - Only checks gateway (local network), not internet
 #   - If gateway is reachable but internet is down, no action taken
-#   - Reboot cooldown prevents reboot loops
-#   - State persists across script restarts
+#   - Reboot cooldown prevents reboot loops (checked against both the saved
+#     wall-clock time and system uptime, since a Pi without an RTC may not
+#     have a correct clock while the network is down)
+#   - Optional reboot guard: if WATCHDOG_REBOOT_GUARD_URL is set, the reboot
+#     is refused unless that URL reports "relay_state": false (GenSlave
+#     must never reboot while the generator relay is energized)
+#   - State persists across script restarts and reboots (stored on disk)
+#   - Failure counter resets on startup so a fresh boot restarts the
+#     escalation from soft resets
 #
 # Installation:
 #   sudo cp wifi-watchdog.sh /usr/local/bin/
@@ -40,12 +47,14 @@ PING_COUNT="${WATCHDOG_PING_COUNT:-2}"                   # Number of pings per c
 MAX_SOFT_RESETS="${WATCHDOG_MAX_SOFT_RESETS:-3}"         # Soft resets before escalating
 MAX_HARD_RESETS="${WATCHDOG_MAX_HARD_RESETS:-2}"         # Hard resets before reboot
 REBOOT_COOLDOWN="${WATCHDOG_REBOOT_COOLDOWN:-3600}"      # Min seconds between reboots
-STATE_FILE="/var/run/wifi-watchdog.state"
+STATE_FILE="${WATCHDOG_STATE_FILE:-/var/lib/wifi-watchdog/state}"      # Persistent (not tmpfs)
+REBOOT_GUARD_URL="${WATCHDOG_REBOOT_GUARD_URL:-}"        # Optional: refuse reboot unless relay_state is false
 LOG_TAG="wifi-watchdog"
 
 # State tracking (loaded from file if exists)
 CONSECUTIVE_FAILURES=0
 LAST_REBOOT_TIME=0
+REFUSED_REBOOTS=0          # Reboot-refused cycles since last success (not persisted)
 
 # =============================================================================
 # Logging
@@ -76,6 +85,7 @@ load_state() {
 }
 
 save_state() {
+    mkdir -p "$(dirname "$STATE_FILE")"
     cat > "$STATE_FILE" << EOF
 CONSECUTIVE_FAILURES=$CONSECUTIVE_FAILURES
 LAST_REBOOT_TIME=$LAST_REBOOT_TIME
@@ -244,15 +254,67 @@ restart_network_service() {
     return 1
 }
 
+get_uptime_seconds() {
+    # Integer seconds since boot (independent of wall-clock time)
+    local uptime
+    uptime=$(cut -d' ' -f1 /proc/uptime 2>/dev/null | cut -d'.' -f1)
+    if [[ ! "$uptime" =~ ^[0-9]+$ ]]; then
+        uptime=0
+    fi
+    echo "$uptime"
+}
+
+check_reboot_guard() {
+    # Returns 0 only if no guard is configured or the guard URL reports
+    # relay_state false. Any other result (relay energized, request failed,
+    # unparseable response) is treated as unsafe.
+    if [[ -z "$REBOOT_GUARD_URL" ]]; then
+        return 0
+    fi
+
+    local response
+    local relay_state
+    if ! response=$(curl -s --max-time 10 "$REBOOT_GUARD_URL" 2>/dev/null) || [[ -z "$response" ]]; then
+        log_error "Reboot guard check failed (no response from $REBOOT_GUARD_URL), refusing to reboot"
+        return 1
+    fi
+
+    relay_state=$(echo "$response" | grep -o '"relay_state":[^,}]*' | cut -d':' -f2 | tr -d ' ')
+    if [[ "$relay_state" == "true" ]]; then
+        log_error "Reboot guard: generator relay is energized, refusing to reboot"
+        return 1
+    elif [[ "$relay_state" == "false" ]]; then
+        log_info "Reboot guard: generator relay is off, reboot allowed"
+        return 0
+    fi
+
+    log_error "Reboot guard: could not determine relay_state from $REBOOT_GUARD_URL, refusing to reboot"
+    return 1
+}
+
 do_reboot() {
     local current_time
     current_time=$(date +%s)
 
-    # Check reboot cooldown
+    # Check reboot cooldown (wall-clock, persisted across reboots)
     local time_since_last=$((current_time - LAST_REBOOT_TIME))
     if [[ $time_since_last -lt $REBOOT_COOLDOWN ]]; then
         local remaining=$((REBOOT_COOLDOWN - time_since_last))
         log_warn "Reboot cooldown active. $remaining seconds remaining. Skipping reboot."
+        return 1
+    fi
+
+    # Check reboot cooldown (uptime, independent of wall-clock time)
+    local uptime
+    uptime=$(get_uptime_seconds)
+    if [[ $uptime -lt $REBOOT_COOLDOWN ]]; then
+        local remaining_uptime=$((REBOOT_COOLDOWN - uptime))
+        log_warn "System uptime ${uptime}s is below reboot cooldown. $remaining_uptime seconds remaining. Skipping reboot."
+        return 1
+    fi
+
+    # Never reboot while the generator relay is (or may be) energized
+    if ! check_reboot_guard; then
         return 1
     fi
 
@@ -295,7 +357,18 @@ attempt_recovery() {
     else
         # Reboot phase
         log_error "Recovery phase 3: all resets exhausted after $CONSECUTIVE_FAILURES failures"
-        do_reboot
+        if ! do_reboot; then
+            # Reboot not permitted right now; keep recovering each cycle,
+            # restarting the network service on every 3rd refused cycle
+            ((REFUSED_REBOOTS++)) || true
+            if [[ $((REFUSED_REBOOTS % 3)) -eq 0 ]]; then
+                log_warn "Reboot skipped (refused cycle $REFUSED_REBOOTS); restarting network service"
+                restart_network_service
+            else
+                log_warn "Reboot skipped (refused cycle $REFUSED_REBOOTS); continuing with hard reset"
+                reset_wifi_hard
+            fi
+        fi
     fi
 }
 
@@ -314,6 +387,8 @@ main() {
     log_info "Soft resets before escalating: $MAX_SOFT_RESETS"
     log_info "Hard resets before reboot: $MAX_HARD_RESETS"
     log_info "Reboot cooldown: ${REBOOT_COOLDOWN}s"
+    log_info "State file: $STATE_FILE"
+    log_info "Reboot guard URL: ${REBOOT_GUARD_URL:-not configured}"
     log_info "=========================================="
 
     if [[ -z "$iface" ]]; then
@@ -324,9 +399,12 @@ main() {
 
     load_state
 
+    # Restart the escalation ladder on every start (keep LAST_REBOOT_TIME)
     if [[ $CONSECUTIVE_FAILURES -gt 0 ]]; then
-        log_info "Resuming with $CONSECUTIVE_FAILURES previous failures"
+        log_info "Previous run recorded $CONSECUTIVE_FAILURES failure(s); resetting counter to 0"
     fi
+    CONSECUTIVE_FAILURES=0
+    save_state
 
     while true; do
         # First check if WiFi is even connected
@@ -345,6 +423,7 @@ main() {
             if [[ $CONSECUTIVE_FAILURES -gt 0 ]]; then
                 log_info "Connectivity restored after $CONSECUTIVE_FAILURES failure(s)"
                 CONSECUTIVE_FAILURES=0
+                REFUSED_REBOOTS=0
                 save_state
             fi
         else

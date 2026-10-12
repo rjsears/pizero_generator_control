@@ -16,10 +16,10 @@ FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-builder
 WORKDIR /build
 
 # Copy package files first for better caching
-COPY frontend/package.json ./
+COPY frontend/package.json frontend/package-lock.json ./
 
-# Install dependencies
-RUN npm install --legacy-peer-deps
+# Install dependencies from the lockfile for reproducible builds
+RUN npm ci --legacy-peer-deps
 
 # Copy frontend source
 COPY frontend/ .

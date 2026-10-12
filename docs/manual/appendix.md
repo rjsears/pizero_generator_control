@@ -29,7 +29,7 @@ Comprehensive reference material for GenMaster operators — troubleshooting tab
 | Likely cause | Action |
 |--------------|--------|
 | Pi Zero powered off | Verify physical power, indicator LEDs. |
-| WiFi dropped | Check router for the `genslave` device; check WiFi Watchdog status in [System](system.md#wifi-watchdog) and on GenSlave page. |
+| WiFi dropped | Check router for the `genslave` device; check WiFi Watchdog status in [System](system.md#wifi-watchdog), and on the GenSlave host with `journalctl -u wifi-watchdog`. |
 | API secret rotation drift | Re-save secret on both ends from [GenSlave → Connection Settings](genslave.md#connection-settings). |
 | Tailscale issue (if used) | `tailscale status` on both ends. |
 | Heartbeat firewall block | Verify nothing on the network is blocking outbound TCP from GenMaster to the slave's `:8001`. |

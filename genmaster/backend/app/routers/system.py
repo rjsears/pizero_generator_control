@@ -2164,7 +2164,7 @@ def _get_wifi_watchdog_status() -> WifiWatchdogStatus:
 
     if running:
         state_ok, state_output = _run_host_command_sync(
-            "cat /var/run/wifi-watchdog.state 2>/dev/null"
+            "cat /var/lib/wifi-watchdog/state 2>/dev/null || cat /var/run/wifi-watchdog.state 2>/dev/null"
         )
         if state_ok and state_output:
             for line in state_output.split("\n"):

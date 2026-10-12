@@ -8,7 +8,8 @@
 # This script sets up GenSlave using a pre-built Docker image
 # No local compilation required - just pull and run!
 #
-# Self-contained: No GitHub downloads required
+# Self-contained: No GitHub downloads required (except the optional
+# WiFi watchdog, which is fetched from GitHub when not run from a checkout)
 #
 # Richard J. Sears
 # richardjsears@protonmail.com
@@ -20,6 +21,8 @@ set -e
 # Configuration
 IMAGE_NAME="rjsears/pizero_generator_control:genslave"
 INSTALL_DIR="/opt/genslave"
+WATCHDOG_RAW_URL="https://raw.githubusercontent.com/rjsears/pizero_generator_control/main/scripts"
+WATCHDOG_INSTALLED=false
 
 # Colors
 RED='\033[0;31m'
@@ -459,6 +462,134 @@ EOF
     log_success "Systemd service created and enabled"
 }
 
+# Detect the WiFi interface (same method as the GenMaster installer)
+detect_wifi_interface() {
+    local wifi_iface=""
+    if command -v iw &>/dev/null; then
+        wifi_iface=$(iw dev 2>/dev/null | grep Interface | awk '{print $2}' | head -1)
+    fi
+    if [ -z "$wifi_iface" ]; then
+        for i in /sys/class/net/*/wireless; do
+            if [ -d "$i" ]; then
+                wifi_iface=$(basename "$(dirname "$i")")
+                break
+            fi
+        done
+    fi
+    echo "$wifi_iface"
+}
+
+# Install WiFi watchdog (optional, recommended)
+install_wifi_watchdog() {
+    echo ""
+
+    read -p "Install WiFi watchdog (auto-recovers WiFi after an outage)? [Y/n] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        log_info "Skipping WiFi watchdog installation"
+        return 0
+    fi
+
+    log_info "Installing WiFi watchdog..."
+
+    local wifi_iface
+    wifi_iface=$(detect_wifi_interface)
+    if [ -z "$wifi_iface" ]; then
+        log_warn "No WiFi interface detected - WiFi watchdog may not function"
+    else
+        log_info "Detected WiFi interface: $wifi_iface"
+    fi
+
+    # Use the files from a repository checkout if present, otherwise download
+    local src_dir
+    src_dir="$(dirname "$0")/../scripts"
+    local tmp_dir=""
+    local watchdog_script
+    local watchdog_service
+
+    if [ -f "$src_dir/wifi-watchdog.sh" ] && [ -f "$src_dir/wifi-watchdog.service" ]; then
+        log_info "Using WiFi watchdog files from $src_dir"
+        watchdog_script="$src_dir/wifi-watchdog.sh"
+        watchdog_service="$src_dir/wifi-watchdog.service"
+    else
+        tmp_dir=$(mktemp -d)
+        log_info "Downloading WiFi watchdog files..."
+        if ! curl -fsSL "$WATCHDOG_RAW_URL/wifi-watchdog.sh" -o "$tmp_dir/wifi-watchdog.sh" || \
+           ! curl -fsSL "$WATCHDOG_RAW_URL/wifi-watchdog.service" -o "$tmp_dir/wifi-watchdog.service"; then
+            log_warn "Failed to download WiFi watchdog files - skipping"
+            log_warn "WiFi will NOT auto-recover after an access point outage"
+            rm -rf "$tmp_dir"
+            return 0
+        fi
+        watchdog_script="$tmp_dir/wifi-watchdog.sh"
+        watchdog_service="$tmp_dir/wifi-watchdog.service"
+    fi
+
+    # Install script and unit
+    cp "$watchdog_script" /usr/local/bin/wifi-watchdog.sh
+    chmod +x /usr/local/bin/wifi-watchdog.sh
+    log_success "Installed /usr/local/bin/wifi-watchdog.sh"
+
+    cp "$watchdog_service" /etc/systemd/system/wifi-watchdog.service
+    log_success "Installed /etc/systemd/system/wifi-watchdog.service"
+
+    if [ -n "$tmp_dir" ]; then
+        rm -rf "$tmp_dir"
+    fi
+
+    # GenSlave-specific drop-in: never reboot while the generator relay is energized
+    mkdir -p /etc/systemd/system/wifi-watchdog.service.d
+    cat > /etc/systemd/system/wifi-watchdog.service.d/genslave.conf << 'EOF'
+[Service]
+Environment="WATCHDOG_REBOOT_GUARD_URL=http://localhost:8001/api/health"
+EOF
+    log_success "Installed reboot guard drop-in (refuses reboot while generator relay is energized)"
+
+    systemctl daemon-reload
+    systemctl enable --now wifi-watchdog || true
+
+    # Verify it's running
+    if systemctl is-active --quiet wifi-watchdog; then
+        log_success "WiFi Watchdog is running"
+        WATCHDOG_INSTALLED=true
+    else
+        log_warn "WiFi Watchdog service may not have started properly"
+        log_info "Check status with: systemctl status wifi-watchdog"
+    fi
+
+    return 0
+}
+
+# Disable WiFi power save (prevents dropped/unrecovered connections on Pi Zero)
+disable_wifi_powersave() {
+    echo ""
+
+    if [ ! -d /etc/NetworkManager ]; then
+        log_warn "NetworkManager not found - skipping WiFi power save configuration"
+        return 0
+    fi
+
+    log_info "Disabling WiFi power save..."
+
+    mkdir -p /etc/NetworkManager/conf.d
+    cat > /etc/NetworkManager/conf.d/wifi-powersave-off.conf << 'EOF'
+[connection]
+wifi.powersave = 2
+EOF
+    nmcli general reload 2>/dev/null || true
+    log_success "Created /etc/NetworkManager/conf.d/wifi-powersave-off.conf"
+
+    # Apply immediately without re-activating the connection (that would drop SSH)
+    local wifi_iface
+    wifi_iface=$(detect_wifi_interface)
+    if [ -n "$wifi_iface" ] && command -v iw &>/dev/null; then
+        iw dev "$wifi_iface" set power_save off 2>/dev/null || true
+        log_info "Power save turned off on $wifi_iface for the current connection"
+    fi
+
+    log_info "The NetworkManager setting takes full effect on the next connection activation (e.g. reboot)"
+}
+
 # Install and configure Tailscale (optional)
 install_tailscale() {
     echo ""
@@ -551,6 +682,12 @@ print_success() {
         echo ""
     fi
 
+    if [ "$WATCHDOG_INSTALLED" = true ]; then
+        echo -e "${CYAN}WiFi Watchdog:${NC} running"
+        echo "  journalctl -u wifi-watchdog -f   # View watchdog log"
+        echo ""
+    fi
+
     echo -e "${YELLOW}Next Steps:${NC}"
     echo "  1. Edit $INSTALL_DIR/.env to set GENSLAVE_API_SECRET"
     echo "  2. Restart: docker-compose restart"
@@ -576,6 +713,8 @@ main() {
     pull_image
     start_container
     setup_systemd
+    install_wifi_watchdog
+    disable_wifi_powersave
     install_tailscale
 
     print_success

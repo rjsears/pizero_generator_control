@@ -149,10 +149,7 @@ class NotificationService:
             apobj.add(url)
 
             # Send notification
-            success = apobj.notify(
-                title=title,
-                body=message,
-            )
+            success = await asyncio.to_thread(apobj.notify, title=title, body=message)
 
             result.success = success
             if not success:
