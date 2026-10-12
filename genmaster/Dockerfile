@@ -10,7 +10,8 @@
 # =============================================================================
 # Stage 1: Build Frontend
 # =============================================================================
-FROM node:20-alpine AS frontend-builder
+# Frontend output is architecture-independent; pin this stage to the build host platform to avoid running npm under emulation
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-builder
 
 WORKDIR /build
 

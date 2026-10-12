@@ -2809,8 +2809,11 @@ EOF
     privileged: true
     user: root
     networks:
-      - genmaster-internal
-      - genmaster-external
+      genmaster-external:
+        priority: 100
+        gw_priority: 100
+      genmaster-internal:
+        priority: 0
     environment:
       - APP_ENV=${APP_ENV:-production}
       - MOCK_GPIO_MODE=${MOCK_GPIO_MODE:-false}
@@ -2839,6 +2842,11 @@ EOF
       - GEN_INFO_LOAD_EXPECTED=${GEN_INFO_LOAD_EXPECTED:-}
       - GEN_INFO_FUEL_CONSUMPTION_50=${GEN_INFO_FUEL_CONSUMPTION_50:-}
       - GEN_INFO_FUEL_CONSUMPTION_100=${GEN_INFO_FUEL_CONSUMPTION_100:-}
+      # HOA_BOOT_DELAY_SECONDS=0 is convenient for bench testing.
+      - HOA_SWITCH_ENABLED=${HOA_SWITCH_ENABLED:-true}
+      - HOA_GPIO_QUIET=${HOA_GPIO_QUIET:-22}
+      - HOA_GPIO_RUN=${HOA_GPIO_RUN:-27}
+      - HOA_BOOT_DELAY_SECONDS=${HOA_BOOT_DELAY_SECONDS:-30}
     group_add:
       - "${DOCKER_GID:-999}"
     volumes:
@@ -2877,10 +2885,14 @@ EOF
       - certbot_data:/var/www/certbot:ro
       - nginx_logs:/var/log/nginx
     networks:
-      - genmaster-internal
-      - genmaster-external
+      genmaster-external:
+        priority: 100
+        gw_priority: 100
+      genmaster-internal:
+        priority: 0
     depends_on:
-      - genmaster
+      genmaster:
+        condition: service_healthy
 
   # ===========================================================================
   # Host Tools Sidecar (for accessing host system)
@@ -2891,10 +2903,17 @@ EOF
     image: rjsears/genmaster-host-tools:latest
     container_name: genmaster_host_tools
     restart: unless-stopped
-    privileged: true
+    network_mode: host
     pid: host
+    privileged: true
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/dbus:/var/run/dbus
       - ../scripts:/scripts:ro
+      - .:/genmaster:ro
+    working_dir: /genmaster
+    environment:
+      - COMPOSE_PROJECT_NAME=genmaster
 
   # ===========================================================================
   # Certbot (Let's Encrypt SSL)
@@ -2908,10 +2927,13 @@ EOF
       - certbot_data:/var/www/certbot
       - ./certbot/${DNS_CREDENTIALS_FILE:-cloudflare.ini}:/credentials.ini:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --no-random-sleep-on-renew \${DNS_CERTBOT_FLAGS:-} --deploy-hook 'docker exec genmaster_nginx nginx -s reload' || true; sleep 12h & wait $${!}; done;"
+    entrypoint: /bin/sh -c "apk add --no-cache docker-cli >/dev/null 2>&1; trap exit TERM; while :; do certbot renew --no-random-sleep-on-renew ${DNS_CERTBOT_FLAGS:-} --deploy-hook 'docker exec genmaster_nginx nginx -s reload' || true; sleep 12h & wait $${!}; done;"
     networks:
-      - genmaster-internal
-      - genmaster-external
+      genmaster-external:
+        priority: 100
+        gw_priority: 100
+      genmaster-internal:
+        priority: 0
 EOF
 
     # Add Cloudflare Tunnel if enabled
@@ -2942,10 +2964,12 @@ EOF
         cat >> "${SCRIPT_DIR}/docker-compose.yaml" << 'EOF'
 
   # ===========================================================================
-  # Tailscale VPN
+  # Tailscale VPN with HTTPS Support
   # ===========================================================================
-  # Provides private access via Tailscale network.
-  # After startup, approve machine at: https://login.tailscale.com/admin/machines
+  # Provides private access via Tailscale network with automatic HTTPS certs.
+  # After startup:
+  #   1. Approve machine at: https://login.tailscale.com/admin/machines
+  #   2. Enable HTTPS at: https://login.tailscale.com/admin/dns
   tailscale:
     image: tailscale/tailscale:latest
     container_name: genmaster_tailscale

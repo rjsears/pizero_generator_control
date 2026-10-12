@@ -47,6 +47,8 @@ services:
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
     volumes:
       - genmaster_db_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
     networks:
       - genmaster-internal
     healthcheck:
@@ -65,6 +67,8 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - genmaster_redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
     networks:
       - genmaster-internal
     healthcheck:
@@ -76,12 +80,20 @@ services:
   # ===========================================================================
   # GenMaster Application
   # ===========================================================================
+  # Uses Docker bridge networking for container-to-container communication.
+  # Connects to database and Redis via service names (db, redis).
   genmaster:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: rjsears/genmaster:latest
     container_name: ${GENMASTER_CONTAINER:-genmaster}
     restart: unless-stopped
+    privileged: true
+    user: root
+    networks:
+      genmaster-external:
+        priority: 100
+        gw_priority: 100
+      genmaster-internal:
+        priority: 0
     environment:
       - APP_ENV=${APP_ENV:-production}
       - MOCK_GPIO_MODE=${MOCK_GPIO_MODE:-false}
@@ -92,6 +104,7 @@ services:
       - DATABASE_PASSWORD=${DATABASE_PASSWORD}
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
+      - GENSLAVE_ENABLED=${GENSLAVE_ENABLED:-true}
       - SLAVE_API_URL=${SLAVE_API_URL}
       - SLAVE_API_SECRET=${SLAVE_API_SECRET}
       - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL}
@@ -100,7 +113,8 @@ services:
       - TZ=${TIMEZONE:-America/Los_Angeles}
       - GENSLAVE_IP=${GENSLAVE_IP:-}
       - GENSLAVE_HOSTNAME=${GENSLAVE_HOSTNAME:-genslave}
-      # Generator Info (optional - can be configured via web UI)
+      - DOCKER_GID=${DOCKER_GID:-999}
+      # Generator Info (optional - for pre-configuration via setup wizard)
       - GEN_INFO_MANUFACTURER=${GEN_INFO_MANUFACTURER:-}
       - GEN_INFO_MODEL_NUMBER=${GEN_INFO_MODEL_NUMBER:-}
       - GEN_INFO_SERIAL_NUMBER=${GEN_INFO_SERIAL_NUMBER:-}
@@ -108,25 +122,20 @@ services:
       - GEN_INFO_LOAD_EXPECTED=${GEN_INFO_LOAD_EXPECTED:-}
       - GEN_INFO_FUEL_CONSUMPTION_50=${GEN_INFO_FUEL_CONSUMPTION_50:-}
       - GEN_INFO_FUEL_CONSUMPTION_100=${GEN_INFO_FUEL_CONSUMPTION_100:-}
-      # GenMaster GPIO assignments (Pi 5 header). Defaults here are the
-      # standard layout for a clean install on a dedicated Pi. The
-      # System -> GPIO Assignments panel overrides these by writing to
-      # .env; a restart is required for pin changes to take effect.
-      # Defaults match the Pydantic defaults in app/config.py.
-      - VICTRON_GPIO_PIN=${VICTRON_GPIO_PIN:-17}
+      # HOA_BOOT_DELAY_SECONDS=0 is convenient for bench testing.
       - HOA_SWITCH_ENABLED=${HOA_SWITCH_ENABLED:-true}
       - HOA_GPIO_QUIET=${HOA_GPIO_QUIET:-22}
       - HOA_GPIO_RUN=${HOA_GPIO_RUN:-27}
       - HOA_BOOT_DELAY_SECONDS=${HOA_BOOT_DELAY_SECONDS:-30}
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       - genmaster_logs:/app/logs
       - genmaster_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
       - ./nginx:/app/nginx
       - ./.env:/config/.env:rw  # Mount .env for UI editing
-    extra_hosts:
-      - "${GENSLAVE_HOSTNAME:-genslave}:${GENSLAVE_IP:-127.0.0.1}"
-    networks:
-      - genmaster-internal
+      - ../scripts:/app/scripts:ro
     depends_on:
       db:
         condition: service_healthy
@@ -142,6 +151,7 @@ services:
   # ===========================================================================
   # Nginx Reverse Proxy
   # ===========================================================================
+  # Reverse proxy for GenMaster application with SSL termination.
   nginx:
     image: nginx:alpine
     container_name: ${NGINX_CONTAINER:-genmaster_nginx}
@@ -155,8 +165,11 @@ services:
       - certbot_data:/var/www/certbot:ro
       - nginx_logs:/var/log/nginx
     networks:
-      - genmaster-internal
-      - genmaster-external
+      genmaster-external:
+        priority: 100
+        gw_priority: 100
+      genmaster-internal:
+        priority: 0
     depends_on:
       genmaster:
         condition: service_healthy
@@ -182,11 +195,6 @@ services:
     # `/etc/systemd/system: nonexistent directory` errors at runtime.
     pid: host
     privileged: true
-    # Keep container tiny - it just sleeps waiting for exec commands.
-    # Bumped to 64m to accommodate docker-cli + docker-cli-compose, used
-    # for self-recreate of the genmaster container.
-    mem_limit: 64m
-    memswap_limit: 64m
     volumes:
       # Docker socket so this sidecar can drive docker (recreate genmaster)
       - /var/run/docker.sock:/var/run/docker.sock
@@ -215,6 +223,7 @@ services:
   certbot:
     image: ${DNS_CERTBOT_IMAGE:-certbot/certbot:latest}
     container_name: genmaster_certbot
+    restart: unless-stopped
     volumes:
       - letsencrypt:/etc/letsencrypt
       - certbot_data:/var/www/certbot
@@ -227,5 +236,71 @@ services:
     # apk is idempotent: second container start is a no-op.
     entrypoint: /bin/sh -c "apk add --no-cache docker-cli >/dev/null 2>&1; trap exit TERM; while :; do certbot renew --no-random-sleep-on-renew ${DNS_CERTBOT_FLAGS:-} --deploy-hook 'docker exec genmaster_nginx nginx -s reload' || true; sleep 12h & wait $${!}; done;"
     networks:
+      genmaster-external:
+        priority: 100
+        gw_priority: 100
+      genmaster-internal:
+        priority: 0
+
+  # ===========================================================================
+  # Cloudflare Tunnel
+  # ===========================================================================
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: genmaster_cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    # Pinned IP so nginx's set_real_ip_from can trust this exact host as
+    # the only proxy. See docs/SECURITY.md for the trust model.
+    networks:
+      genmaster-external:
+        ipv4_address: 172.30.0.10
+
+  # ===========================================================================
+  # Tailscale VPN with HTTPS Support
+  # ===========================================================================
+  # Provides private access via Tailscale network with automatic HTTPS certs.
+  # After startup:
+  #   1. Approve machine at: https://login.tailscale.com/admin/machines
+  #   2. Enable HTTPS at: https://login.tailscale.com/admin/dns
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: genmaster_tailscale
+    restart: unless-stopped
+    hostname: genmaster-tailscale
+    network_mode: host
+    environment:
+      - TS_AUTHKEY=${TAILSCALE_AUTH_KEY}
+      - TS_HOSTNAME=${TAILSCALE_HOSTNAME}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+      - TS_EXTRA_ARGS=--accept-routes
+      - TS_ROUTES=${TAILSCALE_ROUTES}
+      - TS_AUTH_ONCE=true
+    volumes:
+      - tailscale_state:/var/lib/tailscale
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+  # ===========================================================================
+  # Portainer Container Management
+  # ===========================================================================
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: genmaster_portainer
+    restart: unless-stopped
+    # setup.sh injects --admin-password='<bcrypt hash of ADMIN_PASSWORD>'
+    # (with $ escaped as $$) after --base-url when it generates the live file.
+    command: --base-url /portainer
+    environment:
+      - PORTAINER_CSRF_DISABLE=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
       - genmaster-internal
-      - genmaster-external
